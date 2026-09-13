@@ -3,28 +3,490 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta http-equiv="refresh" content="0; url=https://forms.gle/W12a3DShSvTsWqTu5" />
-  <meta name="robots" content="noindex" />
-  <title>Taking you to the FlatOut quote form…</title>
-  <link rel="stylesheet" href="/css/site.css" />
+  <title>Get a move-out quote | FlatOut</title>
+  <meta name="description" content="Tell us where you're moving, when you're leaving and what you need. One form covers moving, cleaning, rubbish and storage for your whole flat." />
+  <link rel="canonical" href="https://flatoutnz.netlify.app/quote" />
+
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+  <link rel="preload" href="/fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/css/site.css" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="FlatOut" />
+  <meta property="og:title" content="Get a move-out quote | FlatOut" />
+  <meta property="og:description" content="Tell us where you're moving, when you're leaving and what you need. One form covers moving, cleaning, rubbish and storage for your whole flat." />
+  <meta property="og:url" content="https://flatoutnz.netlify.app/quote" />
+  <meta property="og:image" content="https://flatoutnz.netlify.app/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
 </head>
 <body>
-  <!--
-    Fallback only. On Netlify, the _redirects rule "/quote -> FORM_URL"
-    answers this request before it ever reaches this file. This page
-    exists so the folder still works if you drag it onto some other
-    static host later.
-  -->
-  <section class="section section--navy" style="min-height: 100vh; display: flex; align-items: center;">
-    <div class="container">
-      <p class="eyebrow">FlatOut</p>
-      <h1 style="color: var(--white);">Taking you to the quote form…</h1>
-      <p style="color: var(--white); max-width: 30rem;">
-        If you're not redirected automatically,
-        <a class="btn btn-on-dark" href="https://forms.gle/W12a3DShSvTsWqTu5">continue to the form</a>.
+  <a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="container site-header__inner">
+    <a class="site-logo" href="/" aria-label="FlatOut home">
+      <img class="site-logo__mark" src="/images/logo-icon.png" width="36" height="36" alt="" />
+      <span class="site-logo__word">FlatOut</span>
+    </a>
+
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+    </nav>
+
+    <div class="site-header__actions">
+      <a class="site-header__phone" href="tel:+64274086895">027 408 6895</a>
+      <a class="btn btn-on-dark" href="/quote">Get a Quote</a>
+      <details class="nav-toggle">
+        <summary aria-label="Menu">
+          <span class="nav-toggle__icon"><span></span><span></span><span></span></span>
+        </summary>
+        <div class="nav-toggle__panel">
+          <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+          <a class="site-header__phone" href="tel:+64274086895">027 408 6895</a>
+        </div>
+      </details>
+    </div>
+  </div>
+</header>
+
+  <main id="main">
+
+<section class="section section--tight section--cream">
+  <div class="container form-intro">
+    <p class="eyebrow muted">Get your move-out quote</p>
+    <h1>Tell us what you need</h1>
+    <p class="muted">
+      One form covers your whole flat — moving, cleaning, rubbish and
+      storage. Takes about a minute. We'll come back to you the same day,
+      and no later than the end of the following day.
+    </p>
+  </div>
+</section>
+
+<section class="section section--off-white">
+  <div class="container">
+
+    <form class="form-card card" id="quote-form" novalidate>
+
+      <!-- Honeypot — real visitors never see or fill this in -->
+      <div class="form-honeypot" aria-hidden="true">
+        <label for="website">Leave this field blank</label>
+        <input type="text" id="website" name="website" tabindex="-1" autocomplete="off" />
+      </div>
+      <input type="hidden" id="started_at" name="started_at" value="" />
+
+      <fieldset class="form-fieldset">
+        <legend>Your details</legend>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label" for="fullName">Full name</label>
+            <input class="form-input" type="text" id="fullName" name="fullName" autocomplete="name" required />
+            <p class="form-error-message" id="fullName-error">Enter your full name.</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="phone">Phone number</label>
+            <input class="form-input" type="tel" id="phone" name="phone" autocomplete="tel" inputmode="tel" required />
+            <p class="form-error-message" id="phone-error">Enter a phone number we can reach you on.</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="email">Email address</label>
+            <input class="form-input" type="email" id="email" name="email" autocomplete="email" required />
+            <p class="form-error-message" id="email-error">Enter a valid email address.</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Are you a student?</label>
+            <div class="form-options" role="radiogroup" aria-required="true" id="isStudent-group">
+              <label class="form-option"><input type="radio" name="isStudent" value="Yes" required /><span>Yes</span></label>
+              <label class="form-option"><input type="radio" name="isStudent" value="No" /><span>No</span></label>
+            </div>
+            <p class="form-error-message" id="isStudent-error">Let us know if you're a student.</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-fieldset">
+        <legend>Your move</legend>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label" for="currentLocation">Current location</label>
+            <input class="form-input" type="text" id="currentLocation" name="currentLocation" placeholder="e.g. Ilam" autocomplete="off" required />
+            <p class="form-error-message" id="currentLocation-error">Tell us your current suburb.</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="movingTo">Moving to</label>
+            <input class="form-input" type="text" id="movingTo" name="movingTo" placeholder="e.g. Sockburn, or Unsure" autocomplete="off" required />
+            <p class="form-error-message" id="movingTo-error">Tell us where you're headed, or write "Unsure".</p>
+          </div>
+        </div>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label" for="moveDate">When are you moving out?</label>
+            <input class="form-input" type="date" id="moveDate" name="moveDate" required />
+            <p class="form-error-message" id="moveDate-error">Pick a move-out date.</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bedrooms">Bedrooms in your current flat</label>
+            <select class="form-select" id="bedrooms" name="bedrooms" required>
+              <option value="" disabled selected>Choose one</option>
+              <option>1 bedroom</option>
+              <option>2 bedrooms</option>
+              <option>3 bedrooms</option>
+              <option>4 bedrooms</option>
+              <option>5+ bedrooms</option>
+            </select>
+            <p class="form-error-message" id="bedrooms-error">Choose a bedroom count.</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Is this move for:</label>
+            <div class="form-options" role="radiogroup" aria-required="true" id="moveFor-group">
+              <label class="form-option"><input type="radio" name="moveFor" value="Just me (individual)" required /><span>Just me (individual)</span></label>
+              <label class="form-option"><input type="radio" name="moveFor" value="My whole flat" /><span>My whole flat</span></label>
+              <label class="form-option"><input type="radio" name="moveFor" value="Both of the above" /><span>Both — my stuff, and I'm helping organise the flat</span></label>
+            </div>
+            <p class="form-error-message" id="moveFor-error">Let us know who this covers.</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="volume">Approximately how much stuff do you have to move?</label>
+            <select class="form-select" id="volume" name="volume" required>
+              <option value="" disabled selected>Choose one</option>
+              <option>Light (1–2 rooms worth)</option>
+              <option>Medium (3–4 rooms worth)</option>
+              <option>Heavy (5+ rooms worth)</option>
+            </select>
+            <p class="form-error-message" id="volume-error">Give us a rough idea of the volume.</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-fieldset">
+        <legend>What you need</legend>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Which services do you need?</label>
+            <div class="form-options" id="services-group">
+              <label class="form-option"><input type="checkbox" name="services" value="Moving (furniture & boxes transport)" /><span>Moving (furniture &amp; boxes transport)</span></label>
+              <label class="form-option"><input type="checkbox" name="services" value="Cleaning (end-of-lease deep clean)" /><span>Cleaning (end-of-lease deep clean)</span></label>
+              <label class="form-option"><input type="checkbox" name="services" value="Rubbish (junk removal & disposal)" /><span>Rubbish (junk removal &amp; disposal)</span></label>
+              <label class="form-option"><input type="checkbox" name="services" value="Storage (short or long-term storage)" /><span>Storage (short or long-term storage)</span></label>
+            </div>
+            <p class="form-error-message" id="services-error">Tick at least one service.</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="specialRequirements">Anything else we should know? <span class="form-optional">(optional)</span></label>
+            <textarea class="form-textarea" id="specialRequirements" name="specialRequirements" placeholder="Awkward access, specific dates, particular items, anything at all"></textarea>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-fieldset">
+        <legend>Last thing</legend>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label" for="hearAbout">How did you hear about FlatOut? <span class="form-optional">(optional)</span></label>
+            <select class="form-select" id="hearAbout" name="hearAbout">
+              <option value="" selected>Prefer not to say</option>
+              <option>Social media</option>
+              <option>Word of mouth / a friend</option>
+              <option>Poster or flyer</option>
+              <option>Google search</option>
+              <option>UCSA</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Best way to contact you</label>
+            <div class="form-options" role="radiogroup" aria-required="true" id="contactMethod-group">
+              <label class="form-option"><input type="radio" name="contactMethod" value="Email" required /><span>Email</span></label>
+              <label class="form-option"><input type="radio" name="contactMethod" value="Phone or text" /><span>Phone or text</span></label>
+            </div>
+            <p class="form-error-message" id="contactMethod-error">Let us know how to reach you.</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="form-consent">
+        <input type="checkbox" id="consent" name="consent" value="I consent to FlatOut contacting me about my move-out request and relevant service providers." required />
+        <label for="consent">
+          I consent to FlatOut contacting me about my move-out request and
+          relevant service providers.
+        </label>
+      </div>
+      <p class="form-error-message" id="consent-error">We need your consent to be able to help.</p>
+
+      <div class="form-submit-row">
+        <button class="btn btn-primary btn-block" type="submit" id="submit-btn">
+          <span id="submit-btn-label">Get my free quote</span>
+        </button>
+        <p class="form-submit-note muted">No cost, no obligation — you decide what to book.</p>
+      </div>
+
+      <p class="form-status form-status--error" id="form-status" role="alert"></p>
+    </form>
+
+    <!-- Success state — swapped in over the form on submit -->
+    <div class="form-card card form-success" id="form-success">
+      <div class="form-success__icon">
+        <svg width="24" height="24" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3.5 9.5 7 13l7.5-8" stroke="var(--teal)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <h2>Got it — thanks!</h2>
+      <p class="muted">
+        Your reference number is
+      </p>
+      <span class="form-success__ref" id="form-success-ref">FO-000000</span>
+      <p class="muted">
+        We'll be in touch the same day, and no later than the end of the
+        following day, with providers who suit what you've told us.
+      </p>
+      <p class="muted">
+        In the meantime, if anything's urgent, call or text
+        <a href="tel:+64274086895">027 408 6895</a>.
       </p>
     </div>
-  </section>
+
+  </div>
+</section>
+
+  </main>
+
+<footer class="site-footer" id="contact">
+  <div class="container">
+    <div class="site-footer__grid">
+      <div>
+        <a class="site-logo" href="/" aria-label="FlatOut home">
+          <img class="site-logo__mark" src="/images/logo-icon.png" width="32" height="32" alt="" />
+          <span class="site-logo__word">FlatOut</span>
+        </a>
+        <p class="muted" style="margin-top: var(--space-sm); max-width: 26rem;">
+          FlatOut connects students with local moving, cleaning, rubbish
+          and storage providers when it's time to move out.
+        </p>
+      </div>
+
+      <div>
+        <h2>Contact</h2>
+        <ul class="site-footer__list">
+          <li><a href="tel:+64274086895">027 408 6895</a></li>
+          <li><a href="mailto:danielbell1928@gmail.com">danielbell1928@gmail.com</a></li>
+          <li class="muted">Christchurch</li>
+        </ul>
+      </div>
+
+      <div>
+        <h2>Explore</h2>
+        <ul class="site-footer__list">
+          <li><a href="/#how-it-works">How It Works</a></li><li><a href="/#services">Services</a></li><li><a href="/#landlord">For Landlords</a></li><li><a href="/#contact">Contact</a></li>
+          <li><a href="/quote">Get a Quote</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="site-footer__bottom">
+      <span>&copy; 2026 FlatOut. All rights reserved.</span>
+      <a href="/privacy">Privacy</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // ---- CONFIG -------------------------------------------------------
+  // Paste your Google Apps Script Web App URL below (see the deployment
+  // guide). It ends in /exec.
+  var ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbwrQBIbt5sEn6dOuFY8pz31-HjN-jY4Oiz2DYKrpUo_bYasJJRLLObJHFxdtW4lFAqiSQ/exec";
+  // ---------------------------------------------------------------------
+
+  var form = document.getElementById("quote-form");
+  var successPanel = document.getElementById("form-success");
+  var successRef = document.getElementById("form-success-ref");
+  var statusBox = document.getElementById("form-status");
+  var submitBtn = document.getElementById("submit-btn");
+  var submitBtnLabel = document.getElementById("submit-btn-label");
+  document.getElementById("started_at").value = Date.now();
+
+  var requiredFields = [
+    { name: "fullName", type: "text" },
+    { name: "phone", type: "text" },
+    { name: "email", type: "email" },
+    { name: "isStudent", type: "radio" },
+    { name: "currentLocation", type: "text" },
+    { name: "movingTo", type: "text" },
+    { name: "moveDate", type: "text" },
+    { name: "bedrooms", type: "select" },
+    { name: "moveFor", type: "radio" },
+    { name: "volume", type: "select" },
+    { name: "services", type: "checkbox" },
+    { name: "contactMethod", type: "radio" },
+    { name: "consent", type: "checkbox-single" }
+  ];
+
+  function showError(name, isValid) {
+    var errorEl = document.getElementById(name + "-error");
+    var input = form.querySelector('[name="' + name + '"]');
+    if (errorEl) errorEl.classList.toggle("is-visible", !isValid);
+    if (input && input.type !== "checkbox" && input.type !== "radio") {
+      input.setAttribute("aria-invalid", isValid ? "false" : "true");
+    }
+  }
+
+  function validateField(field) {
+    var isValid = true;
+    if (field.type === "email") {
+      var el = form.querySelector('[name="' + field.name + '"]');
+      isValid = el.value.trim() !== "" && el.validity.valid;
+    } else if (field.type === "text") {
+      var el2 = form.querySelector('[name="' + field.name + '"]');
+      isValid = el2.value.trim() !== "";
+    } else if (field.type === "select") {
+      var el3 = form.querySelector('[name="' + field.name + '"]');
+      isValid = el3.value !== "";
+    } else if (field.type === "radio") {
+      isValid = !!form.querySelector('[name="' + field.name + '"]:checked');
+    } else if (field.type === "checkbox") {
+      isValid = !!form.querySelector('[name="' + field.name + '"]:checked');
+    } else if (field.type === "checkbox-single") {
+      var cb = form.querySelector('[name="' + field.name + '"]');
+      isValid = cb.checked;
+    }
+    showError(field.name, isValid);
+    return isValid;
+  }
+
+  // Validate on blur for text/email/select fields
+  requiredFields.forEach(function (field) {
+    if (field.type === "text" || field.type === "email" || field.type === "select") {
+      var el = form.querySelector('[name="' + field.name + '"]');
+      if (el) el.addEventListener("blur", function () { validateField(field); });
+    }
+  });
+
+  function validateAll() {
+    var allValid = true;
+    var firstInvalidName = null;
+    requiredFields.forEach(function (field) {
+      var isValid = validateField(field);
+      if (!isValid && !firstInvalidName) firstInvalidName = field.name;
+      allValid = allValid && isValid;
+    });
+    return { allValid: allValid, firstInvalidName: firstInvalidName };
+  }
+
+  function collectData() {
+    var data = {};
+    data.fullName = form.fullName.value.trim();
+    data.phone = form.phone.value.trim();
+    data.email = form.email.value.trim();
+    data.isStudent = (form.querySelector('[name="isStudent"]:checked') || {}).value || "";
+    data.moveDate = form.moveDate.value;
+    data.currentLocation = form.currentLocation.value.trim();
+    data.movingTo = form.movingTo.value.trim();
+    data.moveFor = (form.querySelector('[name="moveFor"]:checked') || {}).value || "";
+    data.services = Array.prototype.slice
+      .call(form.querySelectorAll('[name="services"]:checked'))
+      .map(function (cb) { return cb.value; });
+    data.bedrooms = form.bedrooms.value;
+    data.volume = form.volume.value;
+    data.specialRequirements = form.specialRequirements.value.trim();
+    data.hearAbout = form.hearAbout.value;
+    data.contactMethod = (form.querySelector('[name="contactMethod"]:checked') || {}).value || "";
+    data.consent = form.consent.checked ? form.consent.value : "";
+    data.website = form.website.value; // honeypot
+    data.started_at = form.started_at.value;
+    return data;
+  }
+
+  function makeReference() {
+    var now = new Date();
+    var stamp = now.getFullYear().toString().slice(2) +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      String(now.getDate()).padStart(2, "0");
+    var rand = Math.floor(1000 + Math.random() * 9000);
+    return "FO-" + stamp + "-" + rand;
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    statusBox.classList.remove("is-visible");
+
+    var result = validateAll();
+    if (!result.allValid) {
+      var el = form.querySelector('[name="' + result.firstInvalidName + '"]');
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      statusBox.textContent = "A few fields need your attention above.";
+      statusBox.classList.add("is-visible");
+      return;
+    }
+
+    var data = collectData();
+
+    // Spam checks — honeypot filled, or submitted implausibly fast
+    var elapsed = Date.now() - Number(data.started_at || Date.now());
+    var looksLikeSpam = data.website || elapsed < 2500;
+
+    var ref = makeReference();
+
+    if (looksLikeSpam) {
+      // Silently succeed without sending — doesn't tip the bot off
+      showSuccess(ref);
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtnLabel.innerHTML = '<span class="form-loading"><span class="form-spinner"></span> Sending…</span>';
+
+    data.reference = ref;
+
+    fetch(ENDPOINT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(data)
+    })
+      .then(function () {
+        showSuccess(ref);
+      })
+      .catch(function () {
+        submitBtn.disabled = false;
+        submitBtnLabel.textContent = "Get my free quote";
+        statusBox.innerHTML = 'Something went wrong sending that. Please try again, or text us directly on <a href="tel:+64274086895">027 408 6895</a>.';
+        statusBox.classList.add("is-visible");
+      });
+  });
+
+  function showSuccess(ref) {
+    successRef.textContent = ref;
+    form.style.display = "none";
+    successPanel.classList.add("is-visible");
+    successPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (window.gtag) {
+      window.gtag("event", "generate_lead", { event_category: "quote_form" });
+    }
+  }
+})();
+</script>
+
 </body>
 </html>
