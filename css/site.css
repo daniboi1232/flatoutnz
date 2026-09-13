@@ -1,0 +1,563 @@
+/* ==========================================================================
+   FlatOut — design tokens
+   Every colour used anywhere in this project must be one of these ten
+   custom properties. Don't add a hex value outside this block.
+   ========================================================================== */
+:root {
+  --navy-deep: #14283A; /* header, hero, footer, primary buttons, dark sections */
+  --navy: #1D3A50; /* secondary dark surfaces, cards on dark */
+  --blue: #285D78; /* hover states; secondary/muted text on cream & off-white */
+  --teal: #3D8C82; /* checkmarks, form focus ring, small accents — sparing use */
+  --orange: #D97A35; /* brand mark, how-it-works step numbers — sparing use */
+  --cream: #F4F0E8; /* warm content sections */
+  --off-white: #F7F8F6; /* alternating light sections */
+  --grey: #8A969F; /* muted text — dark surfaces ONLY, see note below */
+  --white: #FFFFFF;
+
+  /* --grey on --cream/--off-white measures 2.66:1 — fails WCAG AA even at
+     large text sizes. On light sections use --blue for secondary/muted
+     text instead; --grey is reserved for muted text on --navy-deep/--navy
+     surfaces, where it measures 4.98:1. */
+
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-sm: 1rem;
+  --space-md: 1.5rem;
+  --space-lg: 2.5rem;
+  --space-xl: 4rem;
+  --space-2xl: 6rem;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --container: 72rem;
+
+  --shadow-card: 0 1px 2px rgba(20, 40, 58, 0.06), 0 4px 16px rgba(20, 40, 58, 0.06);
+}
+
+/* ==========================================================================
+   Fonts
+   Display: Fraunces 600 — a serif drawn explicitly for warmth ("a cozy,
+   soft, sturdy" brief was the type designers' own description), which is
+   the whole point of a "cozy dark blue" brand. Its opsz axis is left
+   variable so browsers auto-tune the shapes for heading vs. small sizes.
+   Body: Karla 400/700 (variable, single file) — quiet humanist grotesque,
+   legible at 16px, doesn't compete with Fraunces. Latin-only subsets,
+   ~59KB combined.
+   ========================================================================== */
+@font-face {
+  font-family: "Fraunces";
+  src: url("/fonts/fraunces-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Karla";
+  src: url("/fonts/karla-variable.woff2") format("woff2-variations"), url("/fonts/karla-variable.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ==========================================================================
+   Reset & base
+   ========================================================================== */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body, h1, h2, h3, h4, p, figure, blockquote, dl, dd { margin: 0; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+img, svg { display: block; max-width: 100%; }
+button, input, textarea, select { font: inherit; color: inherit; }
+a { color: inherit; }
+
+html {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+body {
+  font-family: "Karla", "Segoe UI", system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+  background: var(--off-white);
+  color: var(--navy-deep);
+}
+
+h1, h2, h3, h4 {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+h1 { font-size: 2rem; } /* 32px @375px, scales up via section media queries */
+h2 { font-size: 1.6rem; }
+h3 { font-size: 1.25rem; }
+
+@media (min-width: 48rem) {
+  h1 { font-size: 2.75rem; }
+  h2 { font-size: 2rem; }
+}
+@media (min-width: 90rem) {
+  h1 { font-size: 3.25rem; }
+  h2 { font-size: 2.25rem; }
+}
+
+.eyebrow {
+  font-family: "Karla", sans-serif;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Focus visibility — teal ring everywhere, no exceptions */
+:focus-visible {
+  outline: 3px solid var(--teal);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Skip link */
+.skip-link {
+  position: absolute;
+  left: var(--space-sm);
+  top: -3rem;
+  background: var(--cream);
+  color: var(--navy-deep);
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  z-index: 100;
+  transition: top 0.15s ease;
+}
+.skip-link:focus {
+  top: var(--space-sm);
+}
+
+.container {
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: var(--space-sm);
+}
+@media (min-width: 48rem) {
+  .container { padding-inline: var(--space-lg); }
+}
+
+.section {
+  padding-block: var(--space-2xl);
+}
+.section--tight {
+  padding-block: var(--space-xl);
+}
+.section--navy { background: var(--navy-deep); color: var(--white); }
+.section--cream { background: var(--cream); color: var(--navy-deep); }
+.section--off-white { background: var(--off-white); color: var(--navy-deep); }
+
+.section--navy .muted,
+.site-header .muted,
+.site-footer .muted { color: var(--grey); }
+.section--cream .muted,
+.section--off-white .muted { color: var(--blue); }
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2xs);
+  min-height: 3rem;
+  padding: 0.85rem 1.5rem;
+  border-radius: var(--radius-md);
+  border: 2px solid transparent;
+  font-weight: 700;
+  font-size: 1rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.btn-primary {
+  background: var(--navy-deep);
+  color: var(--cream);
+}
+.btn-primary:hover { background: var(--blue); }
+
+.btn-on-dark {
+  background: var(--cream);
+  color: var(--navy-deep);
+}
+.btn-on-dark:hover { background: var(--white); }
+
+.btn-outline {
+  background: transparent;
+  border-color: currentColor;
+  color: inherit;
+}
+.btn-outline:hover { background: rgba(255, 255, 255, 0.08); }
+
+.btn-block { width: 100%; }
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+.site-header {
+  background: var(--navy-deep);
+  color: var(--white);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.site-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding-block: var(--space-2xs);
+  min-height: 4rem;
+}
+.site-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  text-decoration: none;
+  color: var(--white);
+}
+.site-logo__word {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  font-size: 1.125rem;
+  letter-spacing: 0.01em;
+}
+@media (min-width: 26rem) {
+  .site-logo__word { font-size: 1.375rem; }
+}
+
+.site-nav {
+  display: none;
+  align-items: center;
+  gap: var(--space-lg);
+}
+.site-nav a {
+  text-decoration: none;
+  color: var(--white);
+  font-weight: 700;
+  font-size: 0.9375rem;
+  padding-block: var(--space-3xs);
+  border-bottom: 2px solid transparent;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.site-nav a:hover,
+.site-nav a:focus-visible {
+  border-color: var(--teal);
+}
+
+.site-header__phone {
+  display: none;
+  color: var(--grey);
+  text-decoration: none;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.site-header__phone:hover { color: var(--white); }
+
+.site-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.site-header__actions .btn {
+  padding: 0.6rem 0.9rem;
+  font-size: 0.875rem;
+  min-height: 2.75rem;
+  white-space: nowrap;
+}
+@media (min-width: 26rem) {
+  .site-header__actions .btn {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.9375rem;
+  }
+}
+
+.nav-toggle { display: block; position: relative; }
+.nav-toggle summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-sm);
+}
+.nav-toggle summary::-webkit-details-marker { display: none; }
+.nav-toggle summary:hover,
+.nav-toggle summary:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+.nav-toggle__icon {
+  width: 1.5rem;
+  height: 1.125rem;
+  position: relative;
+}
+.nav-toggle__icon span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--white);
+  border-radius: 2px;
+}
+.nav-toggle__icon span:nth-child(1) { top: 0; }
+.nav-toggle__icon span:nth-child(2) { top: 0.5rem; }
+.nav-toggle__icon span:nth-child(3) { top: 1rem; }
+
+.nav-toggle__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-2xs));
+  background: var(--navy-deep);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  min-width: 14rem;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+.nav-toggle__panel a {
+  color: var(--white);
+  text-decoration: none;
+  font-weight: 700;
+  padding: var(--space-2xs) var(--space-2xs);
+  border-radius: var(--radius-sm);
+}
+.nav-toggle__panel a:hover,
+.nav-toggle__panel a:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+.nav-toggle__panel .site-header__phone {
+  display: block;
+  color: var(--grey);
+  padding: var(--space-2xs);
+}
+
+@media (min-width: 64rem) {
+  .site-nav { display: flex; }
+  .site-header__phone { display: inline; }
+  .nav-toggle { display: none; }
+}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+.site-footer {
+  background: var(--navy-deep);
+  color: var(--white);
+  padding-block: var(--space-xl) var(--space-lg);
+}
+.site-footer__grid {
+  display: grid;
+  gap: var(--space-lg);
+  grid-template-columns: 1fr;
+}
+@media (min-width: 48rem) {
+  .site-footer__grid { grid-template-columns: 1.2fr 1fr 1fr; }
+}
+.site-footer h2 {
+  font-size: 1.125rem;
+  margin-bottom: var(--space-sm);
+}
+.site-footer a {
+  text-decoration: none;
+  color: var(--white);
+}
+.site-footer a:hover { color: var(--teal); }
+.site-footer__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+.site-footer__bottom {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+  justify-content: space-between;
+  color: var(--grey);
+  font-size: 0.875rem;
+}
+
+/* ==========================================================================
+   Hero
+   ========================================================================== */
+.hero { padding-block: var(--space-2xl) var(--space-xl); }
+.hero__inner { max-width: 38rem; margin-inline: 0; }
+.hero__kicker { color: var(--grey); margin-bottom: var(--space-sm); }
+.hero__headline { color: var(--white); margin-bottom: var(--space-md); }
+.hero__sub {
+  color: var(--white);
+  font-size: 1.125rem;
+  max-width: 30rem;
+  margin-bottom: var(--space-lg);
+}
+.hero__cta { margin-bottom: var(--space-lg); }
+.hero__checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-lg);
+  color: var(--grey);
+  font-weight: 700;
+}
+.hero__checklist li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3xs);
+}
+
+/* ==========================================================================
+   Services
+   ========================================================================== */
+.service-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+}
+@media (min-width: 40rem) {
+  .service-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 64rem) {
+  .service-grid { grid-template-columns: repeat(4, 1fr); }
+}
+.card {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-card);
+}
+.service-card h3 { margin-block: var(--space-sm) var(--space-2xs); }
+.service-card__link {
+  display: inline-block;
+  margin-top: var(--space-sm);
+  color: var(--blue);
+  font-weight: 700;
+  text-decoration: none;
+}
+.service-card__link:hover { text-decoration: underline; color: var(--navy-deep); }
+
+/* ==========================================================================
+   How it works
+   ========================================================================== */
+.steps {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+@media (min-width: 56rem) {
+  .steps { grid-template-columns: repeat(3, 1fr); }
+}
+.step__number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: var(--orange);
+  color: var(--white);
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: 1.25rem;
+  margin-bottom: var(--space-sm);
+}
+.step h3 { margin-bottom: var(--space-2xs); }
+
+/* ==========================================================================
+   Made for flatmates
+   ========================================================================== */
+.flatmates { max-width: 40rem; margin-inline: 0; }
+.flatmates__lead { font-size: 1.125rem; margin-bottom: var(--space-lg); }
+.flatmates__line {
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: 1.75rem;
+  color: var(--navy-deep);
+  border-left: 4px solid var(--teal);
+  padding-left: var(--space-md);
+}
+@media (min-width: 48rem) {
+  .flatmates__line { font-size: 2.125rem; }
+}
+
+/* ==========================================================================
+   End of year
+   ========================================================================== */
+.end-of-year { max-width: 36rem; margin-inline: 0; }
+.end-of-year__copy {
+  font-size: 1.125rem;
+  color: var(--white);
+  margin-block: var(--space-sm) var(--space-lg);
+}
+
+/* ==========================================================================
+   Small teaser sections (more options, landlord)
+   ========================================================================== */
+.small-block { max-width: 34rem; margin-inline: 0; }
+.small-block p.muted { margin-block: var(--space-2xs) var(--space-md); }
+
+/* ==========================================================================
+   FAQ
+   ========================================================================== */
+.faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+  max-width: 42rem;
+}
+.faq-item summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font-weight: 700;
+  font-size: 1.0625rem;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::after {
+  content: "+";
+  flex-shrink: 0;
+  color: var(--teal);
+  font-size: 1.25rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+.faq-item[open] summary::after { transform: rotate(45deg); }
+.faq-item p { margin-top: var(--space-sm); }
+
+/* ==========================================================================
+   Quote CTA (closing section — hands off to the external form)
+   ========================================================================== */
+.quote-cta { max-width: 34rem; margin-inline: 0; }
+.quote-cta h1,
+.quote-cta h2 { margin-block: var(--space-sm) var(--space-md); }
+.quote-cta p.muted { margin-bottom: var(--space-md); }
+.quote-cta__note { margin-top: var(--space-sm); font-size: 0.875rem; margin-bottom: 0; }
