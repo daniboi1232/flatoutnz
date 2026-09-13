@@ -1,4 +1,3 @@
-# Generated from FORM_URL in src/lib/site-config.js — don't hand-edit.
-# The printed QR code points at /quote, never at the form directly, so
-# the form can be swapped later without reprinting anything.
-/quote  https://forms.gle/W12a3DShSvTsWqTu5  302!
+# Landlord enquiries still go to their own external Google Form for now.
+# Tenant quote requests are served directly by /quote/index.html —
+# no redirect rule for /quote here any more.
