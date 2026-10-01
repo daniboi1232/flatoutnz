@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Page not found | FlatOut</title>
   <meta name="description" content="That page doesn't exist." />
-  <link rel="canonical" href="https://flatoutnz.netlify.app/404" />
+  <link rel="canonical" href="https://flatoutnz.co.nz/404" />
 
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#14283A" />
 
   <link rel="preload" href="/fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin />
@@ -19,8 +21,8 @@
   <meta property="og:site_name" content="FlatOut" />
   <meta property="og:title" content="Page not found | FlatOut" />
   <meta property="og:description" content="That page doesn't exist." />
-  <meta property="og:url" content="https://flatoutnz.netlify.app/404" />
-  <meta property="og:image" content="https://flatoutnz.netlify.app/og-image.png" />
+  <meta property="og:url" content="https://flatoutnz.co.nz/404" />
+  <meta property="og:image" content="https://flatoutnz.co.nz/og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
 
   
@@ -41,7 +43,7 @@
 
     <div class="site-header__actions">
       <a class="site-header__phone" href="tel:+64274086895">027 408 6895</a>
-      <a class="btn btn-on-dark" href="https://forms.gle/W12a3DShSvTsWqTu5" target="_blank" rel="noopener">Get a Quote</a>
+      <a class="btn btn-on-dark" href="/quote">Get a Quote</a>
       <details class="nav-toggle">
         <summary aria-label="Menu">
           <span class="nav-toggle__icon"><span></span><span></span><span></span></span>
@@ -63,7 +65,7 @@
     <p class="muted">The page you're after doesn't exist — but the quote form does.</p>
     <div style="display: flex; flex-wrap: wrap; gap: var(--space-sm);">
       <a class="btn btn-primary" href="/">Back to FlatOut</a>
-      <a class="btn btn-outline" href="https://forms.gle/W12a3DShSvTsWqTu5" target="_blank" rel="noopener">Get My Move-Out Quote</a>
+      <a class="btn btn-outline" href="/quote">Get My Move-Out Quote</a>
     </div>
   </div>
 </section>
@@ -78,8 +80,8 @@
           <span class="site-logo__word">FlatOut</span>
         </a>
         <p class="muted" style="margin-top: var(--space-sm); max-width: 26rem;">
-          FlatOut connects students with local moving, cleaning, rubbish
-          and storage providers when it's time to move out.
+          FlatOut arranges move-out services for Christchurch students —
+          moving, end-of-tenancy cleaning, rubbish removal and storage.
         </p>
       </div>
 
@@ -87,7 +89,7 @@
         <h2>Contact</h2>
         <ul class="site-footer__list">
           <li><a href="tel:+64274086895">027 408 6895</a></li>
-          <li><a href="mailto:danielbell1928@gmail.com">danielbell1928@gmail.com</a></li>
+          <li><a href="mailto:admin@flatoutnz.co.nz">admin@flatoutnz.co.nz</a></li>
           <li class="muted">Christchurch</li>
         </ul>
       </div>
@@ -96,7 +98,9 @@
         <h2>Explore</h2>
         <ul class="site-footer__list">
           <li><a href="/#how-it-works">How It Works</a></li><li><a href="/#services">Services</a></li><li><a href="/#landlord">For Landlords</a></li><li><a href="/#contact">Contact</a></li>
-          <li><a href="https://forms.gle/W12a3DShSvTsWqTu5" target="_blank" rel="noopener">Get a Quote</a></li>
+          <li><a href="/terms">Terms</a></li>
+          <li><a href="https://books.zohosecure.com.au/portal/flatoutnz" target="_blank" rel="noopener">Customer portal</a></li>
+          <li><a href="/quote">Get a Quote</a></li>
         </ul>
       </div>
     </div>
@@ -107,5 +111,20 @@
     </div>
   </div>
 </footer>
+
+  <!-- Mobile call bar. Phones only; hidden from 48rem up where the
+       header phone number is already visible. -->
+  <div class="call-bar" role="complementary" aria-label="Contact FlatOut">
+    <a class="call-bar__btn call-bar__btn--call" href="tel:+64274086895">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>
+      Call
+    </a>
+    <a class="call-bar__btn call-bar__btn--text" href="sms:+64274086895">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg>
+      Text
+    </a>
+    <a class="call-bar__btn call-bar__btn--quote" href="/quote">Get a quote</a>
+  </div>
+
 </body>
 </html>

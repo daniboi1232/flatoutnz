@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://flatoutnz.netlify.app/sitemap.xml
+Sitemap: https://flatoutnz.co.nz/sitemap.xml

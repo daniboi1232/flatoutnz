@@ -1,3 +1,6 @@
-# Landlord enquiries still go to their own external Google Form for now.
-# Tenant quote requests are served directly by /quote/index.html —
-# no redirect rule for /quote here any more.
+# Clean URLs are served by the folder structure (quote/index.html etc.),
+# so no redirect rules are needed for them.
+#
+# The printed QR posters point at /quote, which is now a real page on
+# this site rather than a forward to an external form. If the form ever
+# moves again, add a rule here rather than reprinting anything.

@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en-NZ">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Landlord and property manager enquiries | FlatOut</title>
+  <meta name="description" content="Move-out cleaning, rubbish removal and maintenance between tenancies for Christchurch rentals. One contact, one invoice." />
+  <link rel="canonical" href="https://flatoutnz.co.nz/landlord" />
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#14283A" />
+
+  <link rel="preload" href="/fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/css/site.css" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="FlatOut" />
+  <meta property="og:title" content="Landlord and property manager enquiries | FlatOut" />
+  <meta property="og:description" content="Move-out cleaning, rubbish removal and maintenance between tenancies for Christchurch rentals." />
+  <meta property="og:url" content="https://flatoutnz.co.nz/landlord" />
+  <meta property="og:image" content="https://flatoutnz.co.nz/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="container site-header__inner">
+    <a class="site-logo" href="/" aria-label="FlatOut home">
+      <img class="site-logo__mark" src="/images/logo-icon.png" width="36" height="36" alt="" />
+      <span class="site-logo__word">FlatOut</span>
+    </a>
+
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+    </nav>
+
+    <div class="site-header__actions">
+      <a class="site-header__phone" href="tel:+64274086895">027 408 6895</a>
+      <a class="btn btn-on-dark" href="/quote">Get a Quote</a>
+      <details class="nav-toggle">
+        <summary aria-label="Menu">
+          <span class="nav-toggle__icon"><span></span><span></span><span></span></span>
+        </summary>
+        <div class="nav-toggle__panel">
+          <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+          <a class="site-header__phone" href="tel:+64274086895">027 408 6895</a>
+        </div>
+      </details>
+    </div>
+  </div>
+</header>
+
+  <main id="main">
+
+<section class="section section--tight section--cream">
+  <div class="container form-intro">
+    <p class="eyebrow muted">Landlords and property managers</p>
+    <h1>Turn a property around between tenancies</h1>
+    <p class="muted">
+      End-of-tenancy cleaning, rubbish removal and the bits that need
+      doing before the next tenant walks in. One contact, one invoice,
+      and contractors who turn up when they say they will.
+    </p>
+  </div>
+</section>
+
+<section class="section section--off-white">
+  <div class="container">
+
+    <form class="form-card card" id="landlord-form" novalidate>
+
+      <div class="form-honeypot" aria-hidden="true">
+        <label for="website">Leave this field blank</label>
+        <input type="text" id="website" name="website" tabindex="-1" autocomplete="off" />
+      </div>
+      <input type="hidden" id="started_at" name="started_at" value="" />
+
+      <fieldset class="form-fieldset">
+        <legend>Your details</legend>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label" for="fullName">Name or company</label>
+            <input class="form-input" type="text" id="fullName" name="fullName" autocomplete="organization" required />
+            <p class="form-error-message" id="fullName-error">Enter your name or company name.</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="role">Your role</label>
+            <select class="form-select" id="role" name="role" required>
+              <option value="" disabled selected>Choose one</option>
+              <option>Private landlord</option>
+              <option>Property manager</option>
+              <option>Letting agent</option>
+              <option>Body corporate</option>
+              <option>Other</option>
+            </select>
+            <p class="form-error-message" id="role-error">Let us know which you are.</p>
+          </div>
+        </div>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label" for="email">Email address</label>
+            <input class="form-input" type="email" id="email" name="email" autocomplete="email" required />
+            <p class="form-error-message" id="email-error">Enter a valid email address.</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="phone">Phone number</label>
+            <input class="form-input" type="tel" id="phone" name="phone" autocomplete="tel" inputmode="tel" required />
+            <p class="form-error-message" id="phone-error">Enter a New Zealand phone number.</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-fieldset">
+        <legend>The property</legend>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="propertyAddress">Property address</label>
+            <input class="form-input" type="text" id="propertyAddress" name="propertyAddress" placeholder="Street address, suburb" autocomplete="off" required />
+            <p class="form-error-message" id="propertyAddress-error">We need the address to scope the job.</p>
+          </div>
+        </div>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label" for="tenancyEnd">Tenancy end date</label>
+            <input class="form-input" type="date" id="tenancyEnd" name="tenancyEnd" required />
+            <p class="form-error-message" id="tenancyEnd-error">When does the tenancy end?</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="completionDate">Needs to be done by</label>
+            <input class="form-input" type="date" id="completionDate" name="completionDate" required />
+            <p class="form-error-message" id="completionDate-error">When do you need it finished?</p>
+          </div>
+        </div>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label" for="propertySize">Property size</label>
+            <select class="form-select" id="propertySize" name="propertySize" required>
+              <option value="" disabled selected>Choose one</option>
+              <option>1 bedroom</option>
+              <option>2 bedrooms</option>
+              <option>3 bedrooms</option>
+              <option>4 bedrooms</option>
+              <option>5+ bedrooms</option>
+            </select>
+            <p class="form-error-message" id="propertySize-error">Choose a size.</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="accessMethod">How do we get in?</label>
+            <select class="form-select" id="accessMethod" name="accessMethod" required>
+              <option value="" disabled selected>Choose one</option>
+              <option>Keys collected from our office</option>
+              <option>Lockbox on site</option>
+              <option>Someone will meet the contractor</option>
+              <option>Tenant still in the property</option>
+              <option>Other — we'll arrange it</option>
+            </select>
+            <p class="form-error-message" id="accessMethod-error">Tell us how access works.</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="condition">Current condition</label>
+            <select class="form-select" id="condition" name="condition" required>
+              <option value="" disabled selected>Choose one</option>
+              <option>Good — routine turnover clean</option>
+              <option>Average — normal wear, needs a solid clean</option>
+              <option>Poor — heavy clean, rubbish left behind</option>
+              <option>Not sure yet — tenancy hasn't ended</option>
+            </select>
+            <p class="form-error-message" id="condition-error">Give us a rough idea.</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-fieldset">
+        <legend>What you need</legend>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Which services?</label>
+            <div class="form-options" id="services-group">
+              <label class="form-option"><input type="checkbox" name="services" value="End-of-tenancy cleaning" /><span>End-of-tenancy cleaning</span></label>
+              <label class="form-option"><input type="checkbox" name="services" value="Rubbish removal and disposal" /><span>Rubbish removal and disposal</span></label>
+              <label class="form-option"><input type="checkbox" name="services" value="Moving or furniture removal" /><span>Moving or furniture removal</span></label>
+              <label class="form-option"><input type="checkbox" name="services" value="Maintenance between tenancies" /><span>Maintenance between tenancies</span></label>
+            </div>
+            <p class="form-error-message" id="services-error">Tick at least one.</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="specialRequirements">Anything we should know? <span class="form-optional">(optional)</span></label>
+            <textarea class="form-textarea" id="specialRequirements" name="specialRequirements" placeholder="Problem areas, tight deadlines, previous issues, parking or access constraints"></textarea>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Best way to contact you</label>
+            <div class="form-options" role="radiogroup" aria-required="true" id="contactMethod-group">
+              <label class="form-option"><input type="radio" name="contactMethod" value="Email" required /><span>Email</span></label>
+              <label class="form-option"><input type="radio" name="contactMethod" value="Phone" /><span>Phone</span></label>
+            </div>
+            <p class="form-error-message" id="contactMethod-error">Let us know how to reach you.</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="form-terms">
+        <p class="form-terms__title">Before you send this</p>
+        <ul class="form-terms__list">
+          <li>You're authorised to arrange work on this property.</li>
+          <li>We'll arrange a time to look at the property before we quote it.</li>
+          <li>Nothing is charged until you've accepted a written quote. See our <a href="/terms">full terms</a>.</li>
+          <li>We'll pass the address and job details to the contractors doing the work.</li>
+        </ul>
+      </div>
+
+      <div class="form-consent">
+        <input type="checkbox" id="consent" name="consent" value="Authorised to arrange work on this property; agreed to FlatOut NZ enquiry terms v1.0 (2026-10-01)" required />
+        <label for="consent">
+          I've read and agree to the above.
+        </label>
+      </div>
+      <p class="form-error-message" id="consent-error">We need you to agree before we can take this.</p>
+
+      <div class="form-submit-row">
+        <button class="btn btn-primary btn-block" type="submit" id="submit-btn">
+          <span id="submit-btn-label">Send enquiry</span>
+        </button>
+        <p class="form-submit-note muted">The visit and the quote are free. You're not committing to anything yet.</p>
+      </div>
+
+      <p class="form-status form-status--error" id="form-status" role="alert"></p>
+    </form>
+
+    <div class="form-card card form-success" id="form-success">
+      <div class="form-success__icon">
+        <svg width="24" height="24" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3.5 9.5 7 13l7.5-8" stroke="var(--teal)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <h2>Got it — thanks.</h2>
+      <p class="muted">Your reference is</p>
+      <span class="form-success__ref" id="form-success-ref">FO-000000</span>
+      <p class="muted">
+        We'll be in touch the same day, and no later than the end of the
+        following day, to arrange a look at the property.
+      </p>
+      <p class="muted">
+        If it's urgent, call or text <a href="tel:+64274086895">027 408 6895</a>.
+      </p>
+    </div>
+
+  </div>
+</section>
+
+  </main>
+
+<footer class="site-footer" id="contact">
+  <div class="container">
+    <div class="site-footer__grid">
+      <div>
+        <a class="site-logo" href="/" aria-label="FlatOut home">
+          <img class="site-logo__mark" src="/images/logo-icon.png" width="32" height="32" alt="" />
+          <span class="site-logo__word">FlatOut</span>
+        </a>
+        <p class="muted" style="margin-top: var(--space-sm); max-width: 26rem;">
+          FlatOut arranges move-out services for Christchurch students —
+          moving, end-of-tenancy cleaning, rubbish removal and storage.
+        </p>
+      </div>
+
+      <div>
+        <h2>Contact</h2>
+        <ul class="site-footer__list">
+          <li><a href="tel:+64274086895">027 408 6895</a></li>
+          <li><a href="mailto:admin@flatoutnz.co.nz">admin@flatoutnz.co.nz</a></li>
+          <li class="muted">Christchurch</li>
+        </ul>
+      </div>
+
+      <div>
+        <h2>Explore</h2>
+        <ul class="site-footer__list">
+          <li><a href="/#how-it-works">How It Works</a></li><li><a href="/#services">Services</a></li><li><a href="/#landlord">For Landlords</a></li><li><a href="/#contact">Contact</a></li>
+          <li><a href="/terms">Terms</a></li>
+          <li><a href="https://books.zohosecure.com.au/portal/flatoutnz" target="_blank" rel="noopener">Customer portal</a></li>
+          <li><a href="/quote">Get a Quote</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="site-footer__bottom">
+      <span>&copy; 2026 FlatOut. All rights reserved.</span>
+      <a href="/privacy">Privacy</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbwrQBIbt5sEn6dOuFY8pz31-HjN-jY4Oiz2DYKrpUo_bYasJJRLLObJHFxdtW4lFAqiSQ/exec";
+  var TERMS_VERSION = "1.0 (2026-10-01)";
+
+  var form = document.getElementById("landlord-form");
+  var successPanel = document.getElementById("form-success");
+  var successRef = document.getElementById("form-success-ref");
+  var statusBox = document.getElementById("form-status");
+  var submitBtn = document.getElementById("submit-btn");
+  var submitBtnLabel = document.getElementById("submit-btn-label");
+  document.getElementById("started_at").value = Date.now();
+
+  (function () {
+    var d = new Date();
+    var today = d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
+    ["tenancyEnd", "completionDate"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.setAttribute("min", today);
+    });
+  })();
+
+  var requiredFields = [
+    { name: "fullName", type: "text" },
+    { name: "role", type: "select" },
+    { name: "email", type: "email" },
+    { name: "phone", type: "phone" },
+    { name: "propertyAddress", type: "text" },
+    { name: "tenancyEnd", type: "text" },
+    { name: "completionDate", type: "text" },
+    { name: "propertySize", type: "select" },
+    { name: "accessMethod", type: "select" },
+    { name: "condition", type: "select" },
+    { name: "services", type: "checkbox" },
+    { name: "contactMethod", type: "radio" },
+    { name: "consent", type: "checkbox-single" }
+  ];
+
+  function showError(name, isValid) {
+    var errorEl = document.getElementById(name + "-error");
+    var input = form.querySelector('[name="' + name + '"]');
+    if (errorEl) errorEl.classList.toggle("is-visible", !isValid);
+    if (input && input.type !== "checkbox" && input.type !== "radio") {
+      input.setAttribute("aria-invalid", isValid ? "false" : "true");
+    }
+  }
+
+  function validateField(field) {
+    var isValid = true;
+    var el = form.querySelector('[name="' + field.name + '"]');
+    if (field.type === "email") {
+      isValid = el.value.trim() !== "" && el.validity.valid;
+    } else if (field.type === "phone") {
+      var digits = el.value.replace(/[\s\-().]/g, "").replace(/^\+?64/, "0");
+      isValid = /^0[2-9]\d{7,9}$/.test(digits);
+    } else if (field.type === "text") {
+      isValid = el.value.trim() !== "";
+    } else if (field.type === "select") {
+      isValid = el.value !== "";
+    } else if (field.type === "radio" || field.type === "checkbox") {
+      isValid = !!form.querySelector('[name="' + field.name + '"]:checked');
+    } else if (field.type === "checkbox-single") {
+      isValid = el.checked;
+    }
+    showError(field.name, isValid);
+    return isValid;
+  }
+
+  requiredFields.forEach(function (field) {
+    if (["text", "email", "phone", "select"].indexOf(field.type) !== -1) {
+      var el = form.querySelector('[name="' + field.name + '"]');
+      if (el) el.addEventListener("blur", function () { validateField(field); });
+    }
+  });
+
+  function makeReference() {
+    var now = new Date();
+    var stamp = now.getFullYear().toString().slice(2) +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      String(now.getDate()).padStart(2, "0");
+    return "FO-" + stamp + "-" + Math.floor(1000 + Math.random() * 9000);
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    statusBox.classList.remove("is-visible");
+
+    var allValid = true, firstBad = null;
+    requiredFields.forEach(function (f) {
+      var v = validateField(f);
+      if (!v && !firstBad) firstBad = f.name;
+      allValid = allValid && v;
+    });
+    if (!allValid) {
+      var el = form.querySelector('[name="' + firstBad + '"]');
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      statusBox.textContent = "A few fields need your attention above.";
+      statusBox.classList.add("is-visible");
+      return;
+    }
+
+    var data = {
+      formType: "landlord",
+      fullName: form.fullName.value.trim(),
+      role: form.role.value,
+      email: form.email.value.trim(),
+      phone: form.phone.value.trim(),
+      propertyAddress: form.propertyAddress.value.trim(),
+      tenancyEnd: form.tenancyEnd.value,
+      completionDate: form.completionDate.value,
+      propertySize: form.propertySize.value,
+      accessMethod: form.accessMethod.value,
+      condition: form.condition.value,
+      services: Array.prototype.slice
+        .call(form.querySelectorAll('[name="services"]:checked'))
+        .map(function (c) { return c.value; }),
+      specialRequirements: form.specialRequirements.value.trim(),
+      contactMethod: (form.querySelector('[name="contactMethod"]:checked') || {}).value || "",
+      consent: form.consent.checked ? form.consent.value : "",
+      website: form.website.value,
+      termsVersion: TERMS_VERSION,
+      consentedAt: new Date().toISOString()
+    };
+
+    var elapsed = Date.now() - Number(form.started_at.value || Date.now());
+    var ref = makeReference();
+    if (data.website || elapsed < 2500) { showSuccess(ref); return; }
+
+    data.reference = ref;
+    submitBtn.disabled = true;
+    submitBtnLabel.innerHTML = '<span class="form-loading"><span class="form-spinner"></span> Sending…</span>';
+
+    function attempt(triesLeft) {
+      return fetch(ENDPOINT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(data)
+      })
+        .then(function (res) {
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.json();
+        })
+        .then(function (body) {
+          if (body && body.result === "success") return true;
+          throw new Error("rejected");
+        })
+        .catch(function (err) {
+          if (triesLeft > 0) {
+            return new Promise(function (r) { setTimeout(r, 1200); })
+              .then(function () { return attempt(triesLeft - 1); });
+          }
+          throw err;
+        });
+    }
+
+    attempt(1)
+      .then(function () { showSuccess(ref); })
+      .catch(function () {
+        submitBtn.disabled = false;
+        submitBtnLabel.textContent = "Send enquiry";
+        statusBox.innerHTML = "That didn't send. Your answers are still here, so try again \u2014 or email us at <a href=\"mailto:admin@flatoutnz.co.nz\">admin@flatoutnz.co.nz</a>.";
+        statusBox.classList.add("is-visible");
+        statusBox.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+  });
+
+  function showSuccess(ref) {
+    successRef.textContent = ref;
+    form.style.display = "none";
+    successPanel.classList.add("is-visible");
+    successPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+})();
+</script>
+
+
+  <!-- Mobile call bar. Phones only; hidden from 48rem up where the
+       header phone number is already visible. -->
+  <div class="call-bar" role="complementary" aria-label="Contact FlatOut">
+    <a class="call-bar__btn call-bar__btn--call" href="tel:+64274086895">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>
+      Call
+    </a>
+    <a class="call-bar__btn call-bar__btn--text" href="sms:+64274086895">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg>
+      Text
+    </a>
+    
+  </div>
+
+</body>
+</html>

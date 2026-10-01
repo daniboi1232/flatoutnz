@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://flatoutnz.netlify.app/</loc></url>
-  <url><loc>https://flatoutnz.netlify.app/quote</loc></url>
-  <url><loc>https://flatoutnz.netlify.app/privacy</loc></url>
+  <url><loc>https://flatoutnz.co.nz/</loc></url>
+  <url><loc>https://flatoutnz.co.nz/quote</loc></url>
+  <url><loc>https://flatoutnz.co.nz/landlord</loc></url>
+  <url><loc>https://flatoutnz.co.nz/terms</loc></url>
+  <url><loc>https://flatoutnz.co.nz/privacy</loc></url>
 </urlset>

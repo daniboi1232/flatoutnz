@@ -1,0 +1,23 @@
+{
+  "name": "FlatOut NZ — Student move-out services Christchurch",
+  "short_name": "FlatOut",
+  "description": "Moving out? We'll sort it. Moving, cleaning, rubbish removal and storage for Christchurch students.",
+  "start_url": "/?utm_source=homescreen",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#14283A",
+  "theme_color": "#14283A",
+  "icons": [
+    {
+      "src": "/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
