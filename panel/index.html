@@ -252,6 +252,9 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
 'use strict';
 
 const money = n => n.toLocaleString('en-NZ', { style: 'currency', currency: 'NZD' });
+/* A contractor can be deleted, or an id can come from an older version of the
+   data, so never read .name straight off the lookup. */
+function cName(id) { const c = Data.getContractor(id); return c ? c.name : 'Contractor removed'; }
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fd = d => (typeof d === 'string' ? Data.parseDate(d) : new Date(d)).toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
 const ft = t => { const [h, m] = t.split(':').map(Number); return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''}${h < 12 ? 'am' : 'pm'}`; };
@@ -489,7 +492,7 @@ function vJob(j) {
   <div class="grid2">
     <section class="card"><div class="card-head"><h3>Owner breakdown</h3><span class="eyebrow">Not shown to customer</span></div>
       <div class="tablewrap"><table><thead><tr><th>Section</th><th>Contractor</th><th class="num">Cost</th></tr></thead><tbody>
-      ${Object.entries(j.sections).map(([k, s]) => `<tr><td><b>${S[k]}</b><br><span class="small muted">${Object.entries(s.lines).map(([iid, q]) => lineText(s, iid, q)).filter(Boolean).join(', ')}</span></td><td>${esc(Data.getContractor(s.contractorId).name)}</td><td class="num">${money(Data.sectionCost(s))}</td></tr>`).join('')}
+      ${Object.entries(j.sections).map(([k, s]) => `<tr><td><b>${S[k]}</b><br><span class="small muted">${Object.entries(s.lines).map(([iid, q]) => lineText(s, iid, q)).filter(Boolean).join(', ')}</span></td><td>${esc(cName(s.contractorId))}</td><td class="num">${money(Data.sectionCost(s))}</td></tr>`).join('')}
       <tr><td colspan="2">Contractor cost</td><td class="num">${money(cost)}</td></tr>
       <tr><td colspan="2">Margin (15%)</td><td class="num">${money(total - cost)}</td></tr>
       <tr class="total"><td colspan="2">Customer price</td><td class="num">${money(total)}</td></tr></tbody></table></div>
@@ -499,7 +502,7 @@ function vJob(j) {
   </div>
   ${j.pos.length ? posCard(j) : ''}
   ${messagesCard(j)}
-  ${Object.keys(j.sections).length ? `<section class="card"><h3>Site notes for contractors</h3><div class="rows" style="margin-top:12px">${Object.entries(j.sections).map(([k, s]) => `<div class="row"><div class="main"><b>${S[k]}</b> <span class="small muted">→ ${esc(Data.getContractor(s.contractorId).name)}</span><br><span class="small">${s.access.length ? esc(s.access.join(' · ')) : '<span class="muted">No on-site requirements ticked</span>'}</span>${s.notes ? `<br><span class="small muted">${esc(s.notes)}</span>` : ''}${s.photos.length ? `<div class="photos" style="margin-top:8px">${s.photos.map(u => `<img src="${Data.photoUrl(u)}" alt="Site photo">`).join('')}</div>` : ''}</div></div>`).join('')}</div></section>` : ''}
+  ${Object.keys(j.sections).length ? `<section class="card"><h3>Site notes for contractors</h3><div class="rows" style="margin-top:12px">${Object.entries(j.sections).map(([k, s]) => `<div class="row"><div class="main"><b>${S[k]}</b> <span class="small muted">→ ${esc(cName(s.contractorId))}</span><br><span class="small">${s.access.length ? esc(s.access.join(' · ')) : '<span class="muted">No on-site requirements ticked</span>'}</span>${s.notes ? `<br><span class="small muted">${esc(s.notes)}</span>` : ''}${s.photos.length ? `<div class="photos" style="margin-top:8px">${s.photos.map(u => `<img src="${Data.photoUrl(u)}" alt="Site photo">`).join('')}</div>` : ''}</div></div>`).join('')}</div></section>` : ''}
   ${notesCard(j)}
   <section class="card"><h3>Activity</h3><ul class="log" style="margin-top:10px">${j.log.slice().reverse().map(l => `<li>${esc(l)}</li>`).join('')}</ul></section>
   <section class="card"><div class="card-head"><h3>This job</h3></div>
@@ -696,9 +699,9 @@ function vCalendar() {
     </div>
     <div class="legend"><span><i style="background:var(--navy-deep)"></i>Booked job</span><span><i style="background:var(--white);box-shadow:inset 0 0 0 1px var(--line-strong)"></i>Estimate or quote out</span><span><i style="background:var(--teal-wash)"></i>Site visit</span><span><i style="box-shadow:inset 0 0 0 2px var(--orange)"></i>Possible clash</span></div></section>
     <section class="card"><div class="card-head"><h3>${fd(ui.day)}</h3><span class="eyebrow">${selEv.length} item${selEv.length === 1 ? '' : 's'}</span></div>
-      ${selClash.map(x => `<p class="note" style="margin-bottom:12px">${esc(x.c.name)} is on ${x.jobs.length} jobs this day: ${x.jobs.map(j => j.id).join(', ')}.</p>`).join('')}
+      ${selClash.map(x => `<p class="note" style="margin-bottom:12px">${esc(x.c ? x.c.name : 'Contractor removed')} is on ${x.jobs.length} jobs this day: ${x.jobs.map(j => j.id).join(', ')}.</p>`).join('')}
       <div class="rows">${selEv.map(e => e.type === 'visit' ? `<div class="row"><div class="main"><b>${ft(e.time)} · Site visit</b><br><span class="small muted">${esc((e.enq || e.job.cust).name)} · ${esc((e.enq || e.job.cust).address)}</span></div><span class="pill p-ok">${esc(e.who.split(' ')[0])}</span></div>`
-        : `<div class="row"><div class="main"><b>${esc(e.job.cust.name)}</b> <span class="muted small">${e.job.id}</span><br><span class="small muted">${Object.entries(e.job.sections).map(([k, s]) => `${S[k]} → ${esc(Data.getContractor(s.contractorId).name)}`).join(' · ')}</span></div>${stagePill(e.job.stage, e.job)}<button class="btn sm ghost" data-act="open" data-id="${e.job.id}">Open</button></div>`).join('') || '<p class="muted">Nothing on this day.</p>'}</div></section>
+        : `<div class="row"><div class="main"><b>${esc(e.job.cust.name)}</b> <span class="muted small">${e.job.id}</span><br><span class="small muted">${Object.entries(e.job.sections).map(([k, s]) => `${S[k]} → ${esc(cName(s.contractorId))}`).join(' · ')}</span></div>${stagePill(e.job.stage, e.job)}<button class="btn sm ghost" data-act="open" data-id="${e.job.id}">Open</button></div>`).join('') || '<p class="muted">Nothing on this day.</p>'}</div></section>
   </div></div>`;
 }
 
@@ -861,9 +864,20 @@ function vContractors() {
 }
 
 /* ---------- render ------------------------------------------------ */
+/* If one view throws, say so instead of leaving a blank page — a blank page
+   looks like a dead button and hides the actual fault. */
 function render() {
-  document.getElementById('app').innerHTML =
-    ({ home: vHome, jobs: vJobs, calendar: vCalendar, walk: vWalk, contractors: vContractors, alerts: vAlerts })[view]();
+  const app = document.getElementById('app');
+  try {
+    app.innerHTML =
+      ({ home: vHome, jobs: vJobs, calendar: vCalendar, walk: vWalk, contractors: vContractors, alerts: vAlerts })[view]();
+  } catch (err) {
+    console.error(err);
+    app.innerHTML = `<section class="card"><h2>That didn't draw</h2>
+      <p class="note" style="margin-top:12px">Something in this screen's data broke the page. Nothing has been lost — the records are still saved.</p>
+      <p class="small muted" style="margin-top:10px">${esc(err && err.message || String(err))}</p>
+      <div class="actions" style="margin-top:14px"><button class="btn" data-act="goHome">Back to Home</button></div></section>`;
+  }
   bell();
 }
 function refreshJobs() {
@@ -898,6 +912,7 @@ document.addEventListener('click', e => {
   switch (d.act) {
     case 'nav': openJob = null; go(d.v); break;
     case 'open': go('jobs', d.id); break;
+    case 'goHome': openJob = null; go('home'); break;
     case 'back': go('jobs', null); break;
     case 'alerts': openJob = null; go('alerts'); break;
     case 'cancelDraft': draft = null; render(); break;
@@ -955,7 +970,7 @@ document.addEventListener('click', e => {
     case 'poDone': Data.setPoStatus(d.id, d.po, 'done', { photos: 2 }); render(); break;
     case 'backup': { const to = document.getElementById('bk-' + d.po).value;
       const { po } = Data.replacePurchaseOrder(d.id, d.po, to);
-      toast(`${po.no} sent to ${Data.getContractor(to).name}`); render(); break; }
+      toast(`${po.no} sent to ${cName(to)}`); render(); break; }
     case 'signoff': Data.signOffJob(d.id, owner()); ui.tpl[d.id] = 'review';
       toast('Job signed off. Review request is ready below'); render(); break;
     case 'editTpl': ui.editTpl = ui.editTpl === d.t ? null : d.t; render(); focus('tpl-b-' + d.t); break;
