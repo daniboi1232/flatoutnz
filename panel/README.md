@@ -49,18 +49,77 @@ seeds again.
 
 ---
 
+## How a job runs
+
+Eight stages. Every one of them you move yourself — nothing in here
+talks to Zoho, so each button records something that already happened
+somewhere else.
+
+| Stage | What it means | What moves it on |
+| --- | --- | --- |
+| **New** | Entered from a quote request. Nothing owed, nothing sent. | Walk through the property and price it |
+| **Scoped** | Priced, but the customer hasn't seen it. | Send the estimate from Zoho, then tick it here |
+| **Estimate sent** | With the customer. | They accept — portal, email or phone |
+| **Accepted** | They're in. | Confirm with contractors, send the formal quote from Zoho |
+| **Quote sent** | Waiting on money. | The payment lands in Zoho |
+| **Paid** | Money in, contractors not told yet. | Issue the job orders |
+| **Job orders out** | Contractors have their orders. | They accept, do it, and you sign it off |
+| **Done** | Signed off. | — |
+
+A job can also be marked **lost** or **cancelled**, with a reason. It
+keeps its record but drops out of the pipeline counts and the attention
+list. You can reopen it later.
+
+## Starting a job from a quote request
+
+Walk-through tab → **New job**. Pick Tenant or Landlord, select the
+whole row in Google Sheets, copy it, paste it in, and press **Read the
+row**. It fills the form in for you to check.
+
+It reads dates in several shapes — `13/11/2026`, `2026-11-13`,
+`13 November 2026`, or the bare serial number Sheets uses when a cell
+was never formatted as a date. Day/month order is read the New Zealand
+way, so `3/4/2026` is the third of April. **Whatever it works out shows
+in the form before anything is saved**, so a misread column is visible
+rather than silently becoming a wrong job.
+
+If the reference, phone or address matches a job you already have, it
+says so and offers to open that one instead.
+
+## Sending contractors their job orders
+
+There is no vendor portal, so you send these yourself. On a job at
+**Job orders out**, each contractor has a **Copy the job order to send**
+button. That gives you the address, date, what's needed, access notes,
+what you're paying and the PO number — and deliberately no customer
+name, phone or email, because you arrange access and they never need
+them.
+
+Then record what they told you: **They accepted**, **They declined**
+with a reason, or **No reply**. A no-reply adds a strike. Three
+unexplained silences gets flagged, but the panel never drops a
+contractor by itself.
+
 ## First things to do once it's live
 
-1. **Enter your real contractor rates.** Contractors → each card → the
-   rate table and **+ Add item**. The rate cards start empty on purpose
-   — nothing in here is invented, and the walk-through can't produce a
-   real price until the real prices are in it.
+1. **Enter your real contractor rates.** Contractors → each card →
+   **+ Add item**. The rate cards start empty on purpose — the
+   walk-through can't produce a real price until the real prices are in
+   it.
 2. **Fill in contacts, phone numbers, job-order emails and insurance
    expiry dates** on each contractor.
 3. Check the insurance dates flag correctly: "Renew soon" inside 60
    days, "Expired" after, "No certificate on file" when empty.
 
----
+## Getting your data out
+
+**Jobs** and **Contractors** each have an **Export to spreadsheet**
+button. They download as CSV, which opens straight in Excel or Google
+Sheets.
+
+Worth knowing: a spreadsheet flattens things, so a job's individual line
+items become one summary column. It is for reading, records and your
+accountant — **not a file you could restore the panel from**.
 
 ## How to remove the whole thing
 
@@ -148,9 +207,14 @@ URLs.
 **Basic auth has no logout button.** Close the browser, or use a private
 window.
 
-**Enquiries are typed in by hand for now.** Reading them straight from
-the quote sheet is the next thing to add; when it arrives, only
-`listEnquiries()` in `data.js` changes.
+**Enquiries are pasted in from the sheet.** Reading them automatically
+is the next thing to add; when it arrives, only `listEnquiries()` in
+`data.js` changes.
+
+**Home shows what needs you**, worst first — contractors past their
+reply date, money due or overdue, a job tomorrow where someone hasn't
+confirmed, anything finished and waiting to be signed off, and jobs that
+are nearly due and still unscoped.
 
 **Zoho is untouched.** The panel issues its own job order numbers and
 records contractor responses itself. You do quotes, invoices and

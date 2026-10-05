@@ -238,7 +238,7 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
     </nav>
   </div>
 </header>
-<div class="proto">Phase 1 with sample data. Nothing is sent to Zoho, Google, contractors or customers, and changes reset when the page reloads.</div>
+<div class="proto">Everything here is saved as you go. Nothing is sent to Zoho, Google, contractors or customers — you do that yourself and record it here.</div>
 <main id="app"></main>
 <div class="toast" id="toast" hidden></div>
 
@@ -257,12 +257,12 @@ const fd = d => (typeof d === 'string' ? Data.parseDate(d) : new Date(d)).toLoca
 const ft = t => { const [h, m] = t.split(':').map(Number); return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''}${h < 12 ? 'am' : 'pm'}`; };
 const first = n => n.replace(/^Sample:\s*/, '').split(' ')[0];
 const iso = Data.isoDate;
-const TODAY = Data.today();
 const S = Data.SERVICES, KEYS = Data.SERVICE_KEYS, OWNERS = Data.OWNERS, STAGES = Data.STAGES;
 
 /* ---------- view state (not data) -------------------------------- */
 let view = 'home', openJob = null, draft = null;
-const ui = { jf: { q: '', stage: 'all', who: 'all', suburb: 'all' }, addC: false, editC: null,
+const ui = { jf: { q: '', stage: 'all', who: 'all', suburb: 'all', status: 'active' }, addC: false, editC: null,
+  statusFor: null, confirmDelete: null, confirmDelC: null, calWeek: false, paste: { kind: 'tenant', parsed: null, dup: null },
   addItemFor: null, bookFor: null, tpl: {}, editTpl: null, signoff: {},
   cal: { y: 2026, m: 10 }, day: '2026-11-14' };
 const owner = () => document.getElementById('owner').value;
@@ -288,10 +288,16 @@ function bell() {
   const n = Data.unreadCount(owner()), b = document.getElementById('bellcount');
   b.hidden = !n; b.textContent = n;
 }
-const stagePill = s => `<span class="pill ${s >= 6 ? 'p-ok' : s >= 4 ? 'p-navy' : s === 0 ? 'p-grey' : 'p-warn'}">${STAGES[s]}</span>`;
-const poPill = p => ({ accepted: '<span class="pill p-ok">Accepted</span>', done: '<span class="pill p-ok">Marked done</span>',
+const stagePill = (st, job) => {
+  if (job && job.status && job.status !== 'active') {
+    return `<span class="pill p-grey">${Data.JOB_STATUS[job.status]}</span>`;
+  }
+  return `<span class="pill ${st >= 7 ? 'p-ok' : st >= 5 ? 'p-navy' : st === 0 ? 'p-grey' : 'p-warn'}">${STAGES[st]}</span>`;
+};
+const poPill = (p, overdue) => ({ accepted: '<span class="pill p-ok">Accepted</span>', done: '<span class="pill p-ok">Done</span>',
   declined: '<span class="pill p-bad">Declined</span>', silent: '<span class="pill p-bad">No reply</span>',
-  replaced: '<span class="pill p-grey">Replaced</span>' })[p.status] || '<span class="pill p-warn">Awaiting reply</span>';
+  replaced: '<span class="pill p-grey">Replaced</span>' })[p.status]
+  || (overdue ? '<span class="pill p-bad">Overdue</span>' : '<span class="pill p-warn">Waiting on them</span>');
 async function copy(text) {
   try { await navigator.clipboard.writeText(text); toast('Copied'); }
   catch (e) { toast('Copy blocked here. Select the text and copy it instead'); }
@@ -305,55 +311,47 @@ function jobCtx(j) {
     amount: money(t.amount), 'due date': fd(t.due), 'job date': fd(c.moveDate),
     services: Object.keys(j.sections).map(k => S[k].toLowerCase()).join(', ') };
 }
-const suggested = j => j.stage <= 1 ? 'estimate' : j.stage <= 3 ? 'payment' : j.stage === 5 ? 'daybefore' : 'review';
+const suggested = j => j.stage === 0 ? 'visit'
+  : j.stage <= 2 ? 'estimate'
+  : j.stage <= 4 ? 'payment'
+  : j.stage === 6 ? 'daybefore'
+  : j.stage === 7 ? 'review' : 'estimate';
 const lineText = (s, iid, q) => { const i = Data.getRateItem(s.contractorId, iid); return i ? `${q} × ${i.name}` : ''; };
 
 /* ---------- home -------------------------------------------------- */
-const visitLine = e => e.visit
-  ? `<span class="pill p-ok">Visit ${fd(e.visit.date)} ${ft(e.visit.time)} · ${esc(e.visit.who.split(' ')[0])}</span>`
-  : '<span class="pill p-warn">Visit not booked</span>';
-
-function bookForm(e) {
-  const v = e.visit || { date: iso(Data.addBusinessDays(TODAY, 1)), time: '16:00', who: owner() };
-  return `<form class="formbox" data-form="book" data-ref="${e.ref}"><div class="form-grid">
-    <div class="field"><label for="bk-d-${e.ref}">Date</label><input class="input" type="date" id="bk-d-${e.ref}" name="date" required value="${v.date}"></div>
-    <div class="field"><label for="bk-t-${e.ref}">Time</label><input class="input" type="time" id="bk-t-${e.ref}" name="time" required value="${v.time}"></div>
-    <div class="field"><label for="bk-w-${e.ref}">Who's going</label><select class="select" id="bk-w-${e.ref}" name="who">${OWNERS.map(o => `<option ${o === v.who ? 'selected' : ''}>${o}</option>`).join('')}</select></div></div>
-    <div class="chips"><button class="btn sm" type="submit">Save visit</button><button class="btn sm ghost" type="button" data-act="hideBook">Cancel</button></div></form>`;
-}
-function enquiryRow(e, startLabel = 'Start walk-through') {
-  return `<div class="row"><div class="main"><b>${esc(e.name)}</b> <span class="muted small">${e.ref}</span>${e.source === 'landlord' ? ' <span class="pill p-grey">Landlord</span>' : ''}<br>
-  <span class="small muted">${esc(e.address)} · ${e.people} people · moving ${fd(e.moveDate)}</span><br>
-  <span class="small">${e.services.map(k => S[k]).join(', ')}</span><div style="margin-top:6px">${visitLine(e)}</div></div>
-  <div class="chips"><button class="btn sm ghost" data-act="showBook" data-ref="${e.ref}">${e.visit ? 'Change visit' : 'Book visit'}</button>${e.visit ? `<button class="btn sm ghost" data-act="copyVisit" data-ref="${e.ref}">Copy confirmation</button>` : ''}<button class="btn sm" data-act="start" data-ref="${e.ref}">${startLabel}</button></div>
-  ${ui.bookFor === e.ref ? bookForm(e) : ''}</div>`;
-}
 function vHome() {
-  const jobs = Data.listJobs(), enquiries = Data.listEnquiries();
-  const all = jobs.flatMap(j => j.pos.map(p => ({ j, p })));
-  const problems = all.filter(x => x.p.status === 'declined' || x.p.status === 'silent');
-  const waiting = all.filter(x => x.p.status === 'awaiting');
-  const signoff = jobs.filter(j => j.stage === 5 && Data.livePos(j).length && Data.livePos(j).every(p => p.status === 'done'));
-  const pay = Data.getPayments();
-  const visits = enquiries.filter(e => e.visit).map(e => ({ ...e.visit, name: e.name, address: e.address }))
-    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  const jobs = Data.listJobs();
+  const live = jobs.filter(j => j.status === 'active');
+  const attention = Data.getAttention(owner(), Data.getAlertSettings(owner())?.mineOnly);
+  const pay = Data.getPayments().filter(x => x.job.status === 'active');
+  const urgent = attention.filter(a => a.urgency === 0).length;
+
   return `<div class="view">
-  <div><h2>Kia ora, ${esc(owner().split(' ')[0])}</h2><p class="muted small" style="margin-top:4px">${fd(TODAY)} · ${jobs.length} job${jobs.length === 1 ? '' : 's'} on the books · ${problems.length + signoff.length} thing${problems.length + signoff.length === 1 ? '' : 's'} to sort</p></div>
+  <div><h2>Kia ora, ${esc(owner().split(' ')[0])}</h2>
+    <p class="muted small" style="margin-top:4px">${fd(new Date())} · ${live.length} live job${live.length === 1 ? '' : 's'} · ${attention.length === 0 ? 'nothing needs you right now' : `${attention.length} thing${attention.length === 1 ? '' : 's'} needing you${urgent ? `, ${urgent} urgent` : ''}`}</p></div>
+
+  <section class="card" ${urgent ? 'style="box-shadow:inset 0 0 0 2px var(--orange),var(--shadow-card)"' : ''}>
+    <div class="card-head"><h3>Needs you</h3><span class="eyebrow">Worst first</span></div>
+    ${attention.length ? `<div class="rows">${attention.map(a => `<div class="row">
+      <div class="main"><b>${esc(a.what)}</b><br><span class="small muted">${esc(a.detail)}</span></div>
+      <span class="pill ${a.urgency === 0 ? 'p-bad' : a.urgency === 1 ? 'p-warn' : 'p-grey'}">${a.urgency === 0 ? 'Now' : a.urgency === 1 ? 'Soon' : 'Coming up'}</span>
+      <button class="btn sm ${a.urgency === 0 ? '' : 'ghost'}" data-act="open" data-id="${a.jobId}">${esc(a.action)}</button>
+    </div>`).join('')}</div>`
+      : '<p class="muted">Nothing overdue, nothing waiting on you. Good spot to be in.</p>'}
+  </section>
+
   <div class="grid2">
     <section class="card"><div class="card-head"><h3>Start a job</h3><span class="eyebrow">From a quote request</span></div>
-      <p class="muted small">A quote request comes through to the sheet and to your email. Open it, then start the walk-through here with the customer's details.</p>
-      <div class="chips" style="margin-top:14px"><button class="btn" data-act="nav" data-v="walk">New walk-through</button></div>
-      <p class="small muted" style="margin-top:14px">Pulling enquiries straight from the sheet is the next thing to add, once this is earning its keep.</p></section>
-    <section class="card"><div class="card-head"><h3>Job pipeline</h3><button class="btn sm ghost" data-act="nav" data-v="jobs">All jobs</button></div>
-      <div class="stat-row">${[[0, 1, 'Estimating'], [2, 3, 'Quoting'], [4, 5, 'Booked'], [6, 6, 'Done']].map(([a, b, l]) => `<div class="stat"><b>${jobs.filter(j => j.stage >= a && j.stage <= b).length}</b><span class="small muted">${l}</span></div>`).join('')}</div>
-      <div class="rows" style="margin-top:14px">${signoff.map(j => `<div class="row"><div class="main"><b>${esc(j.cust.name)}</b> <span class="muted small">${j.id}</span><br><span class="small muted">Contractors have marked it done</span></div><span class="pill p-warn">Needs sign-off</span><button class="btn sm" data-act="open" data-id="${j.id}">Check</button></div>`).join('')}
-      ${jobs.filter(j => !signoff.includes(j)).map(j => `<div class="row"><div class="main"><b>${esc(j.cust.name)}</b> <span class="muted small">${j.id}</span><br><span class="small muted">${fd(j.cust.moveDate)} · ${money(Data.customerPrice(Data.jobCost(j)))} · ${esc(j.owner.split(' ')[0])}</span></div>${stagePill(j.stage)}<button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button></div>`).join('')}</div></section>
-    <section class="card"><div class="card-head"><h3>Contractor responses</h3><span class="eyebrow">2 business day window</span></div>
-      <div class="rows">${[...problems, ...waiting].map(({ j, p }) => { const c = Data.getContractor(p.contractorId);
-        return `<div class="row"><div class="main"><b>${esc(c.name)}</b> <span class="muted small">${p.no} · ${j.id}</span><br><span class="small muted">${p.status === 'declined' ? 'Reason: ' + esc(p.reason) : p.status === 'silent' ? `No reply by ${fd(p.due)} · strike ${c.strikes} of 3` : 'Reply due ' + fd(p.due)}</span></div>${poPill(p)}${p.status !== 'awaiting' ? `<button class="btn sm ghost" data-act="open" data-id="${j.id}">Sort it</button>` : ''}</div>`; }).join('') || '<p class="muted">Everyone has replied.</p>'}</div></section>
-    <section class="card"><div class="card-head"><h3>Payments</h3><span class="eyebrow">Status from Zoho Books</span></div>
+      <p class="muted small">Paste the row straight out of the quote sheet and it fills in the details for you to check.</p>
+      <div class="chips" style="margin-top:14px"><button class="btn" data-act="nav" data-v="walk">New job</button></div></section>
+
+    <section class="card"><div class="card-head"><h3>Pipeline</h3><button class="btn sm ghost" data-act="nav" data-v="jobs">All jobs</button></div>
+      <div class="stat-row">${[[0, 0, 'New'], [1, 1, 'Scoped'], [2, 4, 'Quoting'], [5, 6, 'Booked'], [7, 7, 'Done']].map(([a, b, l]) => `<div class="stat"><b>${live.filter(j => j.stage >= a && j.stage <= b).length}</b><span class="small muted">${l}</span></div>`).join('')}</div>
+      <div class="rows" style="margin-top:14px">${live.slice(0, 6).map(j => `<div class="row"><div class="main"><b>${esc(j.cust.name)}</b> <span class="muted small">${j.id}</span><br><span class="small muted">${j.cust.moveDate ? fd(j.cust.moveDate) : 'no date'} · ${money(Data.customerPrice(Data.jobCost(j)))} · ${esc(j.owner.split(' ')[0])}</span></div>${stagePill(j.stage, j)}<button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button></div>`).join('') || '<p class="muted">No jobs yet.</p>'}</div></section>
+
+    <section class="card"><div class="card-head"><h3>Payments</h3><span class="eyebrow">You record these from Zoho</span></div>
       <div class="rows">${pay.map(({ job: j, terms: t, paid, overdue }) => `<div class="row"><div class="main"><b>${esc(j.cust.name)}</b> <span class="muted small">${j.id}</span><br><span class="small muted">${paid ? (t.balance ? `Balance ${money(t.balance)} due ${fd(t.balanceDue)}` : 'Paid in full') : `${t.kind} ${money(t.amount)} due ${fd(t.due)}`}</span></div>${paid ? (t.balance ? '<span class="pill p-warn">Balance owing</span>' : '<span class="pill p-ok">Paid</span>') : overdue ? '<span class="pill p-bad">Overdue</span>' : '<span class="pill p-grey">Not yet due</span>'}</div>`).join('') || '<p class="muted">Nothing owing.</p>'}</div>
-      <p class="small muted" style="margin-top:12px">Invoices, payments and contractor bills are handled in Zoho. This only shows where each job stands.</p></section>
+      <p class="small muted" style="margin-top:12px">Invoices and payments live in Zoho. This only reflects what you have recorded here.</p></section>
   </div></div>`;
 }
 
@@ -365,27 +363,31 @@ function filteredJobs() {
     (!q || [j.id, j.cust.name, j.cust.address, j.cust.phone].join(' ').toLowerCase().includes(q))
     && (f.stage === 'all' || String(j.stage) === f.stage)
     && (f.who === 'all' || (f.who === 'me' ? j.owner === owner() : j.owner === f.who))
-    && (f.suburb === 'all' || suburb(j) === f.suburb));
+    && (f.suburb === 'all' || suburb(j) === f.suburb)
+    && (f.status === 'all' || (f.status === 'active' ? j.status === 'active' : j.status === f.status)));
 }
 function jobRows() {
   const list = filteredJobs();
   return list.length ? list.map(j => `<tr><td>${j.id}</td><td><b>${esc(j.cust.name)}</b><br><span class="small muted">${esc(j.cust.address)}</span></td><td>${fd(j.cust.moveDate)}</td>
     <td><select class="select inline" id="own-${j.id}" data-act="setOwner" data-id="${j.id}" aria-label="Job owner for ${j.id}">${OWNERS.map(o => `<option value="${o}" ${o === j.owner ? 'selected' : ''}>${o.split(' ')[0]}</option>`).join('')}</select></td>
-    <td>${stagePill(j.stage)}</td><td class="num">${money(Data.customerPrice(Data.jobCost(j)))}</td><td><button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button></td></tr>`).join('')
+    <td>${stagePill(j.stage, j)}</td><td class="num">${money(Data.customerPrice(Data.jobCost(j)))}</td><td><button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button></td></tr>`).join('')
     : '<tr><td colspan="7" class="muted">No jobs match. Clear a filter or search for something else.</td></tr>';
 }
 function vJobs() {
   if (openJob) return vJob(Data.getJob(openJob));
   const f = ui.jf, jobs = Data.listJobs(), subs = [...new Set(jobs.map(suburb))].sort();
-  return `<div class="view"><div class="card-head" style="margin:0"><h2>Jobs</h2><button class="btn" data-act="nav" data-v="walk">New walk-through</button></div>
+  return `<div class="view"><div class="card-head" style="margin:0"><h2>Jobs</h2><div class="chips">
+    <button class="btn sm ghost" data-act="exportJobs">Export to spreadsheet</button>
+    <button class="btn" data-act="nav" data-v="walk">New job</button></div></div>
   <section class="card">
     <div class="filters">
       <div class="field"><label for="jf-q">Search</label><input class="input" id="jf-q" type="search" placeholder="Name, address, phone or job number" value="${esc(f.q)}" data-jf="q"></div>
       <div class="field"><label for="jf-who">Owner</label><select class="select" id="jf-who" data-jf="who"><option value="all">Everyone</option><option value="me" ${f.who === 'me' ? 'selected' : ''}>My jobs</option>${OWNERS.map(o => `<option value="${o}" ${f.who === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div>
-      <div class="field"><label for="jf-stage">Stage</label><select class="select" id="jf-stage" data-jf="stage"><option value="all">All stages</option>${STAGES.map((s, i) => i === 4 ? '' : `<option value="${i}" ${f.stage === String(i) ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label for="jf-stage">Stage</label><select class="select" id="jf-stage" data-jf="stage"><option value="all">All stages</option>${STAGES.map((s, i) => `<option value="${i}" ${f.stage === String(i) ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
       <div class="field"><label for="jf-sub">Suburb</label><select class="select" id="jf-sub" data-jf="suburb"><option value="all">All suburbs</option>${subs.map(x => `<option ${f.suburb === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
+      <div class="field"><label for="jf-status">Show</label><select class="select" id="jf-status" data-jf="status"><option value="active" ${f.status === 'active' ? 'selected' : ''}>Live jobs</option><option value="all" ${f.status === 'all' ? 'selected' : ''}>Everything</option><option value="lost" ${f.status === 'lost' ? 'selected' : ''}>Lost</option><option value="cancelled" ${f.status === 'cancelled' ? 'selected' : ''}>Cancelled</option></select></div>
     </div>
-    <p class="small muted" id="jf-count" style="margin:12px 0 4px">${filteredJobs().length} of ${jobs.length} jobs${f.q || f.stage !== 'all' || f.who !== 'all' || f.suburb !== 'all' ? ' · <button class="linkbtn" data-act="clearJf">Clear filters</button>' : ''}</p>
+    <p class="small muted" id="jf-count" style="margin:12px 0 4px">${filteredJobs().length} of ${jobs.length} jobs${f.q || f.stage !== 'all' || f.who !== 'all' || f.suburb !== 'all' || f.status !== 'active' ? ' · <button class="linkbtn" data-act="clearJf">Clear filters</button>' : ''}</p>
     <div class="tablewrap"><table><thead><tr><th>Job</th><th>Customer</th><th>Job date</th><th>Owner</th><th>Stage</th><th class="num">Customer price</th><th></th></tr></thead><tbody id="jobrows">${jobRows()}</tbody></table></div></section></div>`;
 }
 
@@ -403,28 +405,86 @@ function vAlerts() {
 }
 
 /* ---------- job detail -------------------------------------------- */
+/* What the job is waiting on, and the one thing that moves it forward.
+   Every button here records something that happened somewhere else —
+   in Zoho, on the phone, at the property. Nothing is automatic and the
+   wording says so, so nobody is left wondering whether the panel sent
+   an email on their behalf. */
 function nextAction(j) {
+  const t = Data.paymentTerms(j);
+  const priced = Object.values(j.sections).some(sec => Object.keys(sec.lines).length);
+  const total = money(Data.customerPrice(Data.jobCost(j)));
+
   switch (j.stage) {
-    case 0: return ['Push to Zoho as a draft quote and send the estimate to the customer.', 'Send estimate', 'send'];
-    case 1: return ['Waiting for the customer to accept in the Zoho customer portal.', 'Simulate: customer accepts', 'accept'];
-    case 2: return ['Customer accepted. Refine details with contractors, then send the formal quote yourself.', 'Mark formal quote sent', 'quote'];
-    case 3: { const t = Data.paymentTerms(j); return [`Waiting on ${t.kind.toLowerCase()} of ${money(t.amount)}, due ${fd(t.due)}. When it lands, job orders go out automatically.`, 'Simulate: payment received', 'pay']; }
-    case 5: { const l = Data.livePos(j);
-      if (l.every(p => p.status === 'done')) return ['Every contractor has marked their part done. Run the completion check below to sign the job off.', null, null];
-      if (l.every(p => p.status === 'accepted' || p.status === 'done')) return ['All contractors have accepted. Each one marks their part done, with photos, after the job.', null, null];
-      return ["Job orders are in each contractor's vendor portal. Waiting on replies.", null, null]; }
-    default: return ['Job signed off and complete.', null, null];
+    case 0:
+      return { waiting: 'Not scoped yet. Nothing is owed and nothing has been sent.',
+        todo: 'Go to the property, walk through it with them and price the job.',
+        label: 'Start walk-through', act: 'scope' };
+    case 1:
+      return { waiting: `Priced at ${total}. Nothing has been sent to the customer yet.`,
+        todo: priced ? 'Create the estimate in Zoho and send it, then record that here.'
+                     : 'Add some items to the walk-through first.',
+        label: priced ? "I've sent the estimate" : null, act: 'send',
+        second: { label: 'Edit the walk-through', act: 'scope' } };
+    case 2:
+      return { waiting: `Estimate for ${total} is with the customer. Waiting on them.`,
+        todo: 'When they accept — in the portal, by email or over the phone — record it here.',
+        label: 'Customer has accepted', act: 'accept' };
+    case 3:
+      return { waiting: 'Customer has accepted the estimate.',
+        todo: 'Confirm the details with your contractors, then send the formal quote from Zoho.',
+        label: "I've sent the formal quote", act: 'quote' };
+    case 4:
+      return { waiting: `Waiting on the ${t.kind.toLowerCase()} of ${money(t.amount)}, due ${fd(t.due)}.`,
+        todo: 'When the money shows up in Zoho, record it here. The job does not go ahead until it has.',
+        label: 'Payment has landed', act: 'pay' };
+    case 5:
+      return { waiting: `${t.kind} received. Your contractors have not been told yet.`,
+        todo: 'Issue the job orders, then send each contractor their message.',
+        label: 'Issue job orders', act: 'issue' };
+    case 6: {
+      const live = Data.livePos(j);
+      if (!live.length) {
+        return { waiting: 'Job orders were issued but none are outstanding.',
+          todo: 'Add a section and issue an order, or mark the job complete.', label: null };
+      }
+      if (live.every(p => p.status === 'done')) {
+        return { waiting: 'Every contractor has marked their part done.',
+          todo: 'Run the completion check below and sign the job off.', label: null };
+      }
+      if (live.every(p => p.status === 'accepted' || p.status === 'done')) {
+        return { waiting: 'All contractors have accepted.',
+          todo: 'After the job, record each one as done and add their photos.', label: null };
+      }
+      const waitingOn = live.filter(p => p.status === 'awaiting').length;
+      return { waiting: waitingOn
+          ? `Waiting on ${waitingOn} contractor${waitingOn === 1 ? '' : 's'} to come back to you.`
+          : 'Some contractors have declined or not replied.',
+        todo: 'Send each one their job order message, then record their answer below.', label: null };
+    }
+    default:
+      return { waiting: 'Signed off and complete.', todo: '', label: null };
   }
 }
 function vJob(j) {
   const cost = Data.jobCost(j), total = Data.customerPrice(cost), t = Data.paymentTerms(j);
-  const [msg, label, act] = nextAction(j);
-  const allDone = j.stage === 5 && Data.livePos(j).every(p => p.status === 'done');
+  const na = nextAction(j);
+  const priced = Object.values(j.sections).some(sec => Object.keys(sec.lines).length);
+  const live = Data.livePos(j);
+  const allDone = j.stage === 6 && live.length > 0 && live.every(p => p.status === 'done');
   return `<div class="view">
   <div><button class="btn sm ghost" data-act="back">← All jobs</button></div>
-  <div class="card-head" style="margin:0"><div><h2>${esc(j.cust.name)}</h2><p class="muted small" style="margin-top:4px">${j.id} · ${esc(j.cust.address)} · job ${fd(j.cust.moveDate)} · prepared by ${esc(j.preparedBy)}</p></div><div class="chips"><label class="small muted" for="own-d-${j.id}">Owner</label><select class="select inline" id="own-d-${j.id}" data-act="setOwner" data-id="${j.id}">${OWNERS.map(o => `<option value="${o}" ${o === j.owner ? 'selected' : ''}>${o}</option>`).join('')}</select>${stagePill(j.stage)}</div></div>
+  ${j.status !== 'active' ? `<p class="note">This job is marked ${esc(Data.JOB_STATUS[j.status].toLowerCase())}${j.statusReason ? ': ' + esc(j.statusReason) : ''}. It is out of your pipeline until you reopen it.</p>` : ''}
+  <div class="card-head" style="margin:0"><div><h2>${esc(j.cust.name)}</h2><p class="muted small" style="margin-top:4px">${j.id} · ${esc(j.cust.address)} · job ${fd(j.cust.moveDate)} · prepared by ${esc(j.preparedBy)}</p></div><div class="chips"><label class="small muted" for="own-d-${j.id}">Owner</label><select class="select inline" id="own-d-${j.id}" data-act="setOwner" data-id="${j.id}">${OWNERS.map(o => `<option value="${o}" ${o === j.owner ? 'selected' : ''}>${o}</option>`).join('')}</select>${stagePill(j.stage, j)}</div></div>
   <section class="card"><div class="steps">${STAGES.map((s, i) => `<div class="step ${i < j.stage ? 'done' : i === j.stage ? 'now' : ''}">${s}</div>`).join('')}</div>
-    <div class="next"><p>${msg}</p>${label ? `<button class="btn" data-act="${act}" data-id="${j.id}">${label}</button>` : ''}</div></section>
+    <div class="next"><div style="flex:1 1 220px">
+      <p><b>${na.waiting}</b></p>
+      ${na.todo ? `<p class="small muted" style="margin-top:6px">${na.todo}</p>` : ''}
+    </div>
+    <div class="chips">
+      ${na.label ? `<button class="btn" data-act="${na.act}" data-id="${j.id}">${na.label}</button>` : ''}
+      ${na.second ? `<button class="btn ghost" data-act="${na.second.act}" data-id="${j.id}">${na.second.label}</button>` : ''}
+    </div></div></section>
   ${allDone ? signoffCard(j) : ''}
   <div class="grid2">
     <section class="card"><div class="card-head"><h3>Owner breakdown</h3><span class="eyebrow">Not shown to customer</span></div>
@@ -434,24 +494,104 @@ function vJob(j) {
       <tr><td colspan="2">Margin (15%)</td><td class="num">${money(total - cost)}</td></tr>
       <tr class="total"><td colspan="2">Customer price</td><td class="num">${money(total)}</td></tr></tbody></table></div>
       <p class="small muted" style="margin-top:10px">${t.note}.</p></section>
-    ${estimateCard(j)}
+    ${priced ? estimateCard(j) : `<section class="card"><div class="card-head"><h3>Customer estimate</h3><span class="eyebrow">Nothing priced yet</span></div>
+      <p class="muted small">Once you have walked through the property and added items, the estimate the customer sees appears here.</p></section>`}
   </div>
   ${j.pos.length ? posCard(j) : ''}
   ${messagesCard(j)}
-  <section class="card"><h3>Site notes for contractors</h3><div class="rows" style="margin-top:12px">${Object.entries(j.sections).map(([k, s]) => `<div class="row"><div class="main"><b>${S[k]}</b> <span class="small muted">→ ${esc(Data.getContractor(s.contractorId).name)}</span><br><span class="small">${s.access.length ? esc(s.access.join(' · ')) : '<span class="muted">No on-site requirements ticked</span>'}</span>${s.notes ? `<br><span class="small muted">${esc(s.notes)}</span>` : ''}${s.photos.length ? `<div class="photos" style="margin-top:8px">${s.photos.map(u => `<img src="${Data.photoUrl(u)}" alt="Site photo">`).join('')}</div>` : ''}</div></div>`).join('')}</div></section>
-  <section class="card"><h3>Activity</h3><ul class="log" style="margin-top:10px">${j.log.map(l => `<li>${esc(l)}</li>`).join('')}</ul></section>
+  ${Object.keys(j.sections).length ? `<section class="card"><h3>Site notes for contractors</h3><div class="rows" style="margin-top:12px">${Object.entries(j.sections).map(([k, s]) => `<div class="row"><div class="main"><b>${S[k]}</b> <span class="small muted">→ ${esc(Data.getContractor(s.contractorId).name)}</span><br><span class="small">${s.access.length ? esc(s.access.join(' · ')) : '<span class="muted">No on-site requirements ticked</span>'}</span>${s.notes ? `<br><span class="small muted">${esc(s.notes)}</span>` : ''}${s.photos.length ? `<div class="photos" style="margin-top:8px">${s.photos.map(u => `<img src="${Data.photoUrl(u)}" alt="Site photo">`).join('')}</div>` : ''}</div></div>`).join('')}</div></section>` : ''}
+  ${notesCard(j)}
+  <section class="card"><h3>Activity</h3><ul class="log" style="margin-top:10px">${j.log.slice().reverse().map(l => `<li>${esc(l)}</li>`).join('')}</ul></section>
+  <section class="card"><div class="card-head"><h3>This job</h3></div>
+    <div class="chips">
+      ${j.status === 'active'
+        ? `<button class="btn sm ghost" data-act="markLost" data-id="${j.id}">Mark lost</button>
+           <button class="btn sm ghost" data-act="markCancelled" data-id="${j.id}">Mark cancelled</button>`
+        : `<button class="btn sm ghost" data-act="reopen" data-id="${j.id}">Reopen this job</button>`}
+      <button class="linkbtn danger" data-act="delJob" data-id="${j.id}">Delete permanently</button>
+    </div>
+    ${ui.statusFor && ui.statusFor.id === j.id ? `<form class="formbox" data-form="status" data-id="${j.id}" data-status="${ui.statusFor.status}">
+      <div class="field"><label for="status-reason">Why is it ${ui.statusFor.status}? <span class="muted" style="font-weight:400">(optional, but worth knowing later)</span></label>
+      <input class="input" id="status-reason" name="reason" placeholder="${ui.statusFor.status === 'lost' ? 'Went with someone cheaper' : 'Flat decided not to bother'}"></div>
+      <div class="chips"><button class="btn sm" type="submit">Mark ${ui.statusFor.status}</button><button class="btn sm ghost" type="button" data-act="cancelStatus">Cancel</button></div>
+    </form>` : ''}
+    ${ui.confirmDelete === j.id ? `<div class="formbox">
+      <p class="small"><b>Delete ${esc(j.cust.name)} (${j.id}) for good?</b></p>
+      <p class="small muted">Everything goes — the walk-through, the job orders, the notes and the photos. There is no undo. If you just want it out of the way, mark it lost or cancelled instead.</p>
+      <div class="chips"><button class="btn sm" style="background:var(--red)" data-act="reallyDelJob" data-id="${j.id}">Yes, delete it</button><button class="btn sm ghost" data-act="cancelDelete">Keep it</button></div>
+    </div>` : ''}
+    <p class="small muted" style="margin-top:10px">Lost and cancelled jobs keep their record but drop out of your pipeline and the attention list. Deleting cannot be undone.</p>
+  </section>
   </div>`;
 }
+/* Job orders. With no vendor portal, you send these yourself and
+   record what the contractor told you. Every button is a statement of
+   something that already happened, not an instruction to the panel. */
 function posCard(j) {
-  return `<section class="card"><div class="card-head"><h3>Job orders</h3><span class="eyebrow">Zoho purchase orders · vendor portal</span></div><div class="rows">
-  ${j.pos.map(p => { const c = Data.getContractor(p.contractorId), others = Data.contractorsCovering(p.key).filter(o => o.id !== p.contractorId);
-   const sub = p.status === 'declined' ? 'Reason: ' + esc(p.reason) : p.status === 'replaced' ? 'Replaced' : p.status === 'silent' ? 'No reply by ' + fd(p.due) : p.status === 'done' ? `Marked done · ${p.photos} photo${p.photos === 1 ? '' : 's'}` : p.status === 'accepted' ? 'Accepted · booked for ' + fd(j.cust.moveDate) : 'Reply due ' + fd(p.due);
-   return `<div class="row"><div class="main"><b>${p.no}</b> · ${esc(c.name)} <span class="muted small">(${S[p.key]})</span><br><span class="small muted">${money(Data.sectionCost(j.sections[p.key]))} · ${sub}</span>
-    ${p.status === 'done' ? `<div class="photos" style="margin-top:8px">${Array.from({ length: p.photos }, (_, n) => `<span class="ph">Photo ${n + 1}</span>`).join('')}</div>` : ''}</div>${poPill(p)}
-    ${p.status === 'awaiting' ? `<div class="chips"><button class="btn sm ghost" data-act="poAccept" data-id="${j.id}" data-po="${p.no}">Simulate accept</button><button class="btn sm ghost" data-act="poDecline" data-id="${j.id}" data-po="${p.no}">Simulate decline</button><button class="btn sm ghost" data-act="poSilent" data-id="${j.id}" data-po="${p.no}">Simulate no reply</button></div>` : ''}
-    ${p.status === 'accepted' ? `<button class="btn sm ghost" data-act="poDone" data-id="${j.id}" data-po="${p.no}">Simulate: contractor marks done</button>` : ''}
-    ${(p.status === 'declined' || p.status === 'silent') ? (others.length ? `<div class="chips"><select class="select inline" id="bk-${p.no}" aria-label="Replacement contractor">${others.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select><button class="btn sm" data-act="backup" data-id="${j.id}" data-po="${p.no}">Send job order</button></div>` : '<span class="small muted">No other contractor covers this. Add one under Contractors.</span>') : ''}</div>`; }).join('')}
+  return `<section class="card"><div class="card-head"><h3>Job orders</h3><span class="eyebrow">You send these · record their answer</span></div><div class="rows">
+  ${j.pos.map(p => {
+    const c = Data.getContractor(p.contractorId);
+    const others = Data.contractorsCovering(p.key).filter(o => o.id !== p.contractorId);
+    const overdue = p.status === 'awaiting' && Data.parseDate(p.due) < new Date(new Date().toDateString());
+    const sub = p.status === 'declined' ? 'They said no: ' + esc(p.reason || 'no reason given')
+      : p.status === 'replaced' ? 'Replaced by a later order'
+      : p.status === 'silent' ? 'No reply. Reply was due ' + fd(p.due)
+      : p.status === 'done' ? `Marked done · ${p.photos} photo${p.photos === 1 ? '' : 's'}`
+      : p.status === 'accepted' ? 'Accepted · booked for ' + fd(j.cust.moveDate)
+      : overdue ? `No answer yet. Reply was due ${fd(p.due)}` : 'Sent. Reply due ' + fd(p.due);
+    return `<div class="row"><div class="main">
+      <b>${p.no}</b> · ${esc(c?.name || 'Contractor removed')} <span class="muted small">(${S[p.key]})</span><br>
+      <span class="small muted">${money(Data.sectionCost(j.sections[p.key] || { lines: {}, contractorId: null }))} · ${sub}</span>
+      ${p.status === 'done' ? `<div class="photos" style="margin-top:8px">${Array.from({ length: p.photos }, (_, n) => `<span class="ph">Photo ${n + 1}</span>`).join('')}</div>` : ''}
+      ${p.status === 'awaiting' ? `<div class="chips" style="margin-top:10px">
+        <button class="btn sm ghost" data-act="poMsg" data-id="${j.id}" data-po="${p.no}">Copy the job order to send</button>
+      </div>` : ''}
+      </div>${poPill(p, overdue)}
+    ${p.status === 'awaiting' ? `<div class="chips">
+      <button class="btn sm ghost" data-act="poAccept" data-id="${j.id}" data-po="${p.no}">They accepted</button>
+      <button class="btn sm ghost" data-act="poDecline" data-id="${j.id}" data-po="${p.no}">They declined</button>
+      <button class="btn sm ghost" data-act="poSilent" data-id="${j.id}" data-po="${p.no}">No reply</button>
+    </div>` : ''}
+    ${p.status === 'accepted' ? `<button class="btn sm ghost" data-act="poDone" data-id="${j.id}" data-po="${p.no}">They've finished it</button>` : ''}
+    ${(p.status === 'declined' || p.status === 'silent')
+      ? (others.length ? `<div class="chips"><select class="select inline" id="bk-${p.no}" aria-label="Who to send it to instead">${others.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select><button class="btn sm" data-act="backup" data-id="${j.id}" data-po="${p.no}">Send to them instead</button></div>`
+        : '<span class="small muted">Nobody else covers this. Add a contractor under Contractors.</span>') : ''}</div>`;
+  }).join('')}
   </div></section>`;
+}
+
+/* The message you actually send a contractor. Everything they need and
+   nothing they don't — no customer name, no phone number, no email.
+   You arrange access, so they never need to contact the student. */
+function jobOrderText(j, p) {
+  const c = Data.getContractor(p.contractorId);
+  const sec = j.sections[p.key];
+  const items = Object.entries(sec.lines)
+    .map(([iid, q]) => { const i = Data.getRateItem(sec.contractorId, iid); return i ? `  - ${i.name} x ${q}${i.type === 'hourly' ? ' hrs' : ''}` : ''; })
+    .filter(Boolean).join('\n');
+  return [
+    `FlatOut job order ${p.no}`,
+    '',
+    `Hi${c?.contact ? ' ' + c.contact : ''},`,
+    '',
+    `Job: ${S[p.key]}`,
+    `Address: ${j.cust.address}`,
+    `Date: ${fd(j.cust.moveDate)}`,
+    '',
+    'What we need:',
+    items || '  (to be confirmed)',
+    '',
+    sec.access.length ? 'On site: ' + sec.access.join(', ') : '',
+    sec.notes ? 'Notes: ' + sec.notes : '',
+    '',
+    `We'll pay ${money(Data.sectionCost(sec))} + GST if you're registered, on your usual terms (${c?.terms || 'as agreed'}).`,
+    `Please quote ${p.no} on your invoice.`,
+    '',
+    `Can you take it? Let us know within 2 working days (by ${fd(p.due)}).`,
+    '',
+    'Daniel Bell',
+    'FlatOut NZ · 027 408 6895 · admin@flatoutnz.co.nz'
+  ].filter(l => l !== '').join('\n');
 }
 function signoffCard(j) {
   const ticks = ui.signoff[j.id] || (ui.signoff[j.id] = []);
@@ -461,6 +601,19 @@ function signoffCard(j) {
   <div class="options">${checks.map((s, i) => `<label class="option"><input type="checkbox" id="so-${j.id}-${i}" data-act="signTick" data-id="${j.id}" value="${i}" ${ticks.includes(i) ? 'checked' : ''}><span>${s}</span></label>`).join('')}</div>
   <div class="chips" style="margin-top:14px"><button class="btn" data-act="signoff" data-id="${j.id}" ${ready ? '' : 'disabled'}>Sign off job</button><span class="small muted">${ready ? 'Ready to sign off. The review request is set up next.' : `${checks.length - ticks.length} check${checks.length - ticks.length === 1 ? '' : 's'} left`}</span></div></section>`;
 }
+/* Notes you type. The activity log underneath only records what the
+   panel did; this is for what actually happened — the phone call, the
+   change of plan, the thing you'd otherwise forget by Thursday. */
+function notesCard(j) {
+  return `<section class="card"><div class="card-head"><h3>Notes</h3><span class="eyebrow">${j.notes.length} note${j.notes.length === 1 ? '' : 's'}</span></div>
+  <form data-form="note" data-id="${j.id}" class="chips" style="align-items:flex-end;gap:10px">
+    <div class="field" style="flex:1 1 260px"><label for="note-${j.id}">Add a note</label><input class="input" id="note-${j.id}" name="text" placeholder="Rang Mere, pushing to the 16th" required></div>
+    <button class="btn sm" type="submit">Add</button>
+  </form>
+  ${j.notes.length ? `<div class="rows" style="margin-top:14px">${j.notes.map(n => `<div class="row"><div class="main"><p class="small">${esc(n.text)}</p><span class="small muted">${esc(n.by.split(' ')[0])} · ${new Date(n.at).toLocaleString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</span></div><button class="linkbtn danger" data-act="delNote" data-id="${j.id}" data-at="${esc(n.at)}">Remove</button></div>`).join('')}</div>` : ''}
+  </section>`;
+}
+
 function messagesCard(j) {
   const id = ui.tpl[j.id] || suggested(j), tp = Data.getTemplate(id), c = j.cust;
   const text = fill(tp.body, jobCtx(j)), email = c.contact === 'Email';
@@ -479,7 +632,7 @@ function messagesCard(j) {
 function estimateCard(j) {
   const total = Data.customerPrice(Data.jobCost(j)), t = Data.paymentTerms(j);
   const title = Data.TITLES[j.preparedBy] ? ', ' + Data.TITLES[j.preparedBy] : '';
-  return `<section class="estimate" aria-label="Customer estimate preview"><div class="est-head"><div class="logo"><img src="/images/logo-icon.png" alt=""><div><b>FlatOut</b><span>Moving out? We'll sort it.</span></div></div><div class="small" style="text-align:right"><b>Estimate · ${j.id}</b><br><span class="muted">${fd(TODAY)}</span></div></div>
+  return `<section class="estimate" aria-label="Customer estimate preview"><div class="est-head"><div class="logo"><img src="/images/logo-icon.png" alt=""><div><b>FlatOut</b><span>Moving out? We'll sort it.</span></div></div><div class="small" style="text-align:right"><b>Estimate · ${j.id}</b><br><span class="muted">${fd(Data.today())}</span></div></div>
   <div class="est-body"><div class="eyebrow">What the customer sees</div>
   <div><b>${esc(j.cust.name)}</b><br><span class="small muted">${esc(j.cust.address)} · ${fd(j.cust.moveDate)}</span></div>
   ${Object.entries(j.sections).map(([k, s]) => `<div><b>${S[k]}</b><ul class="small">${Object.entries(s.lines).map(([iid, q]) => { const i = Data.getRateItem(s.contractorId, iid); return i ? `<li>${esc(i.name)}${q !== 1 ? ` × ${q}${i.type === 'hourly' ? ' hrs' : ''}` : ''}</li>` : ''; }).join('')}</ul></div>`).join('')}
@@ -505,63 +658,122 @@ function clashes(evs) {
   return Object.entries(by).filter(([, l]) => l.length > 1).map(([c, l]) => ({ c: Data.getContractor(c), jobs: l.map(e => e.job) }));
 }
 function vCalendar() {
-  const { y, m } = ui.cal, start = new Date(y, m, 1), evs = events();
-  const lead = (start.getDay() + 6) % 7, days = new Date(y, m + 1, 0).getDate(), cells = [];
-  const n = Math.ceil((lead + days) / 7) * 7;
-  for (let i = 0; i < n; i++) cells.push(new Date(y, m, 1 - lead + i));
+  const { y, m } = ui.cal, evs = events();
+  let cells, heading;
+  if (ui.calWeek) {
+    /* A week at a time, starting Monday, anchored on whichever day is
+       selected. In peak season "what's on this week" is the question. */
+    const anchor = Data.parseDate(ui.day);
+    const back = (anchor.getDay() + 6) % 7;
+    const mon = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - back);
+    cells = Array.from({ length: 7 }, (_, i) => new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i));
+    const sun = cells[6];
+    heading = `${mon.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })} – ${sun.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  } else {
+    const start = new Date(y, m, 1);
+    const lead = (start.getDay() + 6) % 7, days = new Date(y, m + 1, 0).getDate();
+    cells = [];
+    const n = Math.ceil((lead + days) / 7) * 7;
+    for (let i = 0; i < n; i++) cells.push(new Date(y, m, 1 - lead + i));
+    heading = start.toLocaleDateString('en-NZ', { month: 'long', year: 'numeric' });
+  }
   const selEv = evs.filter(e => e.date === ui.day).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
   const selClash = clashes(selEv);
-  const monthClashes = [...new Set(evs.filter(e => Data.parseDate(e.date).getMonth() === m && Data.parseDate(e.date).getFullYear() === y).map(e => e.date))].filter(d => clashes(evs.filter(e => e.date === d)).length);
+  const shown = new Set(cells.map(d => iso(d)));
+  const monthClashes = [...new Set(evs.filter(e => shown.has(e.date)).map(e => e.date))]
+    .filter(d => clashes(evs.filter(e => e.date === d)).length);
   return `<div class="view">
-  <div class="card-head" style="margin:0"><h2>Calendar</h2><div class="chips"><button class="btn sm ghost" data-act="calPrev" aria-label="Previous month">←</button><b style="min-width:9rem;text-align:center">${start.toLocaleDateString('en-NZ', { month: 'long', year: 'numeric' })}</b><button class="btn sm ghost" data-act="calNext" aria-label="Next month">→</button></div></div>
+  <div class="card-head" style="margin:0"><h2>Calendar</h2><div class="chips">
+    <button class="chip" data-act="calMode" aria-pressed="${ui.calWeek}">${ui.calWeek ? 'Week' : 'Month'}</button>
+    <button class="btn sm ghost" data-act="calPrev" aria-label="Previous">←</button>
+    <b style="min-width:11rem;text-align:center">${heading}</b>
+    <button class="btn sm ghost" data-act="calNext" aria-label="Next">→</button></div></div>
   ${monthClashes.length ? `<p class="note">Possible double-booking on ${monthClashes.map(fd).join(', ')}. Check that the contractor can cover both jobs.</p>` : ''}
   <div class="cal-layout">
     <section class="card"><div class="cal">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<div class="dow">${d}</div>`).join('')}
       ${cells.map(d => { const k = iso(d), de = evs.filter(e => e.date === k), cl = clashes(de).length;
-        return `<button class="day ${d.getMonth() !== m ? 'out' : ''} ${k === iso(TODAY) ? 'today' : ''} ${cl ? 'clash' : ''}" aria-pressed="${k === ui.day}" data-act="pickDay" data-d="${k}" aria-label="${fd(k)}, ${de.length} item${de.length === 1 ? '' : 's'}${cl ? ', possible clash' : ''}"><span class="dnum">${d.getDate()}</span>${de.slice(0, 3).map(e => `<span class="ev ${e.type}">${e.type === 'visit' ? ft(e.time) + ' ' : ''}${esc(e.label)}</span>`).join('')}${de.length > 3 ? `<span class="small muted">+${de.length - 3}</span>` : ''}</button>`; }).join('')}
+        return `<button class="day ${!ui.calWeek && d.getMonth() !== m ? 'out' : ''} ${k === iso(new Date()) ? 'today' : ''} ${cl ? 'clash' : ''}" aria-pressed="${k === ui.day}" data-act="pickDay" data-d="${k}" aria-label="${fd(k)}, ${de.length} item${de.length === 1 ? '' : 's'}${cl ? ', possible clash' : ''}"><span class="dnum">${d.getDate()}</span>${de.slice(0, 3).map(e => `<span class="ev ${e.type}">${e.type === 'visit' ? ft(e.time) + ' ' : ''}${esc(e.label)}</span>`).join('')}${de.length > 3 ? `<span class="small muted">+${de.length - 3}</span>` : ''}</button>`; }).join('')}
     </div>
     <div class="legend"><span><i style="background:var(--navy-deep)"></i>Booked job</span><span><i style="background:var(--white);box-shadow:inset 0 0 0 1px var(--line-strong)"></i>Estimate or quote out</span><span><i style="background:var(--teal-wash)"></i>Site visit</span><span><i style="box-shadow:inset 0 0 0 2px var(--orange)"></i>Possible clash</span></div></section>
     <section class="card"><div class="card-head"><h3>${fd(ui.day)}</h3><span class="eyebrow">${selEv.length} item${selEv.length === 1 ? '' : 's'}</span></div>
       ${selClash.map(x => `<p class="note" style="margin-bottom:12px">${esc(x.c.name)} is on ${x.jobs.length} jobs this day: ${x.jobs.map(j => j.id).join(', ')}.</p>`).join('')}
       <div class="rows">${selEv.map(e => e.type === 'visit' ? `<div class="row"><div class="main"><b>${ft(e.time)} · Site visit</b><br><span class="small muted">${esc((e.enq || e.job.cust).name)} · ${esc((e.enq || e.job.cust).address)}</span></div><span class="pill p-ok">${esc(e.who.split(' ')[0])}</span></div>`
-        : `<div class="row"><div class="main"><b>${esc(e.job.cust.name)}</b> <span class="muted small">${e.job.id}</span><br><span class="small muted">${Object.entries(e.job.sections).map(([k, s]) => `${S[k]} → ${esc(Data.getContractor(s.contractorId).name)}`).join(' · ')}</span></div>${stagePill(e.job.stage)}<button class="btn sm ghost" data-act="open" data-id="${e.job.id}">Open</button></div>`).join('') || '<p class="muted">Nothing on this day.</p>'}</div></section>
+        : `<div class="row"><div class="main"><b>${esc(e.job.cust.name)}</b> <span class="muted small">${e.job.id}</span><br><span class="small muted">${Object.entries(e.job.sections).map(([k, s]) => `${S[k]} → ${esc(Data.getContractor(s.contractorId).name)}`).join(' · ')}</span></div>${stagePill(e.job.stage, e.job)}<button class="btn sm ghost" data-act="open" data-id="${e.job.id}">Open</button></div>`).join('') || '<p class="muted">Nothing on this day.</p>'}</div></section>
   </div></div>`;
 }
 
 /* ---------- walk-through ------------------------------------------ */
 function vWalk() {
-  if (!draft) {
-    const today = Data.isoDate(new Date());
-    return `<div class="view"><div><h2>Walk-through</h2><p class="muted" style="margin-top:4px">Enter the customer's details from their quote request, then price the job while you're on site.</p></div>
-    <section class="card"><form class="formbox" data-form="newjob" style="margin-top:0">
-      <div class="form-grid">
-        <div class="field"><label for="nj-name">Customer name</label><input class="input" id="nj-name" name="name" required placeholder="Full name or company"></div>
-        <div class="field"><label for="nj-ref">Their reference <span class="muted" style="font-weight:400">(optional)</span></label><input class="input" id="nj-ref" name="ref" placeholder="FO-261005-1234"></div>
-        <div class="field"><label for="nj-contact">Contact by</label><select class="select" id="nj-contact" name="contact"><option>Text</option><option>Email</option></select></div>
-        <div class="field"><label for="nj-phone">Phone or email</label><input class="input" id="nj-phone" name="phone" required placeholder="027 000 0000"></div>
-        <div class="field"><label for="nj-date">Move-out date</label><input class="input" id="nj-date" name="moveDate" type="date" required min="${today}"></div>
-        <div class="field"><label for="nj-people">People in the flat</label><input class="input" id="nj-people" name="people" type="number" min="1" max="12" value="4" required></div>
-      </div>
-      <div class="field"><label for="nj-address">Address</label><input class="input" id="nj-address" name="address" required placeholder="Street, suburb"></div>
-      <div class="field"><label for="nj-special">What they told us <span class="muted" style="font-weight:400">(optional)</span></label><textarea class="textarea" id="nj-special" name="special" placeholder="Bedrooms, how much stuff, anything they flagged on the form"></textarea></div>
-      <div class="field"><span class="flabel">Services they asked for</span><div class="options">${KEYS.map(k => `<label class="option"><input type="checkbox" name="services" value="${k}"><span>${S[k]}</span></label>`).join('')}</div></div>
-      <div class="chips"><button class="btn" type="submit">Start walk-through</button></div>
-    </form></section></div>`;
-  }
+  if (!draft) return vNewJob();
   const c = draft.cust, cost = Data.jobCost(draft), total = Data.customerPrice(cost);
-  const brief = [c.bedrooms && `${c.bedrooms}`, c.stuff && `${c.stuff}`].filter(Boolean).join(' · ');
+  const editing = !!draft.jobId;
+  const priced = Object.values(draft.sections).some(sec => Object.keys(sec.lines).length);
   return `<div class="view">
-  <div class="card-head" style="margin:0"><div><h2>Walk-through</h2><p class="muted small" style="margin-top:4px">${c.ref} · prepared by ${esc(owner())}</p></div><button class="btn sm ghost" data-act="cancelDraft">Discard</button></div>
+  <div class="card-head" style="margin:0"><div><h2>${editing ? 'Edit the walk-through' : 'Walk-through'}</h2>
+    <p class="muted small" style="margin-top:4px">${esc(c.name)}${c.ref && c.ref !== '—' ? ' · ' + esc(c.ref) : ''} · ${esc(owner())}</p></div>
+    <button class="btn sm ghost" data-act="cancelDraft">${editing ? 'Back without saving' : 'Discard'}</button></div>
   <section class="card"><div class="custgrid">
     <div><span class="eyebrow">Customer</span><b>${esc(c.name)}</b></div>
-    <div><span class="eyebrow">Contact by ${c.contact.toLowerCase()}</span><b>${esc(c.phone)}</b></div>
+    <div><span class="eyebrow">Contact by ${esc(String(c.contact || '').toLowerCase())}</span><b>${esc(c.phone)}</b></div>
     <div><span class="eyebrow">Address</span><b>${esc(c.address)}</b></div>
-    <div><span class="eyebrow">Move-out</span><b>${fd(c.moveDate)} · ${c.people} people</b></div></div>
-    ${(brief || c.special) ? `<div class="brief" style="margin-top:14px">${brief ? `<p class="small"><b>What they told us:</b> ${esc(brief)}</p>` : ''}${c.special ? `<p class="small">${esc(c.special)}</p>` : ''}</div>` : ''}
+    <div><span class="eyebrow">Move-out</span><b>${c.moveDate ? fd(c.moveDate) : 'Not set'}${c.people ? ' · ' + c.people + ' people' : ''}</b></div></div>
+    ${c.special ? `<div class="brief" style="margin-top:14px"><p class="small"><b>What they told us:</b> ${esc(c.special)}</p></div>` : ''}
   </section>
   <div><div class="eyebrow" style="margin-bottom:8px">Services on this job</div><div class="chips">${KEYS.map(k => `<button class="chip" aria-pressed="${!!draft.sections[k]}" data-act="toggleSec" data-k="${k}">${S[k]}</button>`).join('')}</div></div>
   ${KEYS.filter(k => draft.sections[k]).map(k => walkSection(k, draft.sections[k])).join('')}
-  <div class="pricebar"><div><small>Cost</small><strong>${money(cost)}</strong></div><div><small>Margin</small><strong>${money(total - cost)}</strong></div><div class="cust"><small>Customer</small><strong>${money(total)}</strong></div><button class="btn" data-act="saveDraft" ${cost ? '' : 'disabled'}>Save estimate</button></div>
+  <div class="pricebar"><div><small>Cost</small><strong>${money(cost)}</strong></div><div><small>Margin</small><strong>${money(total - cost)}</strong></div><div class="cust"><small>Customer</small><strong>${money(total)}</strong></div>
+    <button class="btn" data-act="saveDraft">${editing ? 'Save changes' : priced ? 'Save estimate' : 'Save job'}</button></div>
+  ${!priced ? '<p class="small muted">Nothing priced yet. You can still save it — the job sits as New until you come back and price it.</p>' : ''}
+  </div>`;
+}
+
+/* Entering a job. Paste the row straight out of the sheet, or type it
+   in. Either way the fields below are what gets saved, so anything the
+   paste gets wrong is visible and fixable before it becomes a job. */
+function vNewJob() {
+  const today = Data.isoDate(new Date());
+  const p = ui.paste.parsed, dup = ui.paste.dup;
+  const v = (field, fallback = '') => p ? esc(p[field] ?? fallback) : fallback;
+  return `<div class="view">
+  <div><h2>New job</h2><p class="muted" style="margin-top:4px">Paste the row from the quote sheet, or fill it in yourself. Nothing is sent to the customer and no action is needed after saving.</p></div>
+
+  <section class="card"><div class="card-head"><h3>Paste from the sheet</h3><span class="eyebrow">Optional</span></div>
+    <form data-form="paste">
+      <div class="chips" style="margin-bottom:12px">
+        <label class="option" style="flex:0 0 auto"><input type="radio" name="kind" value="tenant" ${ui.paste.kind === 'tenant' ? 'checked' : ''}><span>Tenant row</span></label>
+        <label class="option" style="flex:0 0 auto"><input type="radio" name="kind" value="landlord" ${ui.paste.kind === 'landlord' ? 'checked' : ''}><span>Landlord row</span></label>
+      </div>
+      <div class="field"><label for="pastebox">Select the whole row in Google Sheets, copy it, and paste here</label>
+        <textarea class="textarea" id="pastebox" name="row" rows="2" placeholder="Paste the row"></textarea></div>
+      <div class="chips"><button class="btn sm" type="submit">Read the row</button>
+        ${p ? '<button class="btn sm ghost" type="button" data-act="clearPaste">Clear</button>' : ''}</div>
+    </form>
+    ${p && p.warnings && p.warnings.length ? `<div class="note" style="margin-top:12px">${p.warnings.map(w => esc(w)).join('<br>')}</div>` : ''}
+    ${p && (!p.warnings || !p.warnings.length) ? `<p class="small" style="margin-top:12px;color:var(--ok-ink)"><b>Row read.</b> Check the details below, then save.</p>` : ''}
+    ${dup ? `<div class="note" style="margin-top:12px"><b>This looks like one you already have.</b> ${esc(dup.cust.name)} (${dup.id}) has the same ${esc(ui.paste.dupOn || 'details')}. Open it rather than making a second one, unless this really is a new job.
+      <div class="chips" style="margin-top:10px"><button class="btn sm ghost" data-act="open" data-id="${dup.id}">Open ${dup.id}</button></div></div>` : ''}
+  </section>
+
+  <section class="card"><div class="card-head"><h3>Job details</h3></div>
+    <form data-form="newjob">
+      <div class="form-grid">
+        <div class="field"><label for="nj-name">Customer name</label><input class="input" id="nj-name" name="name" required value="${v('name')}" placeholder="Full name or company"></div>
+        <div class="field"><label for="nj-ref">Their reference <span class="muted" style="font-weight:400">(optional)</span></label><input class="input" id="nj-ref" name="ref" value="${v('ref')}" placeholder="FO-261005-1234"></div>
+        <div class="field"><label for="nj-contact">Contact by</label><select class="select" id="nj-contact" name="contact"><option ${p && p.contact === 'Text' ? 'selected' : ''}>Text</option><option ${p && p.contact === 'Email' ? 'selected' : ''}>Email</option></select></div>
+        <div class="field"><label for="nj-phone">Phone or email</label><input class="input" id="nj-phone" name="phone" required value="${v('phone')}" placeholder="027 000 0000"></div>
+        <div class="field"><label for="nj-date">Move-out date</label><input class="input" id="nj-date" name="moveDate" type="date" required value="${v('moveDate')}"></div>
+        <div class="field"><label for="nj-people">People in the flat</label><input class="input" id="nj-people" name="people" type="number" min="0" max="12" value="${p && p.people ? p.people : 4}"></div>
+      </div>
+      <div class="field"><label for="nj-address">Address</label><input class="input" id="nj-address" name="address" required value="${v('address')}" placeholder="Street, suburb"></div>
+      <div class="field"><label for="nj-special">What they told us <span class="muted" style="font-weight:400">(optional)</span></label><textarea class="textarea" id="nj-special" name="special" placeholder="Bedrooms, how much stuff, anything they flagged">${v('special')}</textarea></div>
+      <div class="field"><span class="flabel">Services they asked for</span><div class="options">${KEYS.map(k => `<label class="option"><input type="checkbox" name="services" value="${k}" ${p && p.services && p.services.includes(k) ? 'checked' : ''}><span>${S[k]}</span></label>`).join('')}</div></div>
+      <div class="chips">
+        <button class="btn" type="submit" name="then" value="save">Save job</button>
+        <button class="btn ghost" type="submit" name="then" value="walk">Save and start walk-through</button>
+      </div>
+      <p class="small muted">Saving puts it on the board as <b>New</b>. Nothing is owed and nothing needs doing until you visit.</p>
+    </form>
+  </section>
   </div>`;
 }
 function walkSection(k, s) {
@@ -583,7 +795,7 @@ function walkSection(k, s) {
 /* ---------- contractors ------------------------------------------- */
 function insPill(c) {
   if (!c.insurance) return '<span class="pill p-bad">No certificate on file</span>';
-  const days = Math.round((Data.parseDate(c.insurance) - TODAY) / 864e5);
+  const days = Math.round((Data.parseDate(c.insurance) - Data.today()) / 864e5);
   return `${fd(c.insurance)} ${days < 0 ? '<span class="pill p-bad">Expired</span>' : days <= 60 ? '<span class="pill p-warn">Renew soon</span>' : ''}`;
 }
 function cForm(c) {
@@ -609,7 +821,7 @@ function vContractors() {
   const list = Data.listContractors();
   const rows = list.map(c => ({ c, s: Data.getScorecard(c.id) })).sort((a, b) => (b.s.rate ?? -1) - (a.s.rate ?? -1));
   return `<div class="view">
-  <div class="card-head" style="margin:0"><div><h2>Contractors</h2><p class="muted small" style="margin-top:4px">Rates below are examples so the walk-through can be tested. Replace them with each contractor's agreed prices; estimates add the 15% margin on the total.</p></div>${ui.addC ? '' : '<button class="btn" data-act="showAddC">Add contractor</button>'}</div>
+  <div class="card-head" style="margin:0"><div><h2>Contractors</h2><p class="muted small" style="margin-top:4px">Rates below are examples so the walk-through can be tested. Replace them with each contractor's agreed prices; estimates add the 15% margin on the total.</p></div><div class="chips">${ui.addC ? '' : '<button class="btn sm ghost" data-act="exportContractors">Export to spreadsheet</button><button class="btn" data-act="showAddC">Add contractor</button>'}</div></div>
   ${ui.addC ? `<section class="card"><h3>New contractor</h3>${cForm(null)}</section>` : ''}
   <section class="card"><div class="card-head"><h3>Scorecard</h3><span class="eyebrow">Sample history + this session</span></div>
     <div class="tablewrap"><table><thead><tr><th>Contractor</th><th class="num">Job orders</th><th>Accepted</th><th class="num">Declined</th><th class="num">No reply</th><th class="num">Avg reply</th><th class="num">Strikes</th><th>Rating</th></tr></thead><tbody>
@@ -626,7 +838,12 @@ function vContractors() {
       <div><dt>Payment terms</dt><dd>${esc(c.terms)}${c.terms.startsWith('On completion') ? '' : ' after invoice'}</dd></div>
       <div><dt>Insurance expires</dt><dd>${insPill(c)}</dd></div>
       <div><dt>Strikes</dt><dd>${c.strikes} of 3</dd></div>
-    </dl><div style="margin-bottom:14px"><button class="btn sm ghost" data-act="editC" data-c="${c.id}">Edit details</button></div>`}
+    </dl><div class="chips" style="margin-bottom:14px"><button class="btn sm ghost" data-act="editC" data-c="${c.id}">Edit details</button><button class="linkbtn danger" data-act="delContractor" data-c="${c.id}">Remove</button></div>
+    ${ui.confirmDelC === c.id ? `<div class="formbox">
+      <p class="small"><b>Remove ${esc(c.name)}?</b></p>
+      <p class="small muted">Their rate card goes with them. Jobs that already use them keep their prices, but the contractor's name will show as removed.</p>
+      <div class="chips"><button class="btn sm" style="background:var(--red)" data-act="reallyDelC" data-c="${c.id}">Yes, remove</button><button class="btn sm ghost" data-act="cancelDelC">Keep them</button></div>
+    </div>` : ''}`}
     <div class="tablewrap"><table><thead><tr><th>Item</th><th>Type</th><th class="num">Rate</th><th></th></tr></thead><tbody>
     ${c.items.map(i => `<tr><td>${esc(i.name)}<br><span class="small muted">${c.services.length > 1 ? S[i.section] + ' · ' : ''}per ${esc(i.unit)}</span></td><td>${i.type === 'hourly' ? '<span class="pill p-ok">Hourly</span>' : '<span class="pill p-grey">Fixed</span>'}</td><td class="num"><input class="input rate" type="number" min="0" step="1" id="rate-${i.id}" aria-label="${esc(i.name)} rate" value="${i.rate}" data-act="rate" data-c="${c.id}" data-i="${i.id}"></td><td class="num"><button class="linkbtn danger" data-act="rmItem" data-c="${c.id}" data-i="${i.id}" aria-label="Remove ${esc(i.name)}">Remove</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No items yet.</td></tr>'}
     </tbody></table></div>
@@ -657,6 +874,22 @@ function refreshJobs() {
 }
 const focus = id => setTimeout(() => document.getElementById(id)?.focus());
 
+/* Hand the browser a file. A BOM goes on the front so Excel opens it as
+   UTF-8 rather than mangling anything with an accent in it. */
+function downloadCsv(name, csv) {
+  const stamp = Data.isoDate(new Date());
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${name}-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('Downloaded ' + a.download);
+}
+
 /* ---------- actions ----------------------------------------------- */
 document.addEventListener('click', e => {
   const b = e.target.closest('button[data-act]');
@@ -667,14 +900,6 @@ document.addEventListener('click', e => {
     case 'open': go('jobs', d.id); break;
     case 'back': go('jobs', null); break;
     case 'alerts': openJob = null; go('alerts'); break;
-    case 'showBook': ui.bookFor = d.ref; render(); focus('bk-d-' + d.ref); break;
-    case 'hideBook': ui.bookFor = null; render(); break;
-    case 'copyVisit': { const en = Data.getEnquiry(d.ref);
-      copy(fill(Data.getTemplate('visit').body, { 'first name': first(en.name), sender: en.visit.who.split(' ')[0],
-        address: en.address, visit: `${fd(en.visit.date)} at ${ft(en.visit.time)}` })); break; }
-    case 'start': { const en = Data.getEnquiry(d.ref), s = {};
-      en.services.forEach(k => s[k] = Data.newSection(k));
-      draft = { cust: { ...en }, sections: s }; go('walk'); break; }
     case 'cancelDraft': draft = null; render(); break;
     case 'toggleSec': if (draft.sections[d.k]) delete draft.sections[d.k]; else draft.sections[d.k] = Data.newSection(d.k); render(); break;
     case 'qty': { const s = draft.sections[d.k], i = Data.getRateItem(s.contractorId, d.i);
@@ -683,13 +908,47 @@ document.addEventListener('click', e => {
       q = Math.max(0, Math.round(q * 2) / 2);
       if (q) s.lines[d.i] = q; else delete s.lines[d.i];
       render(); break; }
-    case 'saveDraft': { const id = Data.saveJob(draft, owner()); draft = null;
-      toast('Estimate saved as ' + id); go('jobs', id); break; }
-    case 'send': Data.sendEstimate(d.id, owner()); toast('Estimate sent to the customer portal'); render(); break;
-    case 'accept': Data.markEstimateAccepted(d.id); render(); break;
-    case 'quote': Data.markFormalQuoteSent(d.id, owner()); render(); break;
-    case 'pay': { const { pos } = Data.markPaymentReceived(d.id);
-      toast(`${pos.length} job order${pos.length > 1 ? 's' : ''} sent to vendor portals`); render(); break; }
+    case 'saveDraft': {
+      if (draft.jobId) {
+        Data.saveScope(draft.jobId, draft.sections, owner());
+        const id = draft.jobId; draft = null;
+        toast('Walk-through saved'); go('jobs', id);
+      } else {
+        const id = Data.saveJob(draft, owner()); draft = null;
+        toast('Saved as ' + id); go('jobs', id);
+      }
+      break; }
+    case 'clearPaste': ui.paste.parsed = null; ui.paste.dup = null; render(); break;
+    case 'send': Data.sendEstimate(d.id, owner()); toast('Recorded: estimate sent'); render(); break;
+    case 'accept': Data.markEstimateAccepted(d.id); toast('Recorded: customer accepted'); render(); break;
+    case 'quote': Data.markFormalQuoteSent(d.id, owner()); toast('Recorded: formal quote sent'); render(); break;
+    case 'pay': Data.markPaymentReceived(d.id); toast('Recorded: payment received'); render(); break;
+    case 'issue': { const pos = Data.createPurchaseOrders(d.id);
+      toast(`${pos.length} job order${pos.length === 1 ? '' : 's'} created. Send each one to the contractor.`);
+      render(); break; }
+    case 'scope': { const jb = Data.getJob(d.id);
+      draft = { jobId: jb.id, cust: jb.cust, sections: JSON.parse(JSON.stringify(jb.sections)) };
+      if (!Object.keys(draft.sections).length) draft.sections.cleaning = Data.newSection('cleaning');
+      go('walk'); break; }
+    case 'poMsg': { const jb = Data.getJob(d.id), po = Data.findPo(jb, d.po);
+      copy(jobOrderText(jb, po)); break; }
+    case 'markLost': case 'markCancelled': {
+      ui.statusFor = { id: d.id, status: d.act === 'markLost' ? 'lost' : 'cancelled' };
+      render(); focus('status-reason'); break; }
+    case 'cancelStatus': ui.statusFor = null; render(); break;
+    case 'reopen': Data.setJobStatus(d.id, 'active', '', owner()); toast('Job reopened'); render(); break;
+    case 'delNote': Data.deleteNote(d.id, d.at); render(); break;
+    case 'delJob': { ui.confirmDelete = d.id; render(); break; }
+    case 'cancelDelete': ui.confirmDelete = null; render(); break;
+    case 'reallyDelJob': { Data.deleteJob(d.id); ui.confirmDelete = null;
+      toast('Job deleted'); go('jobs', null); break; }
+    case 'delContractor': { ui.confirmDelC = d.c; render(); break; }
+    case 'cancelDelC': ui.confirmDelC = null; render(); break;
+    case 'reallyDelC': { Data.deleteContractor(d.c); ui.confirmDelC = null;
+      toast('Contractor removed'); render(); break; }
+    case 'exportJobs': downloadCsv('flatout-jobs', Data.exportJobsCsv()); break;
+    case 'exportContractors': downloadCsv('flatout-contractors', Data.exportContractorsCsv()); break;
+    case 'calMode': ui.calWeek = !ui.calWeek; render(); break;
     case 'poAccept': Data.setPoStatus(d.id, d.po, 'accepted'); render(); break;
     case 'poDecline': Data.setPoStatus(d.id, d.po, 'declined', { reason: 'Fully booked that day' }); render(); break;
     case 'poSilent': Data.setPoStatus(d.id, d.po, 'silent'); render(); break;
@@ -704,14 +963,24 @@ document.addEventListener('click', e => {
     case 'copyMsg': copy(fill(Data.getTemplate(ui.tpl[d.id] || suggested(j)).body, jobCtx(j))); break;
     case 'sentMsg': { const t = Data.getTemplate(ui.tpl[d.id] || suggested(j));
       Data.logActivity(d.id, `"${t.name}" sent to customer by ${owner()}`); toast('Logged as sent'); render(); break; }
-    case 'calPrev': case 'calNext': { let { y, m } = ui.cal;
-      m += d.act === 'calNext' ? 1 : -1;
-      if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; }
-      ui.cal = { y, m }; ui.day = iso(new Date(y, m, 1)); render(); break; }
+    case 'calPrev': case 'calNext': {
+      const step = d.act === 'calNext' ? 1 : -1;
+      if (ui.calWeek) {
+        const cur = Data.parseDate(ui.day);
+        const next = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 7 * step);
+        ui.day = iso(next);
+        ui.cal = { y: next.getFullYear(), m: next.getMonth() };
+      } else {
+        let { y, m } = ui.cal;
+        m += step;
+        if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; }
+        ui.cal = { y, m }; ui.day = iso(new Date(y, m, 1));
+      }
+      render(); break; }
     case 'pickDay': ui.day = d.d; render(); break;
     case 'readAll': Data.markAllAlertsRead(owner()); render(); break;
     case 'openNotif': { const a = Data.markAlertRead(Number(d.n), owner()); go('jobs', a.jobId); break; }
-    case 'clearJf': ui.jf = { q: '', stage: 'all', who: 'all', suburb: 'all' }; render(); break;
+    case 'clearJf': ui.jf = { q: '', stage: 'all', who: 'all', suburb: 'all', status: 'active' }; render(); break;
     case 'showAddC': ui.addC = true; render(); focus('f-name-new'); break;
     case 'hideAddC': ui.addC = false; render(); break;
     case 'editC': ui.editC = d.c; render(); focus('f-name-' + d.c); break;
@@ -722,29 +991,65 @@ document.addEventListener('click', e => {
   }
 });
 
+let lastSubmitter = null;
+document.addEventListener('click', e => {
+  const b = e.target.closest('button[type=submit]');
+  if (b) lastSubmitter = b;
+}, true);
 document.addEventListener('submit', e => {
   const f = e.target;
   e.preventDefault();
   const form = new FormData(f), kind = f.dataset.form;
+  // Which submit button was pressed — "Save job" or "Save and walk".
+  if (lastSubmitter && lastSubmitter.name && f.contains(lastSubmitter)) {
+    form.set(lastSubmitter.name, lastSubmitter.value);
+  }
+  if (kind === 'paste') {
+    ui.paste.kind = form.get('kind') || 'tenant';
+    const parsed = Data.parseSheetRow(form.get('row'), ui.paste.kind);
+    if (parsed.error) { toast(parsed.error); return; }
+    ui.paste.parsed = parsed;
+    const dup = Data.findPossibleDuplicate(parsed);
+    ui.paste.dup = dup;
+    ui.paste.dupOn = dup
+      ? (dup.cust.ref && dup.cust.ref === parsed.ref ? 'quote reference'
+        : dup.cust.phone === parsed.phone ? 'phone or email' : 'address')
+      : null;
+    render();
+    return;
+  }
   if (kind === 'newjob') {
     const services = form.getAll('services');
-    if (!services.length) { toast('Tick at least one service'); return; }
-    const sections = {};
-    services.forEach(k => sections[k] = Data.newSection(k));
-    draft = { cust: {
+    const cust = {
       name: form.get('name').trim(), ref: form.get('ref').trim() || '—',
       contact: form.get('contact'), phone: form.get('phone').trim(),
       address: form.get('address').trim(), moveDate: form.get('moveDate'),
-      people: Number(form.get('people')) || 1, special: form.get('special').trim()
-    }, sections };
-    go('walk');
+      people: Number(form.get('people')) || 0, special: form.get('special').trim()
+    };
+    const job = Data.createJob(cust, owner(), services);
+    ui.paste = { kind: ui.paste.kind, parsed: null, dup: null };
+    if (form.get('then') === 'walk') {
+      draft = { jobId: job.id, cust: job.cust, sections: JSON.parse(JSON.stringify(job.sections)) };
+      if (!Object.keys(draft.sections).length) draft.sections.cleaning = Data.newSection('cleaning');
+      toast('Saved as ' + job.id);
+      go('walk');
+    } else {
+      toast('Saved as ' + job.id + '. Nothing needed until you visit.');
+      go('jobs', job.id);
+    }
     return;
   }
-  if (kind === 'book') {
-    const v = Data.bookVisit(f.dataset.ref, { date: form.get('date'), time: form.get('time'), who: form.get('who') });
-    ui.bookFor = null;
-    toast(`Visit booked for ${fd(v.date)} at ${ft(v.time)}`);
+  if (kind === 'note') {
+    Data.addNote(f.dataset.id, form.get('text'), owner());
     render();
+    return;
+  }
+  if (kind === 'status') {
+    Data.setJobStatus(f.dataset.id, f.dataset.status, form.get('reason'), owner());
+    ui.statusFor = null;
+    toast('Job marked ' + f.dataset.status);
+    render();
+    return;
   }
   if (kind === 'tpl') {
     Data.saveTemplate(f.dataset.t, { subject: form.get('subject'), body: form.get('body') });

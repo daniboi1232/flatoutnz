@@ -33,8 +33,14 @@ const Data = (() => {
   const MARGIN = 0.15;
   const ACCESS_ITEMS = ['Off-street parking', 'Stairs to unit', 'Keys with tenant', 'Power on',
     'Water on', 'Pets on property', 'Narrow access', 'Lockbox on site'];
-  const STAGES = ['Walk-through', 'Estimate sent', 'Estimate accepted', 'Quote sent',
-    'Paid / deposit in', 'Job orders out', 'Completed'];
+  /* Eight stages. "New" exists because a job is now entered from the
+     quote request before anyone has been to the property, and "Paid" is
+     its own stage rather than being skipped: payment and issuing the
+     job orders are two separate things you do. */
+  const STAGES = ['New', 'Scoped', 'Estimate sent', 'Accepted', 'Quote sent',
+    'Paid', 'Job orders out', 'Done'];
+  const SCHEMA = 2;  // bump when the shape of a stored job changes
+  const JOB_STATUS = { active: 'Active', lost: 'Lost', cancelled: 'Cancelled' };
   const SIGNOFF_CHECKS = ['Contractor photos reviewed', 'Customer confirmed they are happy',
     'No damage or issues reported', 'Keys and access returned'];
   const PAYMENT_TERMS = ['14 days', '1 month', 'On completion (on site)'];
@@ -74,6 +80,25 @@ const Data = (() => {
     return x;
   }
   function addDays(date, n) { const x = new Date(date); x.setDate(x.getDate() + n); return x; }
+
+  /* Jobs saved before the stage list changed used seven stages with no
+     "New": old 0 was the walk-through, and "Paid" was never reachable.
+     Shifting every old stage up by one lands each job in the right
+     place on the new list. Marked with a schema number so it only
+     happens once. */
+  function migrateJob(j) {
+    if (!j) return j;
+    if ((j.schema || 1) < 2) {
+      j.stage = Math.min(STAGES.length - 1, (j.stage ?? 0) + 1);
+      j.schema = 2;
+    }
+    if (!j.status) j.status = 'active';
+    if (!Array.isArray(j.notes)) j.notes = [];
+    if (!Array.isArray(j.log)) j.log = [];
+    if (!Array.isArray(j.pos)) j.pos = [];
+    if (!j.sections) j.sections = {};
+    return j;
+  }
 
   /* ---------- in-memory model, filled by init() -------------------- */
   let contractors = [], jobs = [], templates = [], alerts = [];
@@ -256,7 +281,8 @@ const Data = (() => {
       if (d.error) throw new Error(d.error);
 
       contractors = d.contractors || [];
-      jobs = (d.jobs || []).sort((a, b) => String(b.id).localeCompare(String(a.id)));
+      jobs = (d.jobs || []).map(migrateJob)
+        .sort((a, b) => String(b.id).localeCompare(String(a.id)));
       templates = d.templates || [];
       alerts = (d.alerts || []).sort((a, b) => String(b.id).localeCompare(String(a.id)));
       alertSettings = d.settings || {};
@@ -287,20 +313,92 @@ const Data = (() => {
         if (Object.keys(s.lines).length) sections[k] = s;
       });
       const id = nextJobId();
-      const job = { id, owner: byOwner, stage: 0, preparedBy: byOwner,
-        cust: draft.cust, sections, pos: [], log: [`Walk-through saved by ${byOwner}`] };
+      const job = { id, schema: SCHEMA, owner: byOwner, stage: 1, status: 'active',
+        preparedBy: byOwner, cust: draft.cust, sections, pos: [], notes: [],
+        log: [`Walk-through saved by ${byOwner}`] };
       jobs.unshift(job);
       saveJobRecord(job);
       return id;
     },
 
-    createJob(cust, byOwner) {
+    /* A job entered from a quote request, before anyone has been to the
+       property. Stage 0, nothing owed, nothing to do until you visit. */
+    createJob(cust, byOwner, services = []) {
       const id = nextJobId();
-      const job = { id, owner: byOwner, stage: 0, preparedBy: byOwner,
-        cust, sections: {}, pos: [], log: [`Job created by ${byOwner}`] };
+      const sections = {};
+      services.forEach(k => { sections[k] = this.newSection(k); });
+      const job = { id, schema: SCHEMA, owner: byOwner, stage: 0, status: 'active',
+        preparedBy: byOwner, cust, sections, pos: [], notes: [],
+        log: [`Job created by ${byOwner}`] };
       jobs.unshift(job);
       saveJobRecord(job);
       return job;
+    },
+
+    /* Save whatever has been priced so far on an existing job, without
+       moving it along. Lets a walk-through be done in pieces. */
+    saveScope(jobId, sections, byOwner) {
+      const j = getJob(jobId);
+      if (!j) return null;
+      const kept = {};
+      Object.entries(sections).forEach(([k, sec]) => { kept[k] = sec; });
+      j.sections = kept;
+      const priced = Object.values(kept).some(sec => Object.keys(sec.lines).length);
+      if (priced && j.stage === 0) {
+        j.stage = 1;
+        j.log.push(`Scoped and priced by ${byOwner}`);
+      } else {
+        j.log.push(`Scope updated by ${byOwner}`);
+      }
+      saveJobRecord(j);
+      return j;
+    },
+
+    /* ---- lost or cancelled --------------------------------------
+       Kept, not deleted: you still want the record and the reason.
+       Dropped out of the pipeline counts and the attention list. */
+    setJobStatus(id, status, reason, byOwner) {
+      const j = getJob(id);
+      if (!j) return null;
+      j.status = status;
+      j.statusReason = reason || '';
+      j.log.push(status === 'active'
+        ? `Reopened by ${byOwner}`
+        : `Marked ${JOB_STATUS[status].toLowerCase()} by ${byOwner}${reason ? ': ' + reason : ''}`);
+      saveJobRecord(j);
+      return j;
+    },
+    JOB_STATUS,
+    parseSheetRow,
+
+    /* ---- notes you type yourself, alongside the automatic log ---- */
+    addNote(id, text, byOwner) {
+      const j = getJob(id);
+      if (!j || !text.trim()) return null;
+      const note = { at: new Date().toISOString(), by: byOwner, text: text.trim() };
+      j.notes.unshift(note);
+      saveJobRecord(j);
+      return note;
+    },
+    deleteNote(id, at) {
+      const j = getJob(id);
+      if (!j) return;
+      j.notes = j.notes.filter(n => n.at !== at);
+      saveJobRecord(j);
+    },
+
+    /* ---- has this come in before? -------------------------------
+       Pasting the same row twice is easy to do. Matches on the quote
+       reference first, then the phone or email, then the address. */
+    findPossibleDuplicate({ ref, phone, address }) {
+      const norm = v => String(v || '').toLowerCase().replace(/[^a-z0-9@.]/g, '');
+      const r = norm(ref), p = norm(phone), a = norm(address);
+      return jobs.find(j => {
+        if (r && r !== '—' && norm(j.cust.ref) === r) return true;
+        if (p && norm(j.cust.phone) === p) return true;
+        if (a && a.length > 8 && norm(j.cust.address) === a) return true;
+        return false;
+      }) || null;
     },
 
     deleteJob(id) {
@@ -334,7 +432,7 @@ const Data = (() => {
 
     sendEstimate(id, byOwner) {
       const j = getJob(id);
-      j.stage = 1;
+      j.stage = 2;
       j.log.push(`Estimate sent to the customer by ${byOwner}`);
       saveJobRecord(j);
       return j;
@@ -342,7 +440,7 @@ const Data = (() => {
 
     markEstimateAccepted(id) {
       const j = getJob(id);
-      j.stage = 2;
+      j.stage = 3;
       j.log.push('Customer accepted the estimate');
       raiseAlert(j, 'accept', `${j.cust.name} accepted the estimate for ${j.id}`);
       saveJobRecord(j);
@@ -351,29 +449,36 @@ const Data = (() => {
 
     markFormalQuoteSent(id, byOwner) {
       const j = getJob(id);
-      j.stage = 3;
+      j.stage = 4;
       j.log.push(`Formal quote sent by ${byOwner}`);
       saveJobRecord(j);
       return j;
     },
 
+    /* Payment and issuing the job orders are separate now: the money
+       landing doesn't mean you're ready to send contractors out. */
     markPaymentReceived(id) {
       const j = getJob(id);
-      const pos = this.createPurchaseOrders(id);
       j.stage = 5;
-      j.log.push(`${paymentTerms(j).kind} received`,
-        `Job orders issued: ${pos.map(p => p.no + ' to ' + (getContractor(p.contractorId)?.name || '?')).join(', ')}`);
-      raiseAlert(j, 'pay', `${paymentTerms(j).kind} received from ${j.cust.name}. Job orders issued.`);
+      j.log.push(`${paymentTerms(j).kind} recorded as received`);
+      raiseAlert(j, 'pay', `${paymentTerms(j).kind} received from ${j.cust.name}.`);
       saveJobRecord(j);
-      return { job: j, pos };
+      return j;
     },
 
     createPurchaseOrders(jobId) {
       const j = getJob(jobId);
-      j.pos = Object.entries(j.sections).map(([k, s]) => ({
-        no: nextPoNoFor(j), key: k, contractorId: s.contractorId,
-        status: 'awaiting', due: addBusinessDays(new Date(), 2).toISOString().slice(0, 10), photos: 0
-      }));
+      const made = [];
+      for (const [k, s] of Object.entries(j.sections)) {
+        made.push({
+          no: nextPoNoFor(j, made), key: k, contractorId: s.contractorId,
+          status: 'awaiting', issued: isoDate(new Date()),
+          due: isoDate(addBusinessDays(new Date(), 2)), photos: 0
+        });
+      }
+      j.pos = made;
+      j.stage = 6;
+      j.log.push(`Job orders issued: ${made.map(p => p.no + ' to ' + (getContractor(p.contractorId)?.name || '?')).join(', ')}`);
       saveJobRecord(j);
       return j.pos;
     },
@@ -418,7 +523,8 @@ const Data = (() => {
       if (old.status === 'silent') old.wasSilent = true;
       old.status = 'replaced';
       const fresh = { no: nextPoNoFor(j), key: old.key, contractorId: newContractorId,
-        status: 'awaiting', due: addBusinessDays(new Date(), 2).toISOString().slice(0, 10), photos: 0 };
+        status: 'awaiting', issued: isoDate(new Date()),
+        due: isoDate(addBusinessDays(new Date(), 2)), photos: 0 };
       j.pos.push(fresh);
       const matched = Object.keys(lines).length;
       j.log.push(`${fresh.no} issued to ${to.name} to replace ${old.no} (${from?.name || '?'}). ` +
@@ -429,7 +535,7 @@ const Data = (() => {
 
     signOffJob(id, byOwner) {
       const j = getJob(id);
-      j.stage = 6;
+      j.stage = 7;
       j.log.push(`Completion check signed off by ${byOwner}`);
       saveJobRecord(j);
       return j;
@@ -542,21 +648,284 @@ const Data = (() => {
     setAlertType(forOwner, type, on) { alertSettings[forOwner].types[type] = on; saveSettings(); },
     setAlertScope(forOwner, mineOnly) { alertSettings[forOwner].mineOnly = mineOnly; saveSettings(); },
 
+    /* ---- what needs you today -----------------------------------
+       The one screen that matters in a busy week. Everything here is
+       something going wrong or about to, in the order it will bite. */
+    getAttention(forOwner, mineOnly = false) {
+      const today = startOfDay(new Date());
+      const out = [];
+      const mine = j => !mineOnly || j.owner === forOwner;
+
+      jobs.filter(j => j.status === 'active' && mine(j)).forEach(j => {
+        const movesOn = parseDate(j.cust.moveDate);
+        const daysToJob = Math.round((movesOn - today) / 864e5);
+
+        // contractors who have gone quiet past their reply date
+        livePos(j).filter(p => p.status === 'awaiting').forEach(p => {
+          const due = startOfDay(parseDate(p.due));
+          if (due <= today) {
+            const over = Math.round((today - due) / 864e5);
+            out.push({ urgency: over > 0 ? 0 : 1, jobId: j.id,
+              what: `${getContractor(p.contractorId)?.name || 'Contractor'} hasn't replied to ${p.no}`,
+              detail: over > 0 ? `Reply was due ${over} day${over === 1 ? '' : 's'} ago. Chase them or send it elsewhere.`
+                               : 'Reply is due today.',
+              action: 'Chase' });
+          }
+        });
+
+        // a job happening tomorrow where someone hasn't confirmed
+        if (j.stage === 6 && daysToJob >= 0 && daysToJob <= 1) {
+          const unconfirmed = livePos(j).filter(p => p.status !== 'accepted' && p.status !== 'done');
+          if (unconfirmed.length) {
+            out.push({ urgency: 0, jobId: j.id,
+              what: `${j.cust.name}'s job is ${daysToJob === 0 ? 'today' : 'tomorrow'} and ${unconfirmed.length} contractor${unconfirmed.length === 1 ? " hasn't" : "s haven't"} confirmed`,
+              detail: unconfirmed.map(p => `${getContractor(p.contractorId)?.name || '?'} (${p.no})`).join(', '),
+              action: 'Open' });
+          }
+        }
+
+        // money due, or already late
+        if (j.stage >= 2 && j.stage <= 4) {
+          const t = paymentTerms(j);
+          const due = startOfDay(t.due);
+          const days = Math.round((due - today) / 864e5);
+          if (days <= 2) {
+            out.push({ urgency: days < 0 ? 0 : 1, jobId: j.id,
+              what: `${t.kind} of ${fmtMoney(t.amount)} from ${j.cust.name} ${days < 0 ? 'is overdue' : days === 0 ? 'is due today' : `is due in ${days} day${days === 1 ? '' : 's'}`}`,
+              detail: days < 0 ? "The job doesn't go ahead until this is paid." : 'Chase it if it hasn\u2019t come through.',
+              action: 'Open' });
+          }
+        }
+
+        // everything done, waiting on you to sign it off
+        if (j.stage === 6 && livePos(j).length && livePos(j).every(p => p.status === 'done')) {
+          out.push({ urgency: 1, jobId: j.id,
+            what: `${j.cust.name} is finished and needs signing off`,
+            detail: 'Check the photos, confirm with the customer, then sign it off.',
+            action: 'Sign off' });
+        }
+
+        // entered but never scoped, and the move is close
+        if (j.stage === 0 && daysToJob >= 0 && daysToJob <= 10) {
+          out.push({ urgency: daysToJob <= 4 ? 0 : 2, jobId: j.id,
+            what: `${j.cust.name} hasn't been scoped and moves in ${daysToJob} day${daysToJob === 1 ? '' : 's'}`,
+            detail: 'Book a time to walk through the property.',
+            action: 'Open' });
+        }
+
+        // paid, but the contractors still haven't been told
+        if (j.stage === 5) {
+          out.push({ urgency: daysToJob <= 3 ? 0 : 1, jobId: j.id,
+            what: `${j.cust.name} has paid but the job orders haven't gone out`,
+            detail: `Job is ${fmtDate(j.cust.moveDate)}. Send the orders to your contractors.`,
+            action: 'Open' });
+        }
+      });
+
+      return out.sort((a, b) => a.urgency - b.urgency);
+    },
+
+    /* ---- export --------------------------------------------------
+       A spreadsheet is for reading and for your records. It flattens,
+       so a job's individual line items become one summary column: good
+       for an accountant, not a file you could restore from. */
+    exportJobsCsv() {
+      const head = ['Job', 'Status', 'Stage', 'Customer', 'Contact', 'Phone or email',
+        'Address', 'Move-out date', 'People', 'Owner', 'Prepared by', 'Services',
+        'Contractors', 'Contractor cost', 'Customer price', 'Payment', 'Amount', 'Due',
+        'Job orders', 'Reference', 'Notes'];
+      const rows = jobs.map(j => {
+        const cost = jobCost(j), price = customerPrice(cost), t = paymentTerms(j);
+        return [
+          j.id, JOB_STATUS[j.status] || 'Active', STAGES[j.stage] || '',
+          j.cust.name, j.cust.contact, j.cust.phone, j.cust.address, j.cust.moveDate,
+          j.cust.people, j.owner, j.preparedBy,
+          Object.keys(j.sections).map(k => SERVICES[k]).join('; '),
+          Object.values(j.sections).map(sec => getContractor(sec.contractorId)?.name || '').filter(Boolean).join('; '),
+          cost.toFixed(2), price.toFixed(2), t.kind, t.amount.toFixed(2), isoDate(t.due),
+          j.pos.map(p => `${p.no} ${getContractor(p.contractorId)?.name || ''} (${p.status})`).join('; '),
+          j.cust.ref || '', j.notes.map(n => n.text).join(' | ')
+        ];
+      });
+      return toCsv([head, ...rows]);
+    },
+
+    exportContractorsCsv() {
+      const head = ['Contractor', 'Contact', 'Phone', 'Job order email', 'Payment terms',
+        'Insurance expiry', 'Services', 'Strikes', 'Item', 'Service', 'Per', 'Pricing', 'Rate'];
+      const rows = [];
+      contractors.forEach(c => {
+        const base = [c.name, c.contact, c.phone, c.email, c.terms, c.insurance,
+          c.services.map(k => SERVICES[k]).join('; '), `${c.strikes} of 3`];
+        if (!c.items.length) { rows.push([...base, '(no rate card yet)', '', '', '', '']); return; }
+        c.items.forEach(i => rows.push([...base, i.name, SERVICES[i.section], i.unit,
+          i.type === 'hourly' ? 'Hourly' : 'Fixed', Number(i.rate).toFixed(2)]));
+      });
+      return toCsv([head, ...rows]);
+    },
+
     /* ---- payments ------------------------------------------------
        Display only. Zoho does the invoicing; you tick the stage over
        here when you see the money land. */
     getPayments() {
-      const now = new Date(); now.setHours(0, 0, 0, 0);
-      return jobs.filter(j => j.stage >= 2 && j.stage < 6).map(j => {
+      const now = startOfDay(new Date());
+      // From the estimate going out until the job is signed off. Paid
+      // is stage 5 and everything after it; before that the money is
+      // still owed, and overdue once the due date has gone by.
+      return jobs.filter(j => j.stage >= 2 && j.stage < 7 && j.status === 'active').map(j => {
         const t = paymentTerms(j);
-        const paid = j.stage >= 4;
-        return { job: j, terms: t, paid, overdue: !paid && t.due < now };
+        const paid = j.stage >= 5;
+        return { job: j, terms: t, paid, overdue: !paid && startOfDay(t.due) < now };
       });
     }
   };
 
-  function nextPoNoFor(job) {
-    const all = jobs.flatMap(j => j.pos).concat(job.pos || []);
+  /* The next PO number, counting every order that already exists
+     ANYWHERE, including ones built moments ago in the same loop.
+     The earlier version read job.pos while that array was still being
+     replaced, so every order in a job came out with the same number and
+     accepting one would act on another. `extra` is how freshly-made
+     orders get counted before they have been stored. */
+  /* =================================================================
+     Parsing a row pasted from Google Sheets
+     =================================================================
+     Copying a row out of Sheets gives tab-separated text. The two tabs
+     have different columns, so which one it is comes from the toggle
+     rather than from guessing. Whatever this works out is shown in the
+     form for checking before anything is saved — a misread column
+     should never quietly become a wrong job.
+
+     Tenant tab:
+       A Timestamp  B Email  C Full name  D Phone  E Student?
+       F Move-out date  G Current location  H Moving to  I Move is for
+       J Services  K Bedrooms  L Amount of stuff  M Special requirements
+       N How heard  O Best contact  P Consent  Q Reference
+       R Terms version  S Consented at
+
+     Landlord tab:
+       A Timestamp  B Email  C Name/company  D Email  E Phone  F Role
+       G Property address  H Tenancy end  I Required completion
+       J Access method  K Services  L Property size  M Condition
+       N Special requirements  O Preferred contact  P Consent
+       Q Reference  R Terms version  S Consented at
+     ================================================================= */
+  function parseSheetRow(text, kind) {
+    const raw = String(text || '').replace(/\r/g, '').trim();
+    if (!raw) return { error: 'Nothing pasted.' };
+    // One row. If several were copied, take the first non-empty one.
+    const line = raw.split('\n').find(l => l.trim()) || '';
+    const cols = line.split('\t').map(c => c.trim());
+    if (cols.length < 6) {
+      return { error: 'That does not look like a row from the sheet. Select the whole row in Sheets and copy it.' };
+    }
+    const at = i => cols[i] || '';
+    const warnings = [];
+
+    const out = { services: [], warnings };
+    if (kind === 'landlord') {
+      out.name = at(2);
+      out.phone = at(4) || at(3) || at(1);
+      out.contact = /phone/i.test(at(14)) ? 'Text' : 'Email';
+      out.address = at(6);
+      out.moveDate = parseAnyDate(at(8) || at(7), warnings);
+      out.people = 0;
+      out.services = mapServices(at(10));
+      out.special = [at(5) && `Role: ${at(5)}`, at(11) && `Size: ${at(11)}`,
+        at(12) && `Condition: ${at(12)}`, at(9) && `Access: ${at(9)}`, at(13)]
+        .filter(Boolean).join('. ');
+      out.ref = at(16);
+    } else {
+      out.name = at(2);
+      out.phone = /email/i.test(at(14)) ? (at(1) || at(3)) : (at(3) || at(1));
+      out.contact = /email/i.test(at(14)) ? 'Email' : 'Text';
+      out.address = at(6);
+      out.moveDate = parseAnyDate(at(5), warnings);
+      out.people = bedroomsToPeople(at(10));
+      out.services = mapServices(at(9));
+      out.special = [at(10) && `${at(10)}`, at(11) && `${at(11)}`, at(12)]
+        .filter(Boolean).join('. ');
+      out.ref = at(16);
+    }
+
+    if (!out.name) warnings.push('No customer name found in the row.');
+    if (!out.address) warnings.push('No address found in the row.');
+    if (!out.services.length) warnings.push('No services recognised — tick them yourself below.');
+    if (!out.moveDate) warnings.push('Could not read the move-out date — set it yourself below.');
+    return out;
+  }
+
+  /* Services arrive as the form's own wording, e.g.
+     "Cleaning (end-of-lease deep clean), Rubbish (junk removal & disposal)".
+     Matching on the plain word is enough and survives the wording
+     being reworded later. */
+  function mapServices(text) {
+    const t = String(text || '').toLowerCase();
+    const found = [];
+    if (/clean/.test(t)) found.push('cleaning');
+    if (/rubbish|junk|disposal/.test(t)) found.push('rubbish');
+    if (/moving|move|transport|furniture/.test(t)) found.push('moving');
+    if (/storage|store/.test(t)) found.push('storage');
+    return found;
+  }
+
+  function bedroomsToPeople(text) {
+    const m = /(\d+)/.exec(String(text || ''));
+    return m ? Number(m[1]) : 0;
+  }
+
+  /* Sheets can hand over a date in several shapes depending on the
+     locale and whether the cell was formatted: 13/11/2026, 2026-11-13,
+     "13 November 2026", or a bare serial number if the cell was never
+     formatted as a date. NZ reads d/m/y, so 3/4/2026 is 3 April. */
+  function parseAnyDate(value, warnings = []) {
+    const v = String(value || '').trim();
+    if (!v) return '';
+
+    // Excel / Sheets serial number (days since 30 Dec 1899)
+    if (/^\d{5}(\.\d+)?$/.test(v)) {
+      const d = new Date(Date.UTC(1899, 11, 30) + Number(v) * 864e5);
+      return isNaN(d) ? '' : isoDate(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    }
+    // already ISO
+    let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(v);
+    if (m) return isoDate(new Date(+m[1], +m[2] - 1, +m[3]));
+    // d/m/y or d-m-y, read the NZ way
+    m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/.exec(v);
+    if (m) {
+      let [, d, mo, y] = m.map(Number);
+      if (y < 100) y += 2000;
+      if (d > 12 && mo > 12) return '';
+      if (mo > 12) { warnings.push(`Read "${v}" as day/month. Check the date below.`); [d, mo] = [mo, d]; }
+      return isoDate(new Date(y, mo - 1, d));
+    }
+    // "13 November 2026" and similar
+    const parsed = new Date(v);
+    if (!isNaN(parsed)) return isoDate(new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()));
+    return '';
+  }
+
+  /* Function declarations, not consts: everything below sits after the
+     `return` that exports the API, and only function declarations are
+     hoisted far enough to be callable from it. */
+  function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+  function fmtMoney(n) { return n.toLocaleString('en-NZ', { style: 'currency', currency: 'NZD' }); }
+  function fmtDate(d) {
+    return (typeof d === 'string' ? parseDate(d) : new Date(d))
+      .toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
+  /* Quote every field. A customer's note containing a comma, a quote
+     mark or a line break would otherwise split the row and shift every
+     column after it. */
+  function toCsv(rows) {
+    return rows.map(r => r.map(v => {
+      const str = String(v ?? '');
+      return '"' + str.replace(/"/g, '""') + '"';
+    }).join(',')).join('\r\n');
+  }
+
+  function nextPoNoFor(job, extra = []) {
+    const all = jobs.flatMap(j => j.pos || []).concat(job.pos || [], extra);
     const max = all.reduce((m, p) => Math.max(m, Number(String(p.no).replace(/\D/g, '')) || 0), 0);
     return 'PO-' + String(max + 1).padStart(4, '0');
   }
