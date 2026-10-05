@@ -1,0 +1,857 @@
+<!doctype html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FlatOut Employees Panel</title>
+<meta name="robots" content="noindex">
+<link rel="preload" href="/fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+/* Same two faces the website self-hosts. The panel keeps its own copy of
+   the tokens rather than importing css/site.css, so the site's stylesheet
+   can change without touching the panel. */
+@font-face{font-family:"Fraunces";src:url("/fonts/fraunces-600.woff2") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"Karla";src:url("/fonts/karla-variable.woff2") format("woff2-variations"),url("/fonts/karla-variable.woff2") format("woff2");font-weight:400 700;font-style:normal;font-display:swap}
+/* Light app shell on the flatoutnz.co.nz tokens: white header with tabs on
+   desktop, bottom tab bar on phones, white rounded cards on off-white, a
+   sticky price bar on the walk-through. Light-only, to match the website. */
+:root{
+  --navy-deep:#14283A; --navy:#1D3A50; --blue:#285D78; --teal:#3D8C82; --orange:#D97A35;
+  --cream:#F4F0E8; --off-white:#F7F8F6; --white:#FFFFFF;
+  --line:rgba(20,40,58,.10); --line-strong:rgba(20,40,58,.18);
+  --teal-wash:rgba(61,140,130,.10); --orange-wash:rgba(217,122,53,.13); --red:#C24444; --red-wash:#FDF4F4;
+  --ok-ink:#2C6E66; --warn-ink:#9A5420;
+  --display:"Fraunces",Georgia,serif; --body:"Karla","Segoe UI",system-ui,sans-serif;
+  --r-sm:6px; --r-md:12px; --r-lg:20px;
+  --shadow-card:0 1px 2px rgba(20,40,58,.06),0 4px 16px rgba(20,40,58,.06);
+  --navh:0px; color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--off-white);color:var(--navy-deep);font-family:var(--body);font-size:16px;line-height:1.55;font-variant-numeric:tabular-nums;margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3{margin:0;font-family:var(--display);font-weight:600;line-height:1.15;letter-spacing:-.01em;text-wrap:balance}
+h2{font-size:1.6rem} h3{font-size:1.2rem}
+p{margin:0}
+.muted{color:var(--blue)}
+.small{font-size:.875rem}
+.eyebrow{font-size:.75rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--blue)}
+:focus-visible{outline:3px solid var(--teal);outline-offset:3px;border-radius:4px}
+
+header.top{background:var(--white);border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
+.top-inner{max-width:72rem;margin:0 auto;padding-inline:16px;padding-block:10px 0;display:flex;gap:12px 20px;align-items:center;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:10px}
+.logo img{width:36px;height:36px}
+.logo b{font-family:var(--display);font-weight:600;font-size:1.3rem;line-height:1}
+.logo span{display:block;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);font-weight:700;margin-top:3px}
+.bell{margin-left:auto;display:inline-flex;align-items:center;gap:6px;background:var(--off-white);border:1.5px solid var(--line-strong);border-radius:999px;padding:6px 12px;font-weight:700;cursor:pointer;color:var(--navy-deep)}
+.bell:hover{border-color:var(--teal)}
+.bell b{background:var(--orange);color:var(--white);border-radius:999px;font-size:.72rem;min-width:20px;padding:1px 6px;text-align:center}
+.who{display:flex;align-items:center;gap:8px;font-size:.875rem;color:var(--blue)}
+.savestate{margin-left:auto;font-size:.78rem;font-weight:700;color:var(--ok-ink);background:var(--teal-wash);border-radius:999px;padding:4px 10px;white-space:nowrap}
+.savestate.saving{color:var(--warn-ink);background:var(--orange-wash)}
+.savestate.failing{color:var(--red);background:var(--red-wash)}
+.bell{margin-left:0}
+#boot{min-height:60vh;display:flex;align-items:center;justify-content:center;padding:40px 16px;text-align:center}
+#boot .card{max-width:26rem}
+.tosite{display:inline-flex;align-items:center;gap:6px;color:var(--blue);text-decoration:none;font-weight:700;font-size:.875rem;border:1.5px solid var(--line-strong);border-radius:999px;padding:6px 12px;white-space:nowrap}
+.tosite:hover{border-color:var(--teal);color:var(--navy-deep)}
+.tosite svg{flex-shrink:0}
+nav.tabs{display:flex;gap:4px;width:100%}
+nav.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:10px 12px;cursor:pointer;font-weight:700;color:var(--blue)}
+nav.tabs button:hover{color:var(--navy-deep)}
+nav.tabs button[aria-current="page"]{color:var(--navy-deep);border-bottom-color:var(--navy-deep)}
+.proto{background:var(--cream);color:var(--blue);font-size:.8rem;text-align:center;padding:6px 16px}
+
+main{max-width:72rem;margin:0 auto;padding-inline:16px;padding-block:24px 120px}
+.view{display:grid;gap:20px}
+.card{background:var(--white);border-radius:var(--r-lg);box-shadow:var(--shadow-card);padding:20px;min-width:0}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px 12px;margin-bottom:12px;flex-wrap:wrap}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:20px}
+.rows{display:grid}
+.row{display:flex;gap:10px 12px;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.row:first-child{border-top:0;padding-top:0}
+.row .main{min-width:0;flex:1 1 180px}
+.pill{display:inline-block;font-size:.75rem;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.p-ok{background:var(--teal-wash);color:var(--ok-ink)} .p-warn{background:var(--orange-wash);color:var(--warn-ink)}
+.p-bad{background:var(--red-wash);color:var(--red)} .p-grey{background:var(--off-white);color:var(--blue);box-shadow:inset 0 0 0 1px var(--line)}
+.p-navy{background:var(--navy-deep);color:var(--cream)}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:.6rem 1.15rem;border-radius:var(--r-md);border:2px solid transparent;font-weight:700;cursor:pointer;background:var(--navy-deep);color:var(--cream);transition:background-color .15s,border-color .15s}
+.btn:hover{background:var(--blue)}
+.btn.ghost{background:transparent;color:var(--navy-deep);border:1.5px solid var(--line-strong)}
+.btn.ghost:hover{border-color:var(--teal);background:var(--teal-wash)}
+.btn.sm{min-height:36px;padding:.3rem .8rem;font-size:.875rem}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.linkbtn{background:none;border:0;padding:0;color:var(--blue);font-weight:700;cursor:pointer;text-decoration:underline;font-size:.875rem}
+.linkbtn.danger{color:var(--red)}
+
+.stat-row{display:flex;gap:10px;flex-wrap:wrap}
+.stat{flex:1 1 90px;background:var(--off-white);border-radius:var(--r-md);padding:10px 12px}
+.stat b{display:block;font-family:var(--display);font-size:1.6rem;line-height:1.1}
+
+.steps{display:flex;overflow-x:auto;padding-bottom:4px}
+.step{flex:1 0 96px;font-size:.8rem;color:var(--blue);position:relative;padding-top:20px;text-align:center}
+.step::before{content:"";position:absolute;top:6px;left:0;right:0;height:3px;background:var(--line)}
+.step::after{content:"";position:absolute;top:0;left:50%;width:15px;height:15px;margin-left:-7.5px;border-radius:50%;background:var(--white);border:3px solid var(--line-strong)}
+.step.done{color:var(--navy-deep)} .step.done::before,.step.now::before{background:var(--teal)}
+.step.done::after{background:var(--teal);border-color:var(--teal)}
+.step.now{color:var(--navy-deep);font-weight:700} .step.now::after{border-color:var(--orange)}
+.next{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--cream);border-radius:var(--r-md);padding:14px 16px;margin-top:16px}
+.next p{flex:1 1 220px}
+
+table{width:100%;border-collapse:collapse}
+td,th{padding:9px 6px;border-top:1px solid var(--line);text-align:left;vertical-align:middle}
+th{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--blue);border-top:0;white-space:nowrap}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
+.tablewrap{overflow-x:auto}
+
+.input,.select,.textarea{appearance:none;-webkit-appearance:none;width:100%;border:1.5px solid rgba(20,40,58,.15);border-radius:var(--r-md);padding:.65rem .9rem;background-color:var(--off-white);min-height:44px;transition:border-color .15s,box-shadow .15s}
+.textarea{min-height:5rem;resize:vertical;line-height:1.5}
+.select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9' fill='none'%3E%3Cpath d='M1 1.5 7 7.5 13 1.5' stroke='%23285D78' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .9rem center;padding-right:2.4rem}
+.input:hover,.select:hover,.textarea:hover{border-color:rgba(20,40,58,.32)}
+.input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--teal);background-color:var(--white);box-shadow:0 0 0 4px rgba(61,140,130,.15)}
+.select.inline{width:auto;min-height:36px;padding-block:.3rem}
+.field{display:grid;gap:6px;min-width:0}
+.field>label,.flabel{font-weight:700;font-size:.9rem}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:12px}
+.options{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr));gap:8px}
+.option{display:flex;align-items:center;gap:10px;border:1.5px solid rgba(20,40,58,.15);border-radius:var(--r-md);padding:.55rem .85rem;background:var(--off-white);cursor:pointer;font-size:.92rem}
+.option:hover{border-color:var(--teal)}
+.option input{width:1.1rem;height:1.1rem;accent-color:var(--teal);flex-shrink:0}
+.option:has(input:checked){border-color:var(--teal);background:var(--teal-wash)}
+.formbox{background:var(--off-white);border-radius:var(--r-md);padding:16px;display:grid;gap:12px;margin-top:12px;width:100%}
+.details{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px 16px;margin:0 0 14px}
+.details div{min-width:0;overflow-wrap:anywhere}
+.details dt{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--blue);font-weight:700}
+.details dd{margin:0}
+
+.estimate{background:var(--white);border-radius:var(--r-lg);box-shadow:var(--shadow-card);overflow:hidden;min-width:0}
+.est-head{background:var(--cream);padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.est-body{padding:20px;display:grid;gap:12px}
+.est-body ul{margin:4px 0 0;padding-left:18px}
+.est-total{display:flex;justify-content:space-between;align-items:baseline;border-top:2px solid var(--navy-deep);padding-top:10px}
+.est-total b{font-family:var(--display);font-size:1.7rem}
+
+.chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{border:1.5px solid var(--line-strong);background:var(--white);border-radius:999px;padding:8px 16px;cursor:pointer;font-weight:700}
+.chip:hover{border-color:var(--teal)}
+.chip[aria-pressed="true"]{background:var(--navy-deep);border-color:var(--navy-deep);color:var(--cream)}
+.sec-head{display:flex;gap:10px 16px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.sec-head .field{flex:1 1 220px;max-width:340px}
+.item{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.item:first-of-type{border-top:0}
+.item .main{flex:1;min-width:0}
+.qty{display:flex;align-items:center;gap:4px}
+.qty button{width:38px;height:38px;border-radius:var(--r-md);border:1.5px solid rgba(20,40,58,.15);background:var(--off-white);cursor:pointer;font-size:1.15rem;font-weight:700}
+.qty button:hover{border-color:var(--teal)}
+.qty output{min-width:34px;text-align:center;font-weight:700}
+.item.on .qty output{color:var(--teal)}
+.photos{display:flex;gap:8px;flex-wrap:wrap}
+.photos img{width:72px;height:72px;object-fit:cover;border-radius:var(--r-sm)}
+.pricebar{position:sticky;bottom:calc(var(--navh) + 12px + env(safe-area-inset-bottom,0px));z-index:10;background:var(--white);border-radius:var(--r-lg);box-shadow:0 2px 6px rgba(20,40,58,.08),0 10px 30px rgba(20,40,58,.14);padding:12px 16px;display:flex;gap:10px 20px;align-items:center;flex-wrap:wrap}
+.pricebar div{display:flex;flex-direction:column;line-height:1.15}
+.pricebar small{color:var(--blue);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;font-weight:700}
+.pricebar strong{font-size:1.1rem}
+.pricebar .cust strong{font-family:var(--display);font-size:1.35rem}
+.pricebar .btn{margin-left:auto}
+.custgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:12px}
+.custgrid div{min-width:0;overflow-wrap:anywhere}
+.custgrid b{display:block}
+.input.rate{width:90px;text-align:right;min-height:36px;padding:.3rem .5rem}
+.note{background:var(--orange-wash);color:var(--warn-ink);border-radius:var(--r-md);padding:10px 14px;font-size:.9rem}
+.log{margin:0;padding-left:18px;color:var(--blue);font-size:.9rem}
+.filters{display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr));gap:10px;align-items:end}
+@media (max-width:700px){.filters{grid-template-columns:1fr 1fr}.filters .field:first-child{grid-column:1/-1}}
+.notif{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line)}
+.notif:first-child{border-top:0;padding-top:0}
+.notif .dot{width:10px;height:10px;border-radius:50%;background:var(--orange);margin-top:7px;flex-shrink:0}
+.notif.read .dot{background:var(--line-strong)}
+.notif .main{flex:1;min-width:0}
+.toggle{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.toggle:first-child{border-top:0}
+.toggle input{width:1.2rem;height:1.2rem;accent-color:var(--teal)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--navh) + 24px + env(safe-area-inset-bottom,0px));background:var(--navy-deep);color:var(--cream);padding:10px 18px;border-radius:var(--r-md);z-index:50;max-width:calc(100% - 32px);font-weight:700}
+
+.cal-layout{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:20px;align-items:start}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal .dow{font-size:.7rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--blue);text-align:center;padding-bottom:4px}
+.day{min-height:78px;border-radius:var(--r-sm);background:var(--off-white);border:1.5px solid transparent;padding:6px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:3px;min-width:0}
+.day:hover{border-color:var(--teal)}
+.day.out{opacity:.35}
+.day.today .dnum{background:var(--navy-deep);color:var(--cream);border-radius:999px;padding:0 6px}
+.day[aria-pressed="true"]{border-color:var(--navy-deep);background:var(--white)}
+.day.clash{box-shadow:inset 0 0 0 2px var(--orange)}
+.dnum{font-weight:700;font-size:.85rem;align-self:flex-start}
+.ev{font-size:.72rem;line-height:1.25;border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev.job{background:var(--navy-deep);color:var(--cream)}
+.ev.est{background:var(--white);color:var(--navy-deep);box-shadow:inset 0 0 0 1px var(--line-strong)}
+.ev.visit{background:var(--teal-wash);color:var(--ok-ink)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;color:var(--blue);margin-top:12px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+.msg{background:var(--off-white);border-radius:var(--r-md);padding:14px 16px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.95rem}
+.ph{display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:var(--r-sm);background:var(--cream);color:var(--blue);font-size:.7rem;font-weight:700;text-align:center}
+.bar{height:6px;border-radius:999px;background:var(--line);overflow:hidden;min-width:60px}
+.bar span{display:block;height:100%;background:var(--teal)}
+.brief{background:var(--cream);border-radius:var(--r-md);padding:12px 16px;display:grid;gap:4px}
+
+@media (max-width:820px){.cal-layout{grid-template-columns:1fr}}
+@media (max-width:700px){
+  :root{--navh:66px}
+  .card{padding:16px}
+  h2{font-size:1.4rem}
+  nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--white);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));justify-content:space-around;z-index:30;gap:2px}
+  nav.tabs button{border:0;border-radius:var(--r-md);flex:1;padding:10px 2px;font-size:.75rem;min-width:0;line-height:1.2;overflow-wrap:anywhere;hyphens:auto}
+  nav.tabs button[aria-current="page"]{background:var(--navy-deep);color:var(--cream)}
+  .top-inner{padding-block:10px}
+  .who span{display:none}
+  .tosite span{display:none}
+  .tosite{padding:6px 10px}
+  .day{min-height:52px;padding:4px}
+  .ev{font-size:0;padding:0;height:6px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="logo"><img src="/images/logo-icon.png" alt=""><div><b>FlatOut</b><span>Employees panel</span></div></div>
+    <span class="savestate" id="savestate" title="Whether your changes have reached the server">Saved</span>
+    <button class="bell" id="bell" data-act="alerts" aria-label="Alerts"><span>Alerts</span><b id="bellcount" hidden></b></button>
+    <a class="tosite" href="/" title="Open the public FlatOut website">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
+      <span>Website</span>
+    </a>
+    <label class="who"><span>Signed in as</span>
+      <select id="owner" class="select inline"><option value="Daniel Bell">Daniel Bell</option><option value="Rocky Lin">Rocky Lin</option></select>
+    </label>
+    <nav class="tabs" id="tabs">
+      <button data-view="home" aria-current="page">Home</button>
+      <button data-view="jobs">Jobs</button>
+      <button data-view="calendar">Calendar</button>
+      <button data-view="walk">Walk-through</button>
+      <button data-view="contractors">Contractors</button>
+    </nav>
+  </div>
+</header>
+<div class="proto">Phase 1 with sample data. Nothing is sent to Zoho, Google, contractors or customers, and changes reset when the page reloads.</div>
+<main id="app"></main>
+<div class="toast" id="toast" hidden></div>
+
+<script src="/panel/data.js"></script>
+<script>
+/* =====================================================================
+   UI ONLY. Every read and write goes through Data (see data.js).
+   This file holds no business data and no persistence.
+   ===================================================================== */
+(() => {
+'use strict';
+
+const money = n => n.toLocaleString('en-NZ', { style: 'currency', currency: 'NZD' });
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fd = d => (typeof d === 'string' ? Data.parseDate(d) : new Date(d)).toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
+const ft = t => { const [h, m] = t.split(':').map(Number); return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''}${h < 12 ? 'am' : 'pm'}`; };
+const first = n => n.replace(/^Sample:\s*/, '').split(' ')[0];
+const iso = Data.isoDate;
+const TODAY = Data.today();
+const S = Data.SERVICES, KEYS = Data.SERVICE_KEYS, OWNERS = Data.OWNERS, STAGES = Data.STAGES;
+
+/* ---------- view state (not data) -------------------------------- */
+let view = 'home', openJob = null, draft = null;
+const ui = { jf: { q: '', stage: 'all', who: 'all', suburb: 'all' }, addC: false, editC: null,
+  addItemFor: null, bookFor: null, tpl: {}, editTpl: null, signoff: {},
+  cal: { y: 2026, m: 10 }, day: '2026-11-14' };
+const owner = () => document.getElementById('owner').value;
+
+function toast(m) {
+  const t = document.getElementById('toast');
+  t.textContent = m; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2600);
+}
+Data.onAlert(a => { if (a.to.includes(owner())) toast('Phone alert: ' + a.text); });
+
+function go(v, id) {
+  view = v;
+  if (id !== undefined) openJob = id;
+  document.querySelectorAll('#tabs button').forEach(b => {
+    if (b.dataset.view === v) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  });
+  render();
+  window.scrollTo(0, 0);
+}
+function bell() {
+  const n = Data.unreadCount(owner()), b = document.getElementById('bellcount');
+  b.hidden = !n; b.textContent = n;
+}
+const stagePill = s => `<span class="pill ${s >= 6 ? 'p-ok' : s >= 4 ? 'p-navy' : s === 0 ? 'p-grey' : 'p-warn'}">${STAGES[s]}</span>`;
+const poPill = p => ({ accepted: '<span class="pill p-ok">Accepted</span>', done: '<span class="pill p-ok">Marked done</span>',
+  declined: '<span class="pill p-bad">Declined</span>', silent: '<span class="pill p-bad">No reply</span>',
+  replaced: '<span class="pill p-grey">Replaced</span>' })[p.status] || '<span class="pill p-warn">Awaiting reply</span>';
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast('Copied'); }
+  catch (e) { toast('Copy blocked here. Select the text and copy it instead'); }
+}
+const fill = (tpl, ctx) => tpl.replace(/\{([a-z ]+)\}/g, (m, k) => ctx[k] ?? m);
+function jobCtx(j) {
+  const t = Data.paymentTerms(j), c = j.cust;
+  return { 'first name': first(c.name), sender: owner().split(' ')[0], address: c.address,
+    visit: c.visit ? `${fd(c.visit.date)} at ${ft(c.visit.time)}` : '(no visit booked)',
+    price: money(Data.customerPrice(Data.jobCost(j))), payment: t.kind.toLowerCase(),
+    amount: money(t.amount), 'due date': fd(t.due), 'job date': fd(c.moveDate),
+    services: Object.keys(j.sections).map(k => S[k].toLowerCase()).join(', ') };
+}
+const suggested = j => j.stage <= 1 ? 'estimate' : j.stage <= 3 ? 'payment' : j.stage === 5 ? 'daybefore' : 'review';
+const lineText = (s, iid, q) => { const i = Data.getRateItem(s.contractorId, iid); return i ? `${q} × ${i.name}` : ''; };
+
+/* ---------- home -------------------------------------------------- */
+const visitLine = e => e.visit
+  ? `<span class="pill p-ok">Visit ${fd(e.visit.date)} ${ft(e.visit.time)} · ${esc(e.visit.who.split(' ')[0])}</span>`
+  : '<span class="pill p-warn">Visit not booked</span>';
+
+function bookForm(e) {
+  const v = e.visit || { date: iso(Data.addBusinessDays(TODAY, 1)), time: '16:00', who: owner() };
+  return `<form class="formbox" data-form="book" data-ref="${e.ref}"><div class="form-grid">
+    <div class="field"><label for="bk-d-${e.ref}">Date</label><input class="input" type="date" id="bk-d-${e.ref}" name="date" required value="${v.date}"></div>
+    <div class="field"><label for="bk-t-${e.ref}">Time</label><input class="input" type="time" id="bk-t-${e.ref}" name="time" required value="${v.time}"></div>
+    <div class="field"><label for="bk-w-${e.ref}">Who's going</label><select class="select" id="bk-w-${e.ref}" name="who">${OWNERS.map(o => `<option ${o === v.who ? 'selected' : ''}>${o}</option>`).join('')}</select></div></div>
+    <div class="chips"><button class="btn sm" type="submit">Save visit</button><button class="btn sm ghost" type="button" data-act="hideBook">Cancel</button></div></form>`;
+}
+function enquiryRow(e, startLabel = 'Start walk-through') {
+  return `<div class="row"><div class="main"><b>${esc(e.name)}</b> <span class="muted small">${e.ref}</span>${e.source === 'landlord' ? ' <span class="pill p-grey">Landlord</span>' : ''}<br>
+  <span class="small muted">${esc(e.address)} · ${e.people} people · moving ${fd(e.moveDate)}</span><br>
+  <span class="small">${e.services.map(k => S[k]).join(', ')}</span><div style="margin-top:6px">${visitLine(e)}</div></div>
+  <div class="chips"><button class="btn sm ghost" data-act="showBook" data-ref="${e.ref}">${e.visit ? 'Change visit' : 'Book visit'}</button>${e.visit ? `<button class="btn sm ghost" data-act="copyVisit" data-ref="${e.ref}">Copy confirmation</button>` : ''}<button class="btn sm" data-act="start" data-ref="${e.ref}">${startLabel}</button></div>
+  ${ui.bookFor === e.ref ? bookForm(e) : ''}</div>`;
+}
+function vHome() {
+  const jobs = Data.listJobs(), enquiries = Data.listEnquiries();
+  const all = jobs.flatMap(j => j.pos.map(p => ({ j, p })));
+  const problems = all.filter(x => x.p.status === 'declined' || x.p.status === 'silent');
+  const waiting = all.filter(x => x.p.status === 'awaiting');
+  const signoff = jobs.filter(j => j.stage === 5 && Data.livePos(j).length && Data.livePos(j).every(p => p.status === 'done'));
+  const pay = Data.getPayments();
+  const visits = enquiries.filter(e => e.visit).map(e => ({ ...e.visit, name: e.name, address: e.address }))
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  return `<div class="view">
+  <div><h2>Kia ora, ${esc(owner().split(' ')[0])}</h2><p class="muted small" style="margin-top:4px">${fd(TODAY)} · ${jobs.length} job${jobs.length === 1 ? '' : 's'} on the books · ${problems.length + signoff.length} thing${problems.length + signoff.length === 1 ? '' : 's'} to sort</p></div>
+  <div class="grid2">
+    <section class="card"><div class="card-head"><h3>Start a job</h3><span class="eyebrow">From a quote request</span></div>
+      <p class="muted small">A quote request comes through to the sheet and to your email. Open it, then start the walk-through here with the customer's details.</p>
+      <div class="chips" style="margin-top:14px"><button class="btn" data-act="nav" data-v="walk">New walk-through</button></div>
+      <p class="small muted" style="margin-top:14px">Pulling enquiries straight from the sheet is the next thing to add, once this is earning its keep.</p></section>
+    <section class="card"><div class="card-head"><h3>Job pipeline</h3><button class="btn sm ghost" data-act="nav" data-v="jobs">All jobs</button></div>
+      <div class="stat-row">${[[0, 1, 'Estimating'], [2, 3, 'Quoting'], [4, 5, 'Booked'], [6, 6, 'Done']].map(([a, b, l]) => `<div class="stat"><b>${jobs.filter(j => j.stage >= a && j.stage <= b).length}</b><span class="small muted">${l}</span></div>`).join('')}</div>
+      <div class="rows" style="margin-top:14px">${signoff.map(j => `<div class="row"><div class="main"><b>${esc(j.cust.name)}</b> <span class="muted small">${j.id}</span><br><span class="small muted">Contractors have marked it done</span></div><span class="pill p-warn">Needs sign-off</span><button class="btn sm" data-act="open" data-id="${j.id}">Check</button></div>`).join('')}
+      ${jobs.filter(j => !signoff.includes(j)).map(j => `<div class="row"><div class="main"><b>${esc(j.cust.name)}</b> <span class="muted small">${j.id}</span><br><span class="small muted">${fd(j.cust.moveDate)} · ${money(Data.customerPrice(Data.jobCost(j)))} · ${esc(j.owner.split(' ')[0])}</span></div>${stagePill(j.stage)}<button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button></div>`).join('')}</div></section>
+    <section class="card"><div class="card-head"><h3>Contractor responses</h3><span class="eyebrow">2 business day window</span></div>
+      <div class="rows">${[...problems, ...waiting].map(({ j, p }) => { const c = Data.getContractor(p.contractorId);
+        return `<div class="row"><div class="main"><b>${esc(c.name)}</b> <span class="muted small">${p.no} · ${j.id}</span><br><span class="small muted">${p.status === 'declined' ? 'Reason: ' + esc(p.reason) : p.status === 'silent' ? `No reply by ${fd(p.due)} · strike ${c.strikes} of 3` : 'Reply due ' + fd(p.due)}</span></div>${poPill(p)}${p.status !== 'awaiting' ? `<button class="btn sm ghost" data-act="open" data-id="${j.id}">Sort it</button>` : ''}</div>`; }).join('') || '<p class="muted">Everyone has replied.</p>'}</div></section>
+    <section class="card"><div class="card-head"><h3>Payments</h3><span class="eyebrow">Status from Zoho Books</span></div>
+      <div class="rows">${pay.map(({ job: j, terms: t, paid, overdue }) => `<div class="row"><div class="main"><b>${esc(j.cust.name)}</b> <span class="muted small">${j.id}</span><br><span class="small muted">${paid ? (t.balance ? `Balance ${money(t.balance)} due ${fd(t.balanceDue)}` : 'Paid in full') : `${t.kind} ${money(t.amount)} due ${fd(t.due)}`}</span></div>${paid ? (t.balance ? '<span class="pill p-warn">Balance owing</span>' : '<span class="pill p-ok">Paid</span>') : overdue ? '<span class="pill p-bad">Overdue</span>' : '<span class="pill p-grey">Not yet due</span>'}</div>`).join('') || '<p class="muted">Nothing owing.</p>'}</div>
+      <p class="small muted" style="margin-top:12px">Invoices, payments and contractor bills are handled in Zoho. This only shows where each job stands.</p></section>
+  </div></div>`;
+}
+
+/* ---------- jobs -------------------------------------------------- */
+const suburb = j => j.cust.address.split(',').pop().trim();
+function filteredJobs() {
+  const f = ui.jf, q = f.q.trim().toLowerCase();
+  return Data.listJobs().filter(j =>
+    (!q || [j.id, j.cust.name, j.cust.address, j.cust.phone].join(' ').toLowerCase().includes(q))
+    && (f.stage === 'all' || String(j.stage) === f.stage)
+    && (f.who === 'all' || (f.who === 'me' ? j.owner === owner() : j.owner === f.who))
+    && (f.suburb === 'all' || suburb(j) === f.suburb));
+}
+function jobRows() {
+  const list = filteredJobs();
+  return list.length ? list.map(j => `<tr><td>${j.id}</td><td><b>${esc(j.cust.name)}</b><br><span class="small muted">${esc(j.cust.address)}</span></td><td>${fd(j.cust.moveDate)}</td>
+    <td><select class="select inline" id="own-${j.id}" data-act="setOwner" data-id="${j.id}" aria-label="Job owner for ${j.id}">${OWNERS.map(o => `<option value="${o}" ${o === j.owner ? 'selected' : ''}>${o.split(' ')[0]}</option>`).join('')}</select></td>
+    <td>${stagePill(j.stage)}</td><td class="num">${money(Data.customerPrice(Data.jobCost(j)))}</td><td><button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button></td></tr>`).join('')
+    : '<tr><td colspan="7" class="muted">No jobs match. Clear a filter or search for something else.</td></tr>';
+}
+function vJobs() {
+  if (openJob) return vJob(Data.getJob(openJob));
+  const f = ui.jf, jobs = Data.listJobs(), subs = [...new Set(jobs.map(suburb))].sort();
+  return `<div class="view"><div class="card-head" style="margin:0"><h2>Jobs</h2><button class="btn" data-act="nav" data-v="walk">New walk-through</button></div>
+  <section class="card">
+    <div class="filters">
+      <div class="field"><label for="jf-q">Search</label><input class="input" id="jf-q" type="search" placeholder="Name, address, phone or job number" value="${esc(f.q)}" data-jf="q"></div>
+      <div class="field"><label for="jf-who">Owner</label><select class="select" id="jf-who" data-jf="who"><option value="all">Everyone</option><option value="me" ${f.who === 'me' ? 'selected' : ''}>My jobs</option>${OWNERS.map(o => `<option value="${o}" ${f.who === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div>
+      <div class="field"><label for="jf-stage">Stage</label><select class="select" id="jf-stage" data-jf="stage"><option value="all">All stages</option>${STAGES.map((s, i) => i === 4 ? '' : `<option value="${i}" ${f.stage === String(i) ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label for="jf-sub">Suburb</label><select class="select" id="jf-sub" data-jf="suburb"><option value="all">All suburbs</option>${subs.map(x => `<option ${f.suburb === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
+    </div>
+    <p class="small muted" id="jf-count" style="margin:12px 0 4px">${filteredJobs().length} of ${jobs.length} jobs${f.q || f.stage !== 'all' || f.who !== 'all' || f.suburb !== 'all' ? ' · <button class="linkbtn" data-act="clearJf">Clear filters</button>' : ''}</p>
+    <div class="tablewrap"><table><thead><tr><th>Job</th><th>Customer</th><th>Job date</th><th>Owner</th><th>Stage</th><th class="num">Customer price</th><th></th></tr></thead><tbody id="jobrows">${jobRows()}</tbody></table></div></section></div>`;
+}
+
+/* ---------- alerts ------------------------------------------------ */
+function vAlerts() {
+  const list = Data.getAlerts(owner()), st = Data.getAlertSettings(owner());
+  return `<div class="view"><div class="card-head" style="margin:0"><div><h2>Alerts</h2><p class="muted small" style="margin-top:4px">What gets sent to ${esc(owner().split(' ')[0])}'s phone</p></div><button class="btn sm ghost" data-act="readAll">Mark all read</button></div>
+  <div class="grid2">
+    <section class="card"><h3 style="margin-bottom:12px">Recent</h3><div>${list.map(n => `<div class="notif ${n.readBy.includes(owner()) ? 'read' : ''}"><span class="dot" aria-hidden="true"></span><div class="main"><b>${esc(n.text)}</b><br><span class="small muted">${n.at} · ${n.jobId}</span></div><button class="btn sm ghost" data-act="openNotif" data-n="${Data.alertIndex(n)}">Open job</button></div>`).join('') || '<p class="muted">No alerts yet.</p>'}</div></section>
+    <section class="card"><h3>Send me an alert when</h3><div style="margin-top:12px">
+      ${Object.entries(Data.ALERT_TYPES).map(([k, l]) => `<label class="toggle" for="ns-${k}"><span>${l}</span><input type="checkbox" id="ns-${k}" data-act="nset" value="${k}" ${st.types[k] ? 'checked' : ''}></label>`).join('')}
+      <label class="toggle" for="ns-mine"><span><b>Only for jobs I own</b><br><span class="small muted">Turn off to hear about Rocky's and Dan's jobs alike</span></span><input type="checkbox" id="ns-mine" data-act="nmine" ${st.mineOnly ? 'checked' : ''}></label>
+    </div><p class="small muted" style="margin-top:12px">In Phase 2 these arrive as phone notifications from the panel added to your home screen.</p></section>
+  </div></div>`;
+}
+
+/* ---------- job detail -------------------------------------------- */
+function nextAction(j) {
+  switch (j.stage) {
+    case 0: return ['Push to Zoho as a draft quote and send the estimate to the customer.', 'Send estimate', 'send'];
+    case 1: return ['Waiting for the customer to accept in the Zoho customer portal.', 'Simulate: customer accepts', 'accept'];
+    case 2: return ['Customer accepted. Refine details with contractors, then send the formal quote yourself.', 'Mark formal quote sent', 'quote'];
+    case 3: { const t = Data.paymentTerms(j); return [`Waiting on ${t.kind.toLowerCase()} of ${money(t.amount)}, due ${fd(t.due)}. When it lands, job orders go out automatically.`, 'Simulate: payment received', 'pay']; }
+    case 5: { const l = Data.livePos(j);
+      if (l.every(p => p.status === 'done')) return ['Every contractor has marked their part done. Run the completion check below to sign the job off.', null, null];
+      if (l.every(p => p.status === 'accepted' || p.status === 'done')) return ['All contractors have accepted. Each one marks their part done, with photos, after the job.', null, null];
+      return ["Job orders are in each contractor's vendor portal. Waiting on replies.", null, null]; }
+    default: return ['Job signed off and complete.', null, null];
+  }
+}
+function vJob(j) {
+  const cost = Data.jobCost(j), total = Data.customerPrice(cost), t = Data.paymentTerms(j);
+  const [msg, label, act] = nextAction(j);
+  const allDone = j.stage === 5 && Data.livePos(j).every(p => p.status === 'done');
+  return `<div class="view">
+  <div><button class="btn sm ghost" data-act="back">← All jobs</button></div>
+  <div class="card-head" style="margin:0"><div><h2>${esc(j.cust.name)}</h2><p class="muted small" style="margin-top:4px">${j.id} · ${esc(j.cust.address)} · job ${fd(j.cust.moveDate)} · prepared by ${esc(j.preparedBy)}</p></div><div class="chips"><label class="small muted" for="own-d-${j.id}">Owner</label><select class="select inline" id="own-d-${j.id}" data-act="setOwner" data-id="${j.id}">${OWNERS.map(o => `<option value="${o}" ${o === j.owner ? 'selected' : ''}>${o}</option>`).join('')}</select>${stagePill(j.stage)}</div></div>
+  <section class="card"><div class="steps">${STAGES.map((s, i) => `<div class="step ${i < j.stage ? 'done' : i === j.stage ? 'now' : ''}">${s}</div>`).join('')}</div>
+    <div class="next"><p>${msg}</p>${label ? `<button class="btn" data-act="${act}" data-id="${j.id}">${label}</button>` : ''}</div></section>
+  ${allDone ? signoffCard(j) : ''}
+  <div class="grid2">
+    <section class="card"><div class="card-head"><h3>Owner breakdown</h3><span class="eyebrow">Not shown to customer</span></div>
+      <div class="tablewrap"><table><thead><tr><th>Section</th><th>Contractor</th><th class="num">Cost</th></tr></thead><tbody>
+      ${Object.entries(j.sections).map(([k, s]) => `<tr><td><b>${S[k]}</b><br><span class="small muted">${Object.entries(s.lines).map(([iid, q]) => lineText(s, iid, q)).filter(Boolean).join(', ')}</span></td><td>${esc(Data.getContractor(s.contractorId).name)}</td><td class="num">${money(Data.sectionCost(s))}</td></tr>`).join('')}
+      <tr><td colspan="2">Contractor cost</td><td class="num">${money(cost)}</td></tr>
+      <tr><td colspan="2">Margin (15%)</td><td class="num">${money(total - cost)}</td></tr>
+      <tr class="total"><td colspan="2">Customer price</td><td class="num">${money(total)}</td></tr></tbody></table></div>
+      <p class="small muted" style="margin-top:10px">${t.note}.</p></section>
+    ${estimateCard(j)}
+  </div>
+  ${j.pos.length ? posCard(j) : ''}
+  ${messagesCard(j)}
+  <section class="card"><h3>Site notes for contractors</h3><div class="rows" style="margin-top:12px">${Object.entries(j.sections).map(([k, s]) => `<div class="row"><div class="main"><b>${S[k]}</b> <span class="small muted">→ ${esc(Data.getContractor(s.contractorId).name)}</span><br><span class="small">${s.access.length ? esc(s.access.join(' · ')) : '<span class="muted">No on-site requirements ticked</span>'}</span>${s.notes ? `<br><span class="small muted">${esc(s.notes)}</span>` : ''}${s.photos.length ? `<div class="photos" style="margin-top:8px">${s.photos.map(u => `<img src="${Data.photoUrl(u)}" alt="Site photo">`).join('')}</div>` : ''}</div></div>`).join('')}</div></section>
+  <section class="card"><h3>Activity</h3><ul class="log" style="margin-top:10px">${j.log.map(l => `<li>${esc(l)}</li>`).join('')}</ul></section>
+  </div>`;
+}
+function posCard(j) {
+  return `<section class="card"><div class="card-head"><h3>Job orders</h3><span class="eyebrow">Zoho purchase orders · vendor portal</span></div><div class="rows">
+  ${j.pos.map(p => { const c = Data.getContractor(p.contractorId), others = Data.contractorsCovering(p.key).filter(o => o.id !== p.contractorId);
+   const sub = p.status === 'declined' ? 'Reason: ' + esc(p.reason) : p.status === 'replaced' ? 'Replaced' : p.status === 'silent' ? 'No reply by ' + fd(p.due) : p.status === 'done' ? `Marked done · ${p.photos} photo${p.photos === 1 ? '' : 's'}` : p.status === 'accepted' ? 'Accepted · booked for ' + fd(j.cust.moveDate) : 'Reply due ' + fd(p.due);
+   return `<div class="row"><div class="main"><b>${p.no}</b> · ${esc(c.name)} <span class="muted small">(${S[p.key]})</span><br><span class="small muted">${money(Data.sectionCost(j.sections[p.key]))} · ${sub}</span>
+    ${p.status === 'done' ? `<div class="photos" style="margin-top:8px">${Array.from({ length: p.photos }, (_, n) => `<span class="ph">Photo ${n + 1}</span>`).join('')}</div>` : ''}</div>${poPill(p)}
+    ${p.status === 'awaiting' ? `<div class="chips"><button class="btn sm ghost" data-act="poAccept" data-id="${j.id}" data-po="${p.no}">Simulate accept</button><button class="btn sm ghost" data-act="poDecline" data-id="${j.id}" data-po="${p.no}">Simulate decline</button><button class="btn sm ghost" data-act="poSilent" data-id="${j.id}" data-po="${p.no}">Simulate no reply</button></div>` : ''}
+    ${p.status === 'accepted' ? `<button class="btn sm ghost" data-act="poDone" data-id="${j.id}" data-po="${p.no}">Simulate: contractor marks done</button>` : ''}
+    ${(p.status === 'declined' || p.status === 'silent') ? (others.length ? `<div class="chips"><select class="select inline" id="bk-${p.no}" aria-label="Replacement contractor">${others.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select><button class="btn sm" data-act="backup" data-id="${j.id}" data-po="${p.no}">Send job order</button></div>` : '<span class="small muted">No other contractor covers this. Add one under Contractors.</span>') : ''}</div>`; }).join('')}
+  </div></section>`;
+}
+function signoffCard(j) {
+  const ticks = ui.signoff[j.id] || (ui.signoff[j.id] = []);
+  const checks = Data.SIGNOFF_CHECKS, ready = ticks.length === checks.length;
+  return `<section class="card"><div class="card-head"><h3>Completion check</h3><span class="eyebrow">Signed off by ${esc(owner())}</span></div>
+  <p class="small muted" style="margin-bottom:12px">Review each contractor's photos in the job orders below, then confirm with the customer.</p>
+  <div class="options">${checks.map((s, i) => `<label class="option"><input type="checkbox" id="so-${j.id}-${i}" data-act="signTick" data-id="${j.id}" value="${i}" ${ticks.includes(i) ? 'checked' : ''}><span>${s}</span></label>`).join('')}</div>
+  <div class="chips" style="margin-top:14px"><button class="btn" data-act="signoff" data-id="${j.id}" ${ready ? '' : 'disabled'}>Sign off job</button><span class="small muted">${ready ? 'Ready to sign off. The review request is set up next.' : `${checks.length - ticks.length} check${checks.length - ticks.length === 1 ? '' : 's'} left`}</span></div></section>`;
+}
+function messagesCard(j) {
+  const id = ui.tpl[j.id] || suggested(j), tp = Data.getTemplate(id), c = j.cust;
+  const text = fill(tp.body, jobCtx(j)), email = c.contact === 'Email';
+  return `<section class="card"><div class="card-head"><h3>Message the customer</h3><span class="eyebrow">By ${email ? 'email' : 'text'} · ${esc(c.phone)}</span></div>
+  <div class="chips" style="margin-bottom:12px"><select class="select inline" id="tpl-${j.id}" data-act="pickTpl" data-id="${j.id}" aria-label="Message template">${Data.listTemplates().map(t => `<option value="${t.id}" ${t.id === id ? 'selected' : ''}>${t.name}${t.id === suggested(j) ? ' (suggested)' : ''}</option>`).join('')}</select>
+  <button class="linkbtn" data-act="editTpl" data-t="${id}" data-id="${j.id}">Edit template</button></div>
+  ${ui.editTpl === id ? `<form class="formbox" data-form="tpl" data-t="${id}" style="margin-top:0;margin-bottom:12px">
+    <div class="field"><label for="tpl-s-${id}">Email subject</label><input class="input" id="tpl-s-${id}" name="subject" value="${esc(tp.subject)}"></div>
+    <div class="field"><label for="tpl-b-${id}">Message</label><textarea class="textarea" id="tpl-b-${id}" name="body" rows="4">${esc(tp.body)}</textarea></div>
+    <p class="small muted">Fill-ins: {first name} {sender} {address} {visit} {price} {payment} {amount} {due date} {job date} {services}. Changes apply to every job.</p>
+    <div class="chips"><button class="btn sm" type="submit">Save template</button><button class="btn sm ghost" type="button" data-act="hideTpl">Cancel</button></div></form>` : ''}
+  ${email ? `<p class="small" style="margin-bottom:6px"><b>Subject:</b> ${esc(tp.subject)}</p>` : ''}
+  <div class="msg">${esc(text)}</div>
+  <div class="chips" style="margin-top:12px"><button class="btn sm" data-act="copyMsg" data-id="${j.id}">Copy message</button><button class="btn sm ghost" data-act="sentMsg" data-id="${j.id}">Mark as sent</button></div></section>`;
+}
+function estimateCard(j) {
+  const total = Data.customerPrice(Data.jobCost(j)), t = Data.paymentTerms(j);
+  const title = Data.TITLES[j.preparedBy] ? ', ' + Data.TITLES[j.preparedBy] : '';
+  return `<section class="estimate" aria-label="Customer estimate preview"><div class="est-head"><div class="logo"><img src="/images/logo-icon.png" alt=""><div><b>FlatOut</b><span>Moving out? We'll sort it.</span></div></div><div class="small" style="text-align:right"><b>Estimate · ${j.id}</b><br><span class="muted">${fd(TODAY)}</span></div></div>
+  <div class="est-body"><div class="eyebrow">What the customer sees</div>
+  <div><b>${esc(j.cust.name)}</b><br><span class="small muted">${esc(j.cust.address)} · ${fd(j.cust.moveDate)}</span></div>
+  ${Object.entries(j.sections).map(([k, s]) => `<div><b>${S[k]}</b><ul class="small">${Object.entries(s.lines).map(([iid, q]) => { const i = Data.getRateItem(s.contractorId, iid); return i ? `<li>${esc(i.name)}${q !== 1 ? ` × ${q}${i.type === 'hourly' ? ' hrs' : ''}` : ''}</li>` : ''; }).join('')}</ul></div>`).join('')}
+  <div class="est-total"><span>All-in price</span><b>${money(total)}</b></div>
+  <p class="small muted">${t.kind}: ${money(t.amount)} due ${fd(t.due)}${t.balance ? `, balance ${money(t.balance)} due ${fd(t.balanceDue)}` : ''}. This is an estimate. The formal quote follows once contractors confirm.</p>
+  <p class="small">Prepared by ${esc(j.preparedBy)}${title} · FlatOut NZ</p></div></section>`;
+}
+
+/* ---------- calendar ---------------------------------------------- */
+function events() {
+  const ev = [];
+  Data.listJobs().forEach(j => ev.push({ date: j.cust.moveDate, type: j.stage >= 4 ? 'job' : 'est', job: j,
+    label: first(j.cust.name), cids: Object.values(j.sections).map(s => s.contractorId) }));
+  Data.listEnquiries().filter(e => e.visit).forEach(e => ev.push({ date: e.visit.date, type: 'visit',
+    time: e.visit.time, who: e.visit.who, label: first(e.name), enq: e }));
+  Data.listJobs().filter(j => j.cust.visit).forEach(j => ev.push({ date: j.cust.visit.date, type: 'visit',
+    time: j.cust.visit.time, who: j.cust.visit.who, label: first(j.cust.name), job: j }));
+  return ev;
+}
+function clashes(evs) {
+  const by = {};
+  evs.filter(e => e.cids).forEach(e => e.cids.forEach(c => (by[c] = by[c] || []).push(e)));
+  return Object.entries(by).filter(([, l]) => l.length > 1).map(([c, l]) => ({ c: Data.getContractor(c), jobs: l.map(e => e.job) }));
+}
+function vCalendar() {
+  const { y, m } = ui.cal, start = new Date(y, m, 1), evs = events();
+  const lead = (start.getDay() + 6) % 7, days = new Date(y, m + 1, 0).getDate(), cells = [];
+  const n = Math.ceil((lead + days) / 7) * 7;
+  for (let i = 0; i < n; i++) cells.push(new Date(y, m, 1 - lead + i));
+  const selEv = evs.filter(e => e.date === ui.day).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
+  const selClash = clashes(selEv);
+  const monthClashes = [...new Set(evs.filter(e => Data.parseDate(e.date).getMonth() === m && Data.parseDate(e.date).getFullYear() === y).map(e => e.date))].filter(d => clashes(evs.filter(e => e.date === d)).length);
+  return `<div class="view">
+  <div class="card-head" style="margin:0"><h2>Calendar</h2><div class="chips"><button class="btn sm ghost" data-act="calPrev" aria-label="Previous month">←</button><b style="min-width:9rem;text-align:center">${start.toLocaleDateString('en-NZ', { month: 'long', year: 'numeric' })}</b><button class="btn sm ghost" data-act="calNext" aria-label="Next month">→</button></div></div>
+  ${monthClashes.length ? `<p class="note">Possible double-booking on ${monthClashes.map(fd).join(', ')}. Check that the contractor can cover both jobs.</p>` : ''}
+  <div class="cal-layout">
+    <section class="card"><div class="cal">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<div class="dow">${d}</div>`).join('')}
+      ${cells.map(d => { const k = iso(d), de = evs.filter(e => e.date === k), cl = clashes(de).length;
+        return `<button class="day ${d.getMonth() !== m ? 'out' : ''} ${k === iso(TODAY) ? 'today' : ''} ${cl ? 'clash' : ''}" aria-pressed="${k === ui.day}" data-act="pickDay" data-d="${k}" aria-label="${fd(k)}, ${de.length} item${de.length === 1 ? '' : 's'}${cl ? ', possible clash' : ''}"><span class="dnum">${d.getDate()}</span>${de.slice(0, 3).map(e => `<span class="ev ${e.type}">${e.type === 'visit' ? ft(e.time) + ' ' : ''}${esc(e.label)}</span>`).join('')}${de.length > 3 ? `<span class="small muted">+${de.length - 3}</span>` : ''}</button>`; }).join('')}
+    </div>
+    <div class="legend"><span><i style="background:var(--navy-deep)"></i>Booked job</span><span><i style="background:var(--white);box-shadow:inset 0 0 0 1px var(--line-strong)"></i>Estimate or quote out</span><span><i style="background:var(--teal-wash)"></i>Site visit</span><span><i style="box-shadow:inset 0 0 0 2px var(--orange)"></i>Possible clash</span></div></section>
+    <section class="card"><div class="card-head"><h3>${fd(ui.day)}</h3><span class="eyebrow">${selEv.length} item${selEv.length === 1 ? '' : 's'}</span></div>
+      ${selClash.map(x => `<p class="note" style="margin-bottom:12px">${esc(x.c.name)} is on ${x.jobs.length} jobs this day: ${x.jobs.map(j => j.id).join(', ')}.</p>`).join('')}
+      <div class="rows">${selEv.map(e => e.type === 'visit' ? `<div class="row"><div class="main"><b>${ft(e.time)} · Site visit</b><br><span class="small muted">${esc((e.enq || e.job.cust).name)} · ${esc((e.enq || e.job.cust).address)}</span></div><span class="pill p-ok">${esc(e.who.split(' ')[0])}</span></div>`
+        : `<div class="row"><div class="main"><b>${esc(e.job.cust.name)}</b> <span class="muted small">${e.job.id}</span><br><span class="small muted">${Object.entries(e.job.sections).map(([k, s]) => `${S[k]} → ${esc(Data.getContractor(s.contractorId).name)}`).join(' · ')}</span></div>${stagePill(e.job.stage)}<button class="btn sm ghost" data-act="open" data-id="${e.job.id}">Open</button></div>`).join('') || '<p class="muted">Nothing on this day.</p>'}</div></section>
+  </div></div>`;
+}
+
+/* ---------- walk-through ------------------------------------------ */
+function vWalk() {
+  if (!draft) {
+    const today = Data.isoDate(new Date());
+    return `<div class="view"><div><h2>Walk-through</h2><p class="muted" style="margin-top:4px">Enter the customer's details from their quote request, then price the job while you're on site.</p></div>
+    <section class="card"><form class="formbox" data-form="newjob" style="margin-top:0">
+      <div class="form-grid">
+        <div class="field"><label for="nj-name">Customer name</label><input class="input" id="nj-name" name="name" required placeholder="Full name or company"></div>
+        <div class="field"><label for="nj-ref">Their reference <span class="muted" style="font-weight:400">(optional)</span></label><input class="input" id="nj-ref" name="ref" placeholder="FO-261005-1234"></div>
+        <div class="field"><label for="nj-contact">Contact by</label><select class="select" id="nj-contact" name="contact"><option>Text</option><option>Email</option></select></div>
+        <div class="field"><label for="nj-phone">Phone or email</label><input class="input" id="nj-phone" name="phone" required placeholder="027 000 0000"></div>
+        <div class="field"><label for="nj-date">Move-out date</label><input class="input" id="nj-date" name="moveDate" type="date" required min="${today}"></div>
+        <div class="field"><label for="nj-people">People in the flat</label><input class="input" id="nj-people" name="people" type="number" min="1" max="12" value="4" required></div>
+      </div>
+      <div class="field"><label for="nj-address">Address</label><input class="input" id="nj-address" name="address" required placeholder="Street, suburb"></div>
+      <div class="field"><label for="nj-special">What they told us <span class="muted" style="font-weight:400">(optional)</span></label><textarea class="textarea" id="nj-special" name="special" placeholder="Bedrooms, how much stuff, anything they flagged on the form"></textarea></div>
+      <div class="field"><span class="flabel">Services they asked for</span><div class="options">${KEYS.map(k => `<label class="option"><input type="checkbox" name="services" value="${k}"><span>${S[k]}</span></label>`).join('')}</div></div>
+      <div class="chips"><button class="btn" type="submit">Start walk-through</button></div>
+    </form></section></div>`;
+  }
+  const c = draft.cust, cost = Data.jobCost(draft), total = Data.customerPrice(cost);
+  const brief = [c.bedrooms && `${c.bedrooms}`, c.stuff && `${c.stuff}`].filter(Boolean).join(' · ');
+  return `<div class="view">
+  <div class="card-head" style="margin:0"><div><h2>Walk-through</h2><p class="muted small" style="margin-top:4px">${c.ref} · prepared by ${esc(owner())}</p></div><button class="btn sm ghost" data-act="cancelDraft">Discard</button></div>
+  <section class="card"><div class="custgrid">
+    <div><span class="eyebrow">Customer</span><b>${esc(c.name)}</b></div>
+    <div><span class="eyebrow">Contact by ${c.contact.toLowerCase()}</span><b>${esc(c.phone)}</b></div>
+    <div><span class="eyebrow">Address</span><b>${esc(c.address)}</b></div>
+    <div><span class="eyebrow">Move-out</span><b>${fd(c.moveDate)} · ${c.people} people</b></div></div>
+    ${(brief || c.special) ? `<div class="brief" style="margin-top:14px">${brief ? `<p class="small"><b>What they told us:</b> ${esc(brief)}</p>` : ''}${c.special ? `<p class="small">${esc(c.special)}</p>` : ''}</div>` : ''}
+  </section>
+  <div><div class="eyebrow" style="margin-bottom:8px">Services on this job</div><div class="chips">${KEYS.map(k => `<button class="chip" aria-pressed="${!!draft.sections[k]}" data-act="toggleSec" data-k="${k}">${S[k]}</button>`).join('')}</div></div>
+  ${KEYS.filter(k => draft.sections[k]).map(k => walkSection(k, draft.sections[k])).join('')}
+  <div class="pricebar"><div><small>Cost</small><strong>${money(cost)}</strong></div><div><small>Margin</small><strong>${money(total - cost)}</strong></div><div class="cust"><small>Customer</small><strong>${money(total)}</strong></div><button class="btn" data-act="saveDraft" ${cost ? '' : 'disabled'}>Save estimate</button></div>
+  </div>`;
+}
+function walkSection(k, s) {
+  const opts = Data.contractorsCovering(k);
+  const c = Data.getContractor(s.contractorId);
+  if (!c) return `<section class="card"><h3>${S[k]}</h3><p class="note" style="margin-top:12px">No contractor covers ${S[k].toLowerCase()} yet. Add one under Contractors.</p></section>`;
+  const items = c.items.filter(i => i.section === k);
+  return `<section class="card"><div class="sec-head"><h3>${S[k]}</h3>
+    <div class="field"><label for="pick-${k}">Send job order to</label><select class="select" id="pick-${k}" data-act="pickC" data-k="${k}">${opts.map(o => `<option value="${o.id}" ${o.id === s.contractorId ? 'selected' : ''}>${esc(o.name)} · ${Data.getScorecard(o.id).rating[1]}</option>`).join('')}</select></div>
+    <span class="small muted">${money(Data.sectionCost(s))}</span></div>
+    ${items.map(i => { const q = s.lines[i.id] || 0;
+      return `<div class="item ${q ? 'on' : ''}"><div class="main"><b>${esc(i.name)}</b><br><span class="small muted">${money(i.rate)} per ${esc(i.unit)}${i.type === 'hourly' ? ' · hourly' : ''}</span></div><div class="qty"><button aria-label="Less ${esc(i.name)}" data-act="qty" data-k="${k}" data-i="${i.id}" data-d="-1">−</button><output>${q}</output><button aria-label="More ${esc(i.name)}" data-act="qty" data-k="${k}" data-i="${i.id}" data-d="1">+</button></div></div>`; }).join('') || '<p class="muted small" style="margin-top:12px">This contractor has no items for this service yet. Add their rate card under Contractors.</p>'}
+    <div class="field" style="margin-top:16px"><span class="flabel">On-site requirements</span><div class="options">${Data.ACCESS_ITEMS.map((a, ai) => `<label class="option"><input type="checkbox" id="acc-${k}-${ai}" data-act="access" data-k="${k}" value="${a}" ${s.access.includes(a) ? 'checked' : ''}><span>${a}</span></label>`).join('')}</div></div>
+    <div class="field" style="margin-top:14px"><label for="notes-${k}">Notes for ${esc(c.name)}</label><textarea class="textarea" id="notes-${k}" data-act="notes" data-k="${k}" placeholder="Anything the contractor should know">${esc(s.notes)}</textarea></div>
+    <div class="field" style="margin-top:14px"><label for="ph-${k}">Photos</label><input type="file" id="ph-${k}" accept="image/*" multiple data-act="photos" data-k="${k}">${s.photos.length ? `<div class="photos">${s.photos.map(u => `<img src="${Data.photoUrl(u)}" alt="Site photo">`).join('')}</div>` : ''}</div>
+  </section>`;
+}
+
+/* ---------- contractors ------------------------------------------- */
+function insPill(c) {
+  if (!c.insurance) return '<span class="pill p-bad">No certificate on file</span>';
+  const days = Math.round((Data.parseDate(c.insurance) - TODAY) / 864e5);
+  return `${fd(c.insurance)} ${days < 0 ? '<span class="pill p-bad">Expired</span>' : days <= 60 ? '<span class="pill p-warn">Renew soon</span>' : ''}`;
+}
+function cForm(c) {
+  const v = c || { name: '', contact: '', phone: '', email: '', terms: '14 days', insurance: '', services: [] };
+  const id = c ? c.id : 'new';
+  return `<form class="formbox" data-form="${c ? 'editC' : 'addC'}" data-c="${id}">
+    <div class="form-grid">
+      <div class="field"><label for="f-name-${id}">Business name</label><input class="input" id="f-name-${id}" name="name" required value="${esc(v.name)}"></div>
+      <div class="field"><label for="f-contact-${id}">Contact person</label><input class="input" id="f-contact-${id}" name="contact" value="${esc(v.contact)}"></div>
+      <div class="field"><label for="f-phone-${id}">Phone</label><input class="input" id="f-phone-${id}" name="phone" type="tel" value="${esc(v.phone)}"></div>
+      <div class="field"><label for="f-email-${id}">Job order email</label><input class="input" id="f-email-${id}" name="email" type="email" placeholder="jobs@example.co.nz" value="${esc(v.email)}"></div>
+      <div class="field"><label for="f-terms-${id}">Payment terms</label><select class="select" id="f-terms-${id}" name="terms">${Data.PAYMENT_TERMS.map(t => `<option ${t === v.terms ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div class="field"><label for="f-ins-${id}">Insurance expiry</label><input class="input" id="f-ins-${id}" name="insurance" type="date" value="${esc(v.insurance)}"></div>
+    </div>
+    <div class="field"><span class="flabel">Services they cover</span><div class="options">${KEYS.map(k => `<label class="option"><input type="checkbox" name="services" value="${k}" id="f-${k}-${id}" ${v.services.includes(k) ? 'checked' : ''}><span>${S[k]}</span></label>`).join('')}</div></div>
+    <div class="chips"><button class="btn" type="submit">${c ? 'Save changes' : 'Save contractor'}</button><button class="btn ghost" type="button" data-act="${c ? 'hideEditC' : 'hideAddC'}">Cancel</button></div></form>`;
+}
+const readC = form => ({ name: form.get('name').trim(), contact: form.get('contact').trim(),
+  phone: form.get('phone').trim(), email: form.get('email').trim(), terms: form.get('terms'),
+  insurance: form.get('insurance'), services: form.getAll('services') });
+
+function vContractors() {
+  const list = Data.listContractors();
+  const rows = list.map(c => ({ c, s: Data.getScorecard(c.id) })).sort((a, b) => (b.s.rate ?? -1) - (a.s.rate ?? -1));
+  return `<div class="view">
+  <div class="card-head" style="margin:0"><div><h2>Contractors</h2><p class="muted small" style="margin-top:4px">Rates below are examples so the walk-through can be tested. Replace them with each contractor's agreed prices; estimates add the 15% margin on the total.</p></div>${ui.addC ? '' : '<button class="btn" data-act="showAddC">Add contractor</button>'}</div>
+  ${ui.addC ? `<section class="card"><h3>New contractor</h3>${cForm(null)}</section>` : ''}
+  <section class="card"><div class="card-head"><h3>Scorecard</h3><span class="eyebrow">Sample history + this session</span></div>
+    <div class="tablewrap"><table><thead><tr><th>Contractor</th><th class="num">Job orders</th><th>Accepted</th><th class="num">Declined</th><th class="num">No reply</th><th class="num">Avg reply</th><th class="num">Strikes</th><th>Rating</th></tr></thead><tbody>
+    ${rows.map(({ c, s }) => `<tr><td><b>${esc(c.name)}</b></td><td class="num">${s.sent}</td><td>${s.rate === null ? '<span class="muted">—</span>' : `<div style="display:flex;align-items:center;gap:8px"><div class="bar"><span style="width:${Math.round(s.rate * 100)}%"></span></div><span class="small">${Math.round(s.rate * 100)}%</span></div>`}</td><td class="num">${s.dec}</td><td class="num">${s.sil}</td><td class="num">${s.sent ? s.hrs + ' hrs' : '—'}</td><td class="num">${c.strikes}/3</td><td><span class="pill ${s.rating[0]}">${s.rating[1]}</span></td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="small muted" style="margin-top:10px">Reliable: 85%+ accepted and no strikes. At risk: under 60% accepted or 2+ strikes. Three unexplained silences means they're dropped — the panel flags it, you decide.</p></section>
+  <div class="grid2">${list.map(c => { const sc = Data.getScorecard(c.id);
+    return `<section class="card">
+    <div class="card-head"><div><h3>${esc(c.name)}</h3></div><div class="chips">${c.services.map(k => `<span class="pill p-grey">${S[k]}</span>`).join('')}<span class="pill ${sc.rating[0]}">${sc.rating[1]}</span></div></div>
+    ${ui.editC === c.id ? cForm(c) : `<dl class="details">
+      <div><dt>Contact</dt><dd>${c.contact ? esc(c.contact) : '<span class="muted">Not added</span>'}</dd></div>
+      <div><dt>Phone</dt><dd>${c.phone ? esc(c.phone) : '<span class="muted">Not added</span>'}</dd></div>
+      <div><dt>Job order email</dt><dd>${c.email ? esc(c.email) : '<span class="muted">Not added</span>'}</dd></div>
+      <div><dt>Payment terms</dt><dd>${esc(c.terms)}${c.terms.startsWith('On completion') ? '' : ' after invoice'}</dd></div>
+      <div><dt>Insurance expires</dt><dd>${insPill(c)}</dd></div>
+      <div><dt>Strikes</dt><dd>${c.strikes} of 3</dd></div>
+    </dl><div style="margin-bottom:14px"><button class="btn sm ghost" data-act="editC" data-c="${c.id}">Edit details</button></div>`}
+    <div class="tablewrap"><table><thead><tr><th>Item</th><th>Type</th><th class="num">Rate</th><th></th></tr></thead><tbody>
+    ${c.items.map(i => `<tr><td>${esc(i.name)}<br><span class="small muted">${c.services.length > 1 ? S[i.section] + ' · ' : ''}per ${esc(i.unit)}</span></td><td>${i.type === 'hourly' ? '<span class="pill p-ok">Hourly</span>' : '<span class="pill p-grey">Fixed</span>'}</td><td class="num"><input class="input rate" type="number" min="0" step="1" id="rate-${i.id}" aria-label="${esc(i.name)} rate" value="${i.rate}" data-act="rate" data-c="${c.id}" data-i="${i.id}"></td><td class="num"><button class="linkbtn danger" data-act="rmItem" data-c="${c.id}" data-i="${i.id}" aria-label="Remove ${esc(i.name)}">Remove</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No items yet.</td></tr>'}
+    </tbody></table></div>
+    ${ui.addItemFor === c.id ? `<form class="formbox" data-form="addItem" data-c="${c.id}">
+      <div class="form-grid">
+        <div class="field"><label for="ni-name-${c.id}">Item</label><input class="input" id="ni-name-${c.id}" name="name" required placeholder="e.g. Fridge clean"></div>
+        ${c.services.length > 1 ? `<div class="field"><label for="ni-sec-${c.id}">Service</label><select class="select" id="ni-sec-${c.id}" name="section">${c.services.map(k => `<option value="${k}">${S[k]}</option>`).join('')}</select></div>` : `<input type="hidden" name="section" value="${c.services[0]}">`}
+        <div class="field"><label for="ni-type-${c.id}">Pricing</label><select class="select" id="ni-type-${c.id}" name="type"><option value="fixed">Fixed</option><option value="hourly">Hourly</option></select></div>
+        <div class="field"><label for="ni-unit-${c.id}">Per</label><input class="input" id="ni-unit-${c.id}" name="unit" required placeholder="item, room, hr"></div>
+        <div class="field"><label for="ni-rate-${c.id}">Rate ($)</label><input class="input" id="ni-rate-${c.id}" name="rate" type="number" min="0" step="1" required></div>
+      </div>
+      <div class="chips"><button class="btn sm" type="submit">Add item</button><button class="btn sm ghost" type="button" data-act="hideAddItem">Cancel</button></div></form>`
+      : `<div style="margin-top:12px"><button class="btn sm ghost" data-act="showAddItem" data-c="${c.id}">+ Add item</button></div>`}
+  </section>`; }).join('')}</div></div>`;
+}
+
+/* ---------- render ------------------------------------------------ */
+function render() {
+  document.getElementById('app').innerHTML =
+    ({ home: vHome, jobs: vJobs, calendar: vCalendar, walk: vWalk, contractors: vContractors, alerts: vAlerts })[view]();
+  bell();
+}
+function refreshJobs() {
+  const r = document.getElementById('jobrows');
+  if (r) r.innerHTML = jobRows();
+  const c = document.getElementById('jf-count');
+  if (c) c.firstChild.textContent = `${filteredJobs().length} of ${Data.listJobs().length} jobs${c.querySelector('button') ? ' · ' : ''}`;
+}
+const focus = id => setTimeout(() => document.getElementById(id)?.focus());
+
+/* ---------- actions ----------------------------------------------- */
+document.addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  const d = b.dataset, j = d.id ? Data.getJob(d.id) : null;
+  switch (d.act) {
+    case 'nav': openJob = null; go(d.v); break;
+    case 'open': go('jobs', d.id); break;
+    case 'back': go('jobs', null); break;
+    case 'alerts': openJob = null; go('alerts'); break;
+    case 'showBook': ui.bookFor = d.ref; render(); focus('bk-d-' + d.ref); break;
+    case 'hideBook': ui.bookFor = null; render(); break;
+    case 'copyVisit': { const en = Data.getEnquiry(d.ref);
+      copy(fill(Data.getTemplate('visit').body, { 'first name': first(en.name), sender: en.visit.who.split(' ')[0],
+        address: en.address, visit: `${fd(en.visit.date)} at ${ft(en.visit.time)}` })); break; }
+    case 'start': { const en = Data.getEnquiry(d.ref), s = {};
+      en.services.forEach(k => s[k] = Data.newSection(k));
+      draft = { cust: { ...en }, sections: s }; go('walk'); break; }
+    case 'cancelDraft': draft = null; render(); break;
+    case 'toggleSec': if (draft.sections[d.k]) delete draft.sections[d.k]; else draft.sections[d.k] = Data.newSection(d.k); render(); break;
+    case 'qty': { const s = draft.sections[d.k], i = Data.getRateItem(s.contractorId, d.i);
+      const step = i.type === 'hourly' ? 0.5 : 1;
+      let q = (s.lines[d.i] || 0) + step * Number(d.d);
+      q = Math.max(0, Math.round(q * 2) / 2);
+      if (q) s.lines[d.i] = q; else delete s.lines[d.i];
+      render(); break; }
+    case 'saveDraft': { const id = Data.saveJob(draft, owner()); draft = null;
+      toast('Estimate saved as ' + id); go('jobs', id); break; }
+    case 'send': Data.sendEstimate(d.id, owner()); toast('Estimate sent to the customer portal'); render(); break;
+    case 'accept': Data.markEstimateAccepted(d.id); render(); break;
+    case 'quote': Data.markFormalQuoteSent(d.id, owner()); render(); break;
+    case 'pay': { const { pos } = Data.markPaymentReceived(d.id);
+      toast(`${pos.length} job order${pos.length > 1 ? 's' : ''} sent to vendor portals`); render(); break; }
+    case 'poAccept': Data.setPoStatus(d.id, d.po, 'accepted'); render(); break;
+    case 'poDecline': Data.setPoStatus(d.id, d.po, 'declined', { reason: 'Fully booked that day' }); render(); break;
+    case 'poSilent': Data.setPoStatus(d.id, d.po, 'silent'); render(); break;
+    case 'poDone': Data.setPoStatus(d.id, d.po, 'done', { photos: 2 }); render(); break;
+    case 'backup': { const to = document.getElementById('bk-' + d.po).value;
+      const { po } = Data.replacePurchaseOrder(d.id, d.po, to);
+      toast(`${po.no} sent to ${Data.getContractor(to).name}`); render(); break; }
+    case 'signoff': Data.signOffJob(d.id, owner()); ui.tpl[d.id] = 'review';
+      toast('Job signed off. Review request is ready below'); render(); break;
+    case 'editTpl': ui.editTpl = ui.editTpl === d.t ? null : d.t; render(); focus('tpl-b-' + d.t); break;
+    case 'hideTpl': ui.editTpl = null; render(); break;
+    case 'copyMsg': copy(fill(Data.getTemplate(ui.tpl[d.id] || suggested(j)).body, jobCtx(j))); break;
+    case 'sentMsg': { const t = Data.getTemplate(ui.tpl[d.id] || suggested(j));
+      Data.logActivity(d.id, `"${t.name}" sent to customer by ${owner()}`); toast('Logged as sent'); render(); break; }
+    case 'calPrev': case 'calNext': { let { y, m } = ui.cal;
+      m += d.act === 'calNext' ? 1 : -1;
+      if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; }
+      ui.cal = { y, m }; ui.day = iso(new Date(y, m, 1)); render(); break; }
+    case 'pickDay': ui.day = d.d; render(); break;
+    case 'readAll': Data.markAllAlertsRead(owner()); render(); break;
+    case 'openNotif': { const a = Data.markAlertRead(Number(d.n), owner()); go('jobs', a.jobId); break; }
+    case 'clearJf': ui.jf = { q: '', stage: 'all', who: 'all', suburb: 'all' }; render(); break;
+    case 'showAddC': ui.addC = true; render(); focus('f-name-new'); break;
+    case 'hideAddC': ui.addC = false; render(); break;
+    case 'editC': ui.editC = d.c; render(); focus('f-name-' + d.c); break;
+    case 'hideEditC': ui.editC = null; render(); break;
+    case 'showAddItem': ui.addItemFor = d.c; render(); focus('ni-name-' + d.c); break;
+    case 'hideAddItem': ui.addItemFor = null; render(); break;
+    case 'rmItem': Data.removeRateItem(d.c, d.i); toast('Item removed'); render(); break;
+  }
+});
+
+document.addEventListener('submit', e => {
+  const f = e.target;
+  e.preventDefault();
+  const form = new FormData(f), kind = f.dataset.form;
+  if (kind === 'newjob') {
+    const services = form.getAll('services');
+    if (!services.length) { toast('Tick at least one service'); return; }
+    const sections = {};
+    services.forEach(k => sections[k] = Data.newSection(k));
+    draft = { cust: {
+      name: form.get('name').trim(), ref: form.get('ref').trim() || '—',
+      contact: form.get('contact'), phone: form.get('phone').trim(),
+      address: form.get('address').trim(), moveDate: form.get('moveDate'),
+      people: Number(form.get('people')) || 1, special: form.get('special').trim()
+    }, sections };
+    go('walk');
+    return;
+  }
+  if (kind === 'book') {
+    const v = Data.bookVisit(f.dataset.ref, { date: form.get('date'), time: form.get('time'), who: form.get('who') });
+    ui.bookFor = null;
+    toast(`Visit booked for ${fd(v.date)} at ${ft(v.time)}`);
+    render();
+  }
+  if (kind === 'tpl') {
+    Data.saveTemplate(f.dataset.t, { subject: form.get('subject'), body: form.get('body') });
+    ui.editTpl = null; toast('Template saved'); render();
+  }
+  if (kind === 'addC') {
+    const v = readC(form);
+    if (!v.services.length) { toast('Tick at least one service'); return; }
+    const c = Data.addContractor(v);
+    ui.addC = false; ui.addItemFor = c.id;
+    toast(v.name + ' added. Now add their items.'); render();
+  }
+  if (kind === 'editC') {
+    const v = readC(form);
+    if (!v.services.length) { toast('Tick at least one service'); return; }
+    const res = Data.updateContractor(f.dataset.c, v);
+    if (res.error) { toast(res.error); return; }
+    ui.editC = null; toast('Details saved for ' + res.contractor.name); render();
+  }
+  if (kind === 'addItem') {
+    const c = Data.getContractor(f.dataset.c);
+    Data.addRateItem(c.id, { section: form.get('section'), name: form.get('name').trim(),
+      unit: form.get('unit').trim(), type: form.get('type'), rate: form.get('rate') });
+    toast('Item added to ' + c.name); render(); focus('ni-name-' + c.id);
+  }
+});
+
+document.getElementById('tabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-view]');
+  if (b) { openJob = null; go(b.dataset.view); }
+});
+
+document.addEventListener('change', e => {
+  const t = e.target, d = t.dataset;
+  if (d.act === 'access') {
+    const s = draft.sections[d.k];
+    if (t.checked) s.access.push(t.value); else s.access = s.access.filter(a => a !== t.value);
+  }
+  if (d.act === 'photos') {
+    const sec = draft.sections[d.k];
+    const files = [...t.files];
+    t.value = '';
+    if (!files.length) return;
+    toast(`Uploading ${files.length} photo${files.length === 1 ? '' : 's'}…`);
+    Promise.all(files.map(f => Data.uploadPhoto(f)))
+      .then(keys => { sec.photos.push(...keys); toast('Photos added'); render(); })
+      .catch(err => toast('Photo upload failed: ' + err.message));
+  }
+  if (d.act === 'pickC') {
+    const s = draft.sections[d.k];
+    s.contractorId = t.value; s.lines = {};
+    toast('Items cleared for the new contractor'); render();
+  }
+  if (d.act === 'rate') Data.setRate(d.c, d.i, t.value);
+  if (d.act === 'setOwner') {
+    const j = Data.setJobOwner(d.id, t.value, owner());
+    toast(`${j.id} now owned by ${t.value.split(' ')[0]}`);
+    if (view !== 'jobs' || openJob) render(); else refreshJobs();
+  }
+  if (d.act === 'nset') Data.setAlertType(owner(), t.value, t.checked);
+  if (d.act === 'nmine') Data.setAlertScope(owner(), t.checked);
+  if (d.jf && d.jf !== 'q') { ui.jf[d.jf] = t.value; render(); }
+  if (d.act === 'pickTpl') { ui.tpl[d.id] = t.value; ui.editTpl = null; render(); }
+  if (d.act === 'signTick') {
+    const l = ui.signoff[d.id], v = Number(t.value);
+    if (t.checked) l.push(v); else ui.signoff[d.id] = l.filter(x => x !== v);
+    render();
+  }
+});
+
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.jf === 'q') { ui.jf.q = t.value; refreshJobs(); return; }
+  if (t.dataset.act === 'notes') draft.sections[t.dataset.k].notes = t.value;
+});
+
+document.getElementById('owner').addEventListener('change', render);
+
+/* ---------- boot ---------------------------------------------------
+   Nothing renders until the data is actually loaded. If the load fails
+   the panel says so plainly instead of showing an empty panel that
+   looks like you have no jobs. */
+const saveEl = document.getElementById('savestate');
+Data.onSaveState(state => {
+  saveEl.className = 'savestate' + (state === 'saved' ? '' : ' ' + state);
+  saveEl.textContent = state === 'saved' ? 'Saved'
+    : state === 'saving' ? 'Saving…'
+    : 'Not saved — retrying';
+});
+
+function bootError(message) {
+  document.getElementById('app').innerHTML =
+    `<div id="boot"><section class="card">
+      <h3>The panel couldn't load its data</h3>
+      <p class="muted small" style="margin:10px 0 16px">${esc(message)}</p>
+      <button class="btn" onclick="location.reload()">Try again</button>
+      <p class="small muted" style="margin-top:16px">Nothing has been lost. If this keeps happening, check the function log in Netlify.</p>
+    </section></div>`;
+}
+
+document.getElementById('app').innerHTML =
+  '<div id="boot"><section class="card"><p class="muted">Loading…</p></section></div>';
+
+Data.init()
+  .then(() => render())
+  .catch(err => bootError(err.message || 'Something went wrong loading the panel.'));
+})();
+</script>
+</body>
+</html>

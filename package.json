@@ -1,0 +1,8 @@
+{
+  "name": "flatoutnz",
+  "private": true,
+  "description": "flatoutnz.co.nz. The website itself is plain HTML and CSS with no build step; this file exists only so Netlify installs the one package the employees panel's storage function needs. Pinned to 10.x on purpose: 11.x requires Node 22, which would mean also setting NODE_VERSION in Netlify. 10.x runs on Node 16 and up.",
+  "dependencies": {
+    "@netlify/blobs": "^10.0.7"
+  }
+}
