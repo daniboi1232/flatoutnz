@@ -188,6 +188,7 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
 .ev.job{background:var(--navy-deep);color:var(--cream)}
 .ev.est{background:var(--white);color:var(--navy-deep);box-shadow:inset 0 0 0 1px var(--line-strong)}
 .ev.visit{background:var(--teal-wash);color:var(--ok-ink)}
+.ev.standby{background:var(--white);color:var(--blue);box-shadow:inset 0 0 0 1px var(--line);opacity:.75;font-style:italic}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;color:var(--blue);margin-top:12px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 
@@ -234,6 +235,7 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
       <button data-view="jobs">Jobs</button>
       <button data-view="calendar">Calendar</button>
       <button data-view="walk">Walk-through</button>
+      <button data-view="customers">Customers</button>
       <button data-view="contractors">Contractors</button>
     </nav>
   </div>
@@ -265,8 +267,10 @@ const S = Data.SERVICES, KEYS = Data.SERVICE_KEYS, OWNERS = Data.OWNERS, STAGES 
 /* ---------- view state (not data) -------------------------------- */
 let view = 'home', openJob = null, draft = null;
 const ui = { jf: { q: '', stage: 'all', who: 'all', suburb: 'all', status: 'active' }, addC: false, editC: null,
-  statusFor: null, confirmDelete: null, confirmDelC: null, calWeek: false, paste: { kind: 'tenant', parsed: null, dup: null },
+  statusFor: null, retrieveFor: null, confirmDelete: null, confirmDelC: null, calWeek: false,
+  paste: { kind: 'tenant', parsed: null, dup: null, match: null, useMatch: true },
   addItemFor: null, bookFor: null, tpl: {}, editTpl: null, signoff: {},
+  cust: { q: '', open: null, edit: null, add: false, mergeFrom: null, migrate: null },
   cal: { y: 2026, m: 10 }, day: '2026-11-14' };
 const owner = () => document.getElementById('owner').value;
 
@@ -327,11 +331,12 @@ function vHome() {
   const live = jobs.filter(j => j.status === 'active');
   const attention = Data.getAttention(owner(), Data.getAlertSettings(owner())?.mineOnly);
   const pay = Data.getPayments().filter(x => x.job.status === 'active');
+  const standby = Data.listStandby();
   const urgent = attention.filter(a => a.urgency === 0).length;
 
   return `<div class="view">
   <div><h2>Kia ora, ${esc(owner().split(' ')[0])}</h2>
-    <p class="muted small" style="margin-top:4px">${fd(new Date())} · ${live.length} live job${live.length === 1 ? '' : 's'} · ${attention.length === 0 ? 'nothing needs you right now' : `${attention.length} thing${attention.length === 1 ? '' : 's'} needing you${urgent ? `, ${urgent} urgent` : ''}`}</p></div>
+    <p class="muted small" style="margin-top:4px">${fd(new Date())} · ${live.length} live job${live.length === 1 ? '' : 's'}${standby.length ? ` · <button class="linkbtn" data-act="showStandby">${standby.length} on standby</button>` : ''} · ${attention.length === 0 ? 'nothing needs you right now' : `${attention.length} thing${attention.length === 1 ? '' : 's'} needing you${urgent ? `, ${urgent} urgent` : ''}`}</p></div>
 
   <section class="card" ${urgent ? 'style="box-shadow:inset 0 0 0 2px var(--orange),var(--shadow-card)"' : ''}>
     <div class="card-head"><h3>Needs you</h3><span class="eyebrow">Worst first</span></div>
@@ -363,7 +368,7 @@ const suburb = j => j.cust.address.split(',').pop().trim();
 function filteredJobs() {
   const f = ui.jf, q = f.q.trim().toLowerCase();
   return Data.listJobs().filter(j =>
-    (!q || [j.id, j.cust.name, j.cust.address, j.cust.phone].join(' ').toLowerCase().includes(q))
+    (!q || [j.id, j.cust.name, j.cust.address, j.cust.phone, j.cust.email].join(' ').toLowerCase().includes(q))
     && (f.stage === 'all' || String(j.stage) === f.stage)
     && (f.who === 'all' || (f.who === 'me' ? j.owner === owner() : j.owner === f.who))
     && (f.suburb === 'all' || suburb(j) === f.suburb)
@@ -388,7 +393,7 @@ function vJobs() {
       <div class="field"><label for="jf-who">Owner</label><select class="select" id="jf-who" data-jf="who"><option value="all">Everyone</option><option value="me" ${f.who === 'me' ? 'selected' : ''}>My jobs</option>${OWNERS.map(o => `<option value="${o}" ${f.who === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div>
       <div class="field"><label for="jf-stage">Stage</label><select class="select" id="jf-stage" data-jf="stage"><option value="all">All stages</option>${STAGES.map((s, i) => `<option value="${i}" ${f.stage === String(i) ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
       <div class="field"><label for="jf-sub">Suburb</label><select class="select" id="jf-sub" data-jf="suburb"><option value="all">All suburbs</option>${subs.map(x => `<option ${f.suburb === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
-      <div class="field"><label for="jf-status">Show</label><select class="select" id="jf-status" data-jf="status"><option value="active" ${f.status === 'active' ? 'selected' : ''}>Live jobs</option><option value="all" ${f.status === 'all' ? 'selected' : ''}>Everything</option><option value="lost" ${f.status === 'lost' ? 'selected' : ''}>Lost</option><option value="cancelled" ${f.status === 'cancelled' ? 'selected' : ''}>Cancelled</option></select></div>
+      <div class="field"><label for="jf-status">Show</label><select class="select" id="jf-status" data-jf="status"><option value="active" ${f.status === 'active' ? 'selected' : ''}>Live jobs</option><option value="all" ${f.status === 'all' ? 'selected' : ''}>Everything</option><option value="standby" ${f.status === 'standby' ? 'selected' : ''}>On standby</option><option value="lost" ${f.status === 'lost' ? 'selected' : ''}>Lost</option><option value="cancelled" ${f.status === 'cancelled' ? 'selected' : ''}>Cancelled</option></select></div>
     </div>
     <p class="small muted" id="jf-count" style="margin:12px 0 4px">${filteredJobs().length} of ${jobs.length} jobs${f.q || f.stage !== 'all' || f.who !== 'all' || f.suburb !== 'all' || f.status !== 'active' ? ' · <button class="linkbtn" data-act="clearJf">Clear filters</button>' : ''}</p>
     <div class="tablewrap"><table><thead><tr><th>Job</th><th>Customer</th><th>Job date</th><th>Owner</th><th>Stage</th><th class="num">Customer price</th><th></th></tr></thead><tbody id="jobrows">${jobRows()}</tbody></table></div></section></div>`;
@@ -477,18 +482,23 @@ function vJob(j) {
   const allDone = j.stage === 6 && live.length > 0 && live.every(p => p.status === 'done');
   return `<div class="view">
   <div><button class="btn sm ghost" data-act="back">← All jobs</button></div>
-  ${j.status !== 'active' ? `<p class="note">This job is marked ${esc(Data.JOB_STATUS[j.status].toLowerCase())}${j.statusReason ? ': ' + esc(j.statusReason) : ''}. It is out of your pipeline until you reopen it.</p>` : ''}
+  ${j.status === 'standby' ? standbyBanner(j)
+    : j.status !== 'active' ? `<p class="note">This job is marked ${esc(Data.JOB_STATUS[j.status].toLowerCase())}${j.statusReason ? ': ' + esc(j.statusReason) : ''}. It is out of your pipeline until you reopen it.</p>` : ''}
   <div class="card-head" style="margin:0"><div><h2>${esc(j.cust.name)}</h2><p class="muted small" style="margin-top:4px">${j.id} · ${esc(j.cust.address)} · job ${fd(j.cust.moveDate)} · prepared by ${esc(j.preparedBy)}</p></div><div class="chips"><label class="small muted" for="own-d-${j.id}">Owner</label><select class="select inline" id="own-d-${j.id}" data-act="setOwner" data-id="${j.id}">${OWNERS.map(o => `<option value="${o}" ${o === j.owner ? 'selected' : ''}>${o}</option>`).join('')}</select>${stagePill(j.stage, j)}</div></div>
   <section class="card"><div class="steps">${STAGES.map((s, i) => `<div class="step ${i < j.stage ? 'done' : i === j.stage ? 'now' : ''}">${s}</div>`).join('')}</div>
-    <div class="next"><div style="flex:1 1 220px">
+    ${j.status === 'active' ? `<div class="next"><div style="flex:1 1 220px">
       <p><b>${na.waiting}</b></p>
       ${na.todo ? `<p class="small muted" style="margin-top:6px">${na.todo}</p>` : ''}
     </div>
     <div class="chips">
       ${na.label ? `<button class="btn" data-act="${na.act}" data-id="${j.id}">${na.label}</button>` : ''}
       ${na.second ? `<button class="btn ghost" data-act="${na.second.act}" data-id="${j.id}">${na.second.label}</button>` : ''}
-    </div></div></section>
+    </div></div>` : `<div class="next"><div style="flex:1 1 220px">
+      <p><b>${j.status === 'standby' ? 'Parked. Nothing to do unless they get in touch.' : `This job is ${esc(Data.JOB_STATUS[j.status].toLowerCase())}.`}</b></p>
+      <p class="small muted" style="margin-top:6px">The stages above are where it got to. ${j.status === 'standby' ? 'Bring it back' : 'Reopen it'} at the bottom of the page to carry on.</p>
+    </div></div>`}</section>
   ${allDone ? signoffCard(j) : ''}
+  ${customerCard(j)}
   <div class="grid2">
     <section class="card"><div class="card-head"><h3>Owner breakdown</h3><span class="eyebrow">Not shown to customer</span></div>
       <div class="tablewrap"><table><thead><tr><th>Section</th><th>Contractor</th><th class="num">Cost</th></tr></thead><tbody>
@@ -508,22 +518,34 @@ function vJob(j) {
   <section class="card"><div class="card-head"><h3>This job</h3></div>
     <div class="chips">
       ${j.status === 'active'
-        ? `<button class="btn sm ghost" data-act="markLost" data-id="${j.id}">Mark lost</button>
+        ? `<button class="btn sm ghost" data-act="markStandby" data-id="${j.id}">Put on standby</button>
+           <button class="btn sm ghost" data-act="markLost" data-id="${j.id}">Mark lost</button>
+           <button class="btn sm ghost" data-act="markCancelled" data-id="${j.id}">Mark cancelled</button>`
+        : j.status === 'standby'
+        ? `<button class="btn sm" data-act="retrieve" data-id="${j.id}">They got in touch \u2014 bring it back</button>
            <button class="btn sm ghost" data-act="markCancelled" data-id="${j.id}">Mark cancelled</button>`
         : `<button class="btn sm ghost" data-act="reopen" data-id="${j.id}">Reopen this job</button>`}
       <button class="linkbtn danger" data-act="delJob" data-id="${j.id}">Delete permanently</button>
     </div>
     ${ui.statusFor && ui.statusFor.id === j.id ? `<form class="formbox" data-form="status" data-id="${j.id}" data-status="${ui.statusFor.status}">
-      <div class="field"><label for="status-reason">Why is it ${ui.statusFor.status}? <span class="muted" style="font-weight:400">(optional, but worth knowing later)</span></label>
-      <input class="input" id="status-reason" name="reason" placeholder="${ui.statusFor.status === 'lost' ? 'Went with someone cheaper' : 'Flat decided not to bother'}"></div>
-      <div class="chips"><button class="btn sm" type="submit">Mark ${ui.statusFor.status}</button><button class="btn sm ghost" type="button" data-act="cancelStatus">Cancel</button></div>
+      <div class="field"><label for="status-reason">${ui.statusFor.status === 'standby' ? 'Why are they on standby?' : `Why is it ${ui.statusFor.status}?`} <span class="muted" style="font-weight:400">(optional, but worth knowing later)</span></label>
+      <input class="input" id="status-reason" name="reason" placeholder="${ui.statusFor.status === 'lost' ? 'Went with someone cheaper' : ui.statusFor.status === 'standby' ? 'Flat is doing it themselves, wants us on hand' : 'Flat decided not to bother'}"></div>
+      ${ui.statusFor.status === 'standby' ? '<p class="small muted">Nothing is owed and nothing is chased. It sits out of your way until their move-out date, when Home will ask you what happened.</p>' : ''}
+      <div class="chips"><button class="btn sm" type="submit">${ui.statusFor.status === 'standby' ? 'Put on standby' : 'Mark ' + ui.statusFor.status}</button><button class="btn sm ghost" type="button" data-act="cancelStatus">Cancel</button></div>
+    </form>` : ''}
+    ${ui.retrieveFor === j.id ? `<form class="formbox" data-form="retrieve" data-id="${j.id}">
+      <p class="small"><b>Bring ${esc(j.cust.name)} back into the pipeline</b></p>
+      <p class="small muted">It goes back to <b>${esc(Data.STAGES[j.stage])}</b>, where you left it. Their old date${j.cust.moveDate ? ' (' + fd(j.cust.moveDate) + ')' : ''} is almost certainly past, so set the new one.</p>
+      <div class="field" style="margin-top:10px"><label for="rt-${j.id}">New job date</label>
+        <input class="input" id="rt-${j.id}" name="moveDate" type="date" required value="${Data.isoDate(Data.today())}"></div>
+      <div class="chips"><button class="btn sm" type="submit">Bring it back</button><button class="btn sm ghost" type="button" data-act="cancelRetrieve">Cancel</button></div>
     </form>` : ''}
     ${ui.confirmDelete === j.id ? `<div class="formbox">
       <p class="small"><b>Delete ${esc(j.cust.name)} (${j.id}) for good?</b></p>
       <p class="small muted">Everything goes — the walk-through, the job orders, the notes and the photos. There is no undo. If you just want it out of the way, mark it lost or cancelled instead.</p>
       <div class="chips"><button class="btn sm" style="background:var(--red)" data-act="reallyDelJob" data-id="${j.id}">Yes, delete it</button><button class="btn sm ghost" data-act="cancelDelete">Keep it</button></div>
     </div>` : ''}
-    <p class="small muted" style="margin-top:10px">Lost and cancelled jobs keep their record but drop out of your pipeline and the attention list. Deleting cannot be undone.</p>
+    <p class="small muted" style="margin-top:10px">Standby, lost and cancelled jobs keep their record but drop out of your pipeline. Nothing on standby is ever deleted on its own \u2014 Home asks you once their date comes round. Deleting cannot be undone.</p>
   </section>
   </div>`;
 }
@@ -617,10 +639,51 @@ function notesCard(j) {
   </section>`;
 }
 
+/* Who this is, how to reach them, and whether we have had them before.
+   The details themselves are edited on their customer record, not here,
+   so there is one place a wrong phone number gets fixed. */
+/* A standby job is not a problem to be fixed, so this is a plain
+   statement of where it stands rather than a warning. */
+function standbyBanner(j) {
+  const today = Data.isoDate(Data.today());
+  const due = j.cust.moveDate && j.cust.moveDate <= today;
+  return `<div class="note"><b>On standby.</b>${j.statusReason ? ' ' + esc(j.statusReason) + '.' : ''}
+    Nothing is owed, nothing is being chased and no contractor has been told.
+    ${j.cust.moveDate
+      ? (due
+        ? ` Their move-out date (${fd(j.cust.moveDate)}) has passed. If you never heard from them, mark it cancelled.`
+        : ` It stays here until ${fd(j.cust.moveDate)}, when Home will ask you what happened.`)
+      : ' There is no move-out date on it, so it will sit here until you deal with it.'}</div>`;
+}
+
+function customerCard(j) {
+  const c = j.cust, rec = j.custId ? Data.getCustomer(j.custId) : null;
+  const hist = rec ? Data.customerHistory(rec.id, j.id) : { count: 0, previous: [] };
+  const alsoHere = Data.jobsAtAddress(c.address, j.id);
+  const wants = c.contact === 'Email' ? 'email' : 'text';
+  const missing = c.contact === 'Email' ? !c.email : !c.phone;
+  return `<section class="card"><div class="card-head"><h3>Customer</h3>
+    ${hist.count > 1 ? `<span class="pill p-ok">${ordinal(hist.count)} job with FlatOut</span>` : '<span class="eyebrow">First job with us</span>'}</div>
+  <div class="custgrid" style="margin-top:12px">
+    <div><span class="eyebrow">Name</span><b>${esc(c.name)}</b></div>
+    <div><span class="eyebrow">Phone</span><b>${c.phone ? esc(c.phone) : '<span class="muted">Not on file</span>'}</b></div>
+    <div><span class="eyebrow">Email</span><b>${c.email ? esc(c.email) : '<span class="muted">Not on file</span>'}</b></div>
+    <div><span class="eyebrow">Prefers</span><b>${wants.charAt(0).toUpperCase() + wants.slice(1)}${missing ? ' <span style="color:var(--red)">· nothing on file</span>' : ''}</b></div>
+  </div>
+  ${rec && rec.notes ? `<p class="small" style="margin-top:12px">${esc(rec.notes)}</p>` : ''}
+  ${hist.previous.length ? `<div class="rows" style="margin-top:14px">${hist.previous.map(o => `<div class="row"><div class="main"><b>${o.id}</b> <span class="small muted">${esc(o.cust.address)}${o.cust.moveDate ? ' · ' + fd(o.cust.moveDate) : ''}${Data.jobCost(o) ? ' · ' + money(Data.customerPrice(Data.jobCost(o))) : ''}</span></div>${stagePill(o.stage, o)}<button class="btn sm ghost" data-act="open" data-id="${o.id}">Open</button></div>`).join('')}</div>
+    <p class="small muted" style="margin-top:10px">They have used us before${hist.previous.some(o => Data.jobCost(o)) ? '. Worth a look at what they paid last time before you price this one' : ''}.</p>` : ''}
+  ${alsoHere.length ? `<p class="note" style="margin-top:12px"><b>Another job at this address:</b> ${alsoHere.map(o => `${o.id} — ${esc(o.cust.name)}`).join(', ')}. Probably a flatmate booking separately.</p>` : ''}
+  <div class="chips" style="margin-top:14px">
+    ${rec ? `<button class="btn sm ghost" data-act="openCustFrom" data-c="${rec.id}">Open their record to edit</button>` : '<span class="small muted">This job was entered before customer records existed. Run the tidy-up on the Customers tab to link it.</span>'}
+  </div></section>`;
+}
+const ordinal = n => n + (['th', 'st', 'nd', 'rd'][(n % 100 - n % 10 !== 10) * n % 10] || 'th');
+
 function messagesCard(j) {
   const id = ui.tpl[j.id] || suggested(j), tp = Data.getTemplate(id), c = j.cust;
   const text = fill(tp.body, jobCtx(j)), email = c.contact === 'Email';
-  return `<section class="card"><div class="card-head"><h3>Message the customer</h3><span class="eyebrow">By ${email ? 'email' : 'text'} · ${esc(c.phone)}</span></div>
+  return `<section class="card"><div class="card-head"><h3>Message the customer</h3><span class="eyebrow">By ${email ? 'email' : 'text'} · ${esc((email ? c.email : c.phone) || 'nothing on file')}</span></div>
   <div class="chips" style="margin-bottom:12px"><select class="select inline" id="tpl-${j.id}" data-act="pickTpl" data-id="${j.id}" aria-label="Message template">${Data.listTemplates().map(t => `<option value="${t.id}" ${t.id === id ? 'selected' : ''}>${t.name}${t.id === suggested(j) ? ' (suggested)' : ''}</option>`).join('')}</select>
   <button class="linkbtn" data-act="editTpl" data-t="${id}" data-id="${j.id}">Edit template</button></div>
   ${ui.editTpl === id ? `<form class="formbox" data-form="tpl" data-t="${id}" style="margin-top:0;margin-bottom:12px">
@@ -628,6 +691,8 @@ function messagesCard(j) {
     <div class="field"><label for="tpl-b-${id}">Message</label><textarea class="textarea" id="tpl-b-${id}" name="body" rows="4">${esc(tp.body)}</textarea></div>
     <p class="small muted">Fill-ins: {first name} {sender} {address} {visit} {price} {payment} {amount} {due date} {job date} {services}. Changes apply to every job.</p>
     <div class="chips"><button class="btn sm" type="submit">Save template</button><button class="btn sm ghost" type="button" data-act="hideTpl">Cancel</button></div></form>` : ''}
+  ${email && !c.email ? '<p class="note" style="margin-bottom:10px">They asked to be contacted by email but there is no email address on file. Add one on their customer record.</p>' : ''}
+  ${!email && !c.phone ? '<p class="note" style="margin-bottom:10px">They asked to be contacted by text but there is no phone number on file. Add one on their customer record.</p>' : ''}
   ${email ? `<p class="small" style="margin-bottom:6px"><b>Subject:</b> ${esc(tp.subject)}</p>` : ''}
   <div class="msg">${esc(text)}</div>
   <div class="chips" style="margin-top:12px"><button class="btn sm" data-act="copyMsg" data-id="${j.id}">Copy message</button><button class="btn sm ghost" data-act="sentMsg" data-id="${j.id}">Mark as sent</button></div></section>`;
@@ -647,8 +712,11 @@ function estimateCard(j) {
 /* ---------- calendar ---------------------------------------------- */
 function events() {
   const ev = [];
-  Data.listJobs().forEach(j => ev.push({ date: j.cust.moveDate, type: j.stage >= 4 ? 'job' : 'est', job: j,
-    label: first(j.cust.name), cids: Object.values(j.sections).map(s => s.contractorId) }));
+  Data.listJobs().forEach(j => ev.push({ date: j.cust.moveDate,
+    type: j.status === 'standby' ? 'standby' : j.stage >= 4 ? 'job' : 'est', job: j,
+    label: first(j.cust.name),
+    // A standby job books nobody, so it can't clash with anything.
+    cids: j.status === 'standby' ? null : Object.values(j.sections).map(s => s.contractorId) }));
   Data.listEnquiries().filter(e => e.visit).forEach(e => ev.push({ date: e.visit.date, type: 'visit',
     time: e.visit.time, who: e.visit.who, label: first(e.name), enq: e }));
   Data.listJobs().filter(j => j.cust.visit).forEach(j => ev.push({ date: j.cust.visit.date, type: 'visit',
@@ -697,7 +765,7 @@ function vCalendar() {
       ${cells.map(d => { const k = iso(d), de = evs.filter(e => e.date === k), cl = clashes(de).length;
         return `<button class="day ${!ui.calWeek && d.getMonth() !== m ? 'out' : ''} ${k === iso(new Date()) ? 'today' : ''} ${cl ? 'clash' : ''}" aria-pressed="${k === ui.day}" data-act="pickDay" data-d="${k}" aria-label="${fd(k)}, ${de.length} item${de.length === 1 ? '' : 's'}${cl ? ', possible clash' : ''}"><span class="dnum">${d.getDate()}</span>${de.slice(0, 3).map(e => `<span class="ev ${e.type}">${e.type === 'visit' ? ft(e.time) + ' ' : ''}${esc(e.label)}</span>`).join('')}${de.length > 3 ? `<span class="small muted">+${de.length - 3}</span>` : ''}</button>`; }).join('')}
     </div>
-    <div class="legend"><span><i style="background:var(--navy-deep)"></i>Booked job</span><span><i style="background:var(--white);box-shadow:inset 0 0 0 1px var(--line-strong)"></i>Estimate or quote out</span><span><i style="background:var(--teal-wash)"></i>Site visit</span><span><i style="box-shadow:inset 0 0 0 2px var(--orange)"></i>Possible clash</span></div></section>
+    <div class="legend"><span><i style="background:var(--navy-deep)"></i>Booked job</span><span><i style="background:var(--white);box-shadow:inset 0 0 0 1px var(--line-strong)"></i>Estimate or quote out</span><span><i style="background:var(--teal-wash)"></i>Site visit</span><span><i style="background:var(--white);box-shadow:inset 0 0 0 1px var(--line);opacity:.75"></i>On standby</span><span><i style="box-shadow:inset 0 0 0 2px var(--orange)"></i>Possible clash</span></div></section>
     <section class="card"><div class="card-head"><h3>${fd(ui.day)}</h3><span class="eyebrow">${selEv.length} item${selEv.length === 1 ? '' : 's'}</span></div>
       ${selClash.map(x => `<p class="note" style="margin-bottom:12px">${esc(x.c ? x.c.name : 'Contractor removed')} is on ${x.jobs.length} jobs this day: ${x.jobs.map(j => j.id).join(', ')}.</p>`).join('')}
       <div class="rows">${selEv.map(e => e.type === 'visit' ? `<div class="row"><div class="main"><b>${ft(e.time)} · Site visit</b><br><span class="small muted">${esc((e.enq || e.job.cust).name)} · ${esc((e.enq || e.job.cust).address)}</span></div><span class="pill p-ok">${esc(e.who.split(' ')[0])}</span></div>`
@@ -757,13 +825,16 @@ function vNewJob() {
       <div class="chips" style="margin-top:10px"><button class="btn sm ghost" data-act="open" data-id="${dup.id}">Open ${dup.id}</button></div></div>` : ''}
   </section>
 
+  <div id="matchcard">${matchCard()}</div>
+
   <section class="card"><div class="card-head"><h3>Job details</h3></div>
     <form data-form="newjob">
       <div class="form-grid">
         <div class="field"><label for="nj-name">Customer name</label><input class="input" id="nj-name" name="name" required value="${v('name')}" placeholder="Full name or company"></div>
         <div class="field"><label for="nj-ref">Their reference <span class="muted" style="font-weight:400">(optional)</span></label><input class="input" id="nj-ref" name="ref" value="${v('ref')}" placeholder="FO-261005-1234"></div>
         <div class="field"><label for="nj-contact">Contact by</label><select class="select" id="nj-contact" name="contact"><option ${p && p.contact === 'Text' ? 'selected' : ''}>Text</option><option ${p && p.contact === 'Email' ? 'selected' : ''}>Email</option></select></div>
-        <div class="field"><label for="nj-phone">Phone or email</label><input class="input" id="nj-phone" name="phone" required value="${v('phone')}" placeholder="027 000 0000"></div>
+        <div class="field"><label for="nj-phone">Phone</label><input class="input" id="nj-phone" name="phone" type="tel" value="${v('phone')}" placeholder="027 000 0000"></div>
+        <div class="field"><label for="nj-email">Email</label><input class="input" id="nj-email" name="email" type="email" value="${v('email')}" placeholder="name@example.com"></div>
         <div class="field"><label for="nj-date">Move-out date</label><input class="input" id="nj-date" name="moveDate" type="date" required value="${v('moveDate')}"></div>
         <div class="field"><label for="nj-people">People in the flat</label><input class="input" id="nj-people" name="people" type="number" min="0" max="12" value="${p && p.people ? p.people : 4}"></div>
       </div>
@@ -779,6 +850,32 @@ function vNewJob() {
   </section>
   </div>`;
 }
+/* Have we dealt with this person before, and is there already a job at
+   this address? Two different questions, deliberately kept apart: the
+   first decides which customer record the job goes on, the second is
+   just something you should know about. */
+function matchCard() {
+  const m = ui.paste.match, p = ui.paste.parsed;
+  const addr = p && p.address ? Data.jobsAtAddress(p.address) : [];
+  if (!m && !addr.length) return '';
+  const hist = m ? Data.customerHistory(m.id) : null;
+  return `<section class="card"><div class="card-head"><h3>Before you save</h3></div>
+  ${m ? `<div class="${ui.paste.useMatch ? 'formbox' : 'note'}" style="margin-top:12px">
+    <p class="small"><b>${esc(m.name)} is already a customer</b> — ${hist.count} job${hist.count === 1 ? '' : 's'} with us${hist.count ? ', most recently ' + (hist.previous[0] ? fd(hist.previous[0].cust.moveDate) : '—') : ''}. Matched on their ${esc(Data.phoneKey(m.phone) && Data.phoneKey(m.phone) === Data.phoneKey(p && p.phone) ? 'phone number' : 'email address')}.</p>
+    <p class="small muted" style="margin-top:6px">${ui.paste.useMatch
+      ? 'This job will go on their existing record, and their saved details will be used rather than what the row said.'
+      : 'This job will get a brand new customer record of its own.'}</p>
+    <div class="chips" style="margin-top:10px">
+      ${ui.paste.useMatch
+        ? `<button class="btn sm ghost" data-act="openCustFrom" data-c="${m.id}">See their record</button><button class="linkbtn" data-act="noMatch">No, this is a different person</button>`
+        : `<button class="btn sm" data-act="yesMatch">Use ${esc(m.name)}'s record after all</button>`}
+    </div></div>` : ''}
+  ${addr.length ? `<div class="note" style="margin-top:12px"><b>There's already a job at this address.</b>
+    ${addr.map(j => `${j.id} — ${esc(j.cust.name)}, ${j.cust.moveDate ? fd(j.cust.moveDate) : 'no date'}`).join('<br>')}
+    <p class="small muted" style="margin-top:6px">Usually two flatmates booking separately, which is fine. Worth a look in case it's the same whole-flat job going in twice.</p></div>` : ''}
+  </section>`;
+}
+
 function walkSection(k, s) {
   const opts = Data.contractorsCovering(k);
   const c = Data.getContractor(s.contractorId);
@@ -820,13 +917,136 @@ const readC = form => ({ name: form.get('name').trim(), contact: form.get('conta
   phone: form.get('phone').trim(), email: form.get('email').trim(), terms: form.get('terms'),
   insurance: form.get('insurance'), services: form.getAll('services') });
 
+/* ---------- customers ---------------------------------------------
+   One row per person. Their contact details live here and nowhere
+   else: a job shows them, but this is the record that changing them
+   changes. */
+function custRow(c) {
+  const mine = Data.customerJobs(c.id);
+  const live = mine.filter(j => j.status === 'active');
+  const dates = mine.map(j => j.cust.moveDate).filter(Boolean).sort();
+  const last = dates[dates.length - 1];
+  const open = ui.cust.open === c.id;
+  return `<div class="row">
+    <div class="main">
+      <b>${esc(c.name)}</b>${mine.length > 1 ? ` <span class="pill p-ok">${mine.length} jobs</span>` : ''}
+      <br><span class="small muted">${c.contact === 'Email'
+        ? (c.email ? esc(c.email) : '<span style="color:var(--red)">wants email, none on file</span>')
+        : (c.phone ? esc(c.phone) : '<span style="color:var(--red)">wants text, no number on file</span>')
+      }${last ? ' · last job ' + fd(last) : ' · no jobs yet'}${live.length ? ' · ' + live.length + ' live' : ''}</span>
+    </div>
+    <button class="btn sm ghost" data-act="openCust" data-c="${c.id}">${open ? 'Close' : 'Open'}</button>
+  </div>
+  ${open ? `<div class="formbox">${ui.cust.edit === c.id ? custForm(c) : `<dl class="details">
+      <div><dt>Phone</dt><dd>${c.phone ? esc(c.phone) : '<span class="muted">Not added</span>'}</dd></div>
+      <div><dt>Email</dt><dd>${c.email ? esc(c.email) : '<span class="muted">Not added</span>'}</dd></div>
+      <div><dt>Contact by</dt><dd>${esc(c.contact)}</dd></div>
+      <div><dt>Jobs</dt><dd>${mine.length}</dd></div>
+    </dl>
+    ${c.notes ? `<p class="small" style="margin-bottom:12px">${esc(c.notes)}</p>` : ''}
+    <div class="chips" style="margin-bottom:12px">
+      <button class="btn sm ghost" data-act="editCust" data-c="${c.id}">Edit details</button>
+      <button class="linkbtn" data-act="mergeCust" data-c="${c.id}">Same person as another record</button>
+    </div>
+    ${ui.cust.mergeFrom === c.id ? mergeForm(c) : ''}
+    <div class="rows">${mine.length ? mine
+      .sort((a, b) => String(b.id).localeCompare(String(a.id)))
+      .map(j => `<div class="row"><div class="main"><b>${j.id}</b> <span class="small muted">${esc(j.cust.address)}${j.cust.moveDate ? ' · ' + fd(j.cust.moveDate) : ''}</span></div>${stagePill(j.stage, j)}<button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button></div>`).join('')
+      : '<p class="muted small">No jobs against this customer yet.</p>'}</div>`}</div>` : ''}`;
+}
+
+function custForm(c) {
+  const v = c || { id: 'new', name: '', phone: '', email: '', contact: 'Text', notes: '' };
+  return `<form data-form="cust" data-c="${c ? c.id : ''}">
+    <div class="grid2">
+      <div class="field"><label for="cu-name-${v.id}">Name</label><input class="input" id="cu-name-${v.id}" name="name" value="${esc(v.name)}" required></div>
+      <div class="field"><label for="cu-contact-${v.id}">Contact by</label><select class="select" id="cu-contact-${v.id}" name="contact"><option ${v.contact === 'Text' ? 'selected' : ''}>Text</option><option ${v.contact === 'Email' ? 'selected' : ''}>Email</option></select></div>
+      <div class="field"><label for="cu-phone-${v.id}">Phone</label><input class="input" id="cu-phone-${v.id}" name="phone" type="tel" value="${esc(v.phone)}"></div>
+      <div class="field"><label for="cu-email-${v.id}">Email</label><input class="input" id="cu-email-${v.id}" name="email" type="email" value="${esc(v.email)}"></div>
+    </div>
+    <div class="field"><label for="cu-notes-${v.id}">Notes</label><textarea class="textarea" id="cu-notes-${v.id}" name="notes" placeholder="Anything worth remembering next time">${esc(v.notes)}</textarea></div>
+    <p class="small muted">Changing a name, number or email here changes it on every one of their jobs, and writes a line into each job's history.</p>
+    <div class="chips" style="margin-top:12px"><button class="btn" type="submit">Save</button><button class="btn ghost" type="button" data-act="cancelCust">Cancel</button></div>
+  </form>`;
+}
+
+function mergeForm(c) {
+  const others = Data.listCustomers().filter(o => o.id !== c.id);
+  return `<form class="formbox" data-form="merge" data-c="${c.id}">
+    <p class="small"><b>Move ${esc(c.name)}'s jobs onto another record</b></p>
+    <p class="small muted">Use this when one person ended up with two records — a new number, or a flatmate who booked for them. ${esc(c.name)}'s ${Data.customerJobs(c.id).length} job(s) move across and this record goes. Nothing is deleted: the jobs, their history and the notes all survive on the record you keep.</p>
+    <div class="field" style="margin-top:10px"><label for="mg-${c.id}">Keep this record</label>
+      <select class="select" id="mg-${c.id}" name="into" required>
+        <option value="">Choose a customer…</option>
+        ${others.map(o => `<option value="${o.id}">${esc(o.name)}${o.phone ? ' · ' + esc(o.phone) : ''}${o.email ? ' · ' + esc(o.email) : ''}</option>`).join('')}
+      </select></div>
+    <div class="chips"><button class="btn" type="submit">Merge them</button><button class="btn ghost" type="button" data-act="cancelMerge">Cancel</button></div>
+  </form>`;
+}
+
+function vCustomers() {
+  const all = Data.listCustomers();
+  const list = ui.cust.q.trim() ? all.filter(c => [c.name, c.phone, c.email].join(' ').toLowerCase().includes(ui.cust.q.trim().toLowerCase())) : all;
+  const unreachable = all.filter(c => (c.contact === 'Email' && !c.email) || (c.contact === 'Text' && !c.phone));
+  return `<div class="view">
+  <div class="card-head" style="margin:0"><div><h2>Customers</h2>
+    <p class="muted small" style="margin-top:4px">One record per person. Jobs point at these, so an edit here fixes every job of theirs at once.</p></div>
+    <div class="chips">${ui.cust.add ? '' : `<button class="btn sm ghost" data-act="exportCustomers">Export to spreadsheet</button><button class="btn" data-act="showAddCust">Add customer</button>`}</div></div>
+
+  ${Data.needsCustomerMigration() ? migrateCard() : ''}
+  ${ui.cust.add ? `<section class="card"><h3>New customer</h3><p class="small muted" style="margin:8px 0 12px">Most customers appear here on their own when you enter a job. Add one by hand only if they got in touch some other way.</p>${custForm(null)}</section>` : ''}
+
+  ${unreachable.length ? `<p class="note">${unreachable.length === 1
+    ? `${esc(unreachable[0].name)} wants to be contacted by ${unreachable[0].contact.toLowerCase()}, but there's no ${unreachable[0].contact === 'Email' ? 'email address' : 'phone number'} on file.`
+    : `${unreachable.length} customers want to be contacted a way you don't have details for.`}</p>` : ''}
+
+  <section class="card">
+    <div class="card-head"><h3>${list.length} of ${all.length} customer${all.length === 1 ? '' : 's'}</h3>
+      <div class="field" style="margin:0;min-width:240px"><label for="cust-q">Search</label>
+      <input class="input" id="cust-q" type="search" data-act="custQ" placeholder="Name, phone or email" value="${esc(ui.cust.q)}"></div></div>
+    <div class="rows" style="margin-top:12px" id="custrows">${custRows()}</div>
+  </section>
+</div>`;
+}
+
+function custRows() {
+  const q = ui.cust.q.trim().toLowerCase();
+  const all = Data.listCustomers();
+  const list = q ? all.filter(c => [c.name, c.phone, c.email].join(' ').toLowerCase().includes(q)) : all;
+  return list.map(custRow).join('') ||
+    `<p class="muted">${all.length ? 'Nothing matches that.' : 'No customers yet. They appear here as you enter jobs.'}</p>`;
+}
+
+/* The one-off tidy-up for jobs entered before customers existed. Shown
+   for checking first: it is the only thing in here that rewrites
+   records you already have. */
+function migrateCard() {
+  const plan = ui.cust.migrate;
+  const unlinked = Data.listJobs().filter(j => !j.custId).length;
+  if (!plan) {
+    return `<section class="card"><div class="card-head"><h3>${unlinked} job${unlinked === 1 ? '' : 's'} entered before customers existed</h3></div>
+      <p class="small" style="margin-top:10px">Those jobs carry their customer's details inside them. This builds a customer record for each person and links their jobs across, grouping anyone who shares a phone number or email. Nothing is changed until you have looked at it.</p>
+      <div class="chips" style="margin-top:12px"><button class="btn" data-act="planMigrate">Show me what it would do</button></div></section>`;
+  }
+  const dupes = plan.filter(g => g.jobs.length > 1);
+  return `<section class="card"><div class="card-head"><h3>This would create ${plan.length} customer${plan.length === 1 ? '' : 's'}</h3><span class="eyebrow">Nothing saved yet</span></div>
+    ${dupes.length ? `<p class="note" style="margin-top:10px">${dupes.length === 1
+      ? 'One of them already has more than one job — that is a returning customer.'
+      : `${dupes.length} of them already have more than one job — those are your returning customers.`}</p>` : ''}
+    <div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Customer</th><th>Phone</th><th>Email</th><th>Contact by</th><th>Jobs</th></tr></thead><tbody>
+    ${plan.map(g => `<tr><td><b>${esc(g.name)}</b></td><td>${g.phone ? esc(g.phone) : '<span class="muted">—</span>'}</td><td>${g.email ? esc(g.email) : '<span class="muted">—</span>'}</td><td>${esc(g.contact)}</td><td>${g.jobs.join(', ')}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="small muted" style="margin-top:10px">Check the phone and email columns. The quote form only ever asked for one of the two, so a customer who chose email may have no number — you can fill that in afterwards. If two people here are the same person, link them with "Same person as another record" once this has run.</p>
+    <div class="chips" style="margin-top:12px"><button class="btn" data-act="runMigrate">Create these ${plan.length} customers</button><button class="btn ghost" data-act="cancelMigrate">Not now</button></div></section>`;
+}
+
 function vContractors() {
   const list = Data.listContractors();
   const rows = list.map(c => ({ c, s: Data.getScorecard(c.id) })).sort((a, b) => (b.s.rate ?? -1) - (a.s.rate ?? -1));
   return `<div class="view">
-  <div class="card-head" style="margin:0"><div><h2>Contractors</h2><p class="muted small" style="margin-top:4px">Rates below are examples so the walk-through can be tested. Replace them with each contractor's agreed prices; estimates add the 15% margin on the total.</p></div><div class="chips">${ui.addC ? '' : '<button class="btn sm ghost" data-act="exportContractors">Export to spreadsheet</button><button class="btn" data-act="showAddC">Add contractor</button>'}</div></div>
+  <div class="card-head" style="margin:0"><div><h2>Contractors</h2><p class="muted small" style="margin-top:4px">Enter each contractor's agreed prices here. The walk-through can only price a job from what's on these cards; estimates add the 15% margin on the total.</p></div><div class="chips">${ui.addC ? '' : '<button class="btn sm ghost" data-act="exportContractors">Export to spreadsheet</button><button class="btn" data-act="showAddC">Add contractor</button>'}</div></div>
   ${ui.addC ? `<section class="card"><h3>New contractor</h3>${cForm(null)}</section>` : ''}
-  <section class="card"><div class="card-head"><h3>Scorecard</h3><span class="eyebrow">Sample history + this session</span></div>
+  <section class="card"><div class="card-head"><h3>Scorecard</h3><span class="eyebrow">Every job order you have sent</span></div>
     <div class="tablewrap"><table><thead><tr><th>Contractor</th><th class="num">Job orders</th><th>Accepted</th><th class="num">Declined</th><th class="num">No reply</th><th class="num">Avg reply</th><th class="num">Strikes</th><th>Rating</th></tr></thead><tbody>
     ${rows.map(({ c, s }) => `<tr><td><b>${esc(c.name)}</b></td><td class="num">${s.sent}</td><td>${s.rate === null ? '<span class="muted">—</span>' : `<div style="display:flex;align-items:center;gap:8px"><div class="bar"><span style="width:${Math.round(s.rate * 100)}%"></span></div><span class="small">${Math.round(s.rate * 100)}%</span></div>`}</td><td class="num">${s.dec}</td><td class="num">${s.sil}</td><td class="num">${s.sent ? s.hrs + ' hrs' : '—'}</td><td class="num">${c.strikes}/3</td><td><span class="pill ${s.rating[0]}">${s.rating[1]}</span></td></tr>`).join('')}
     </tbody></table></div>
@@ -870,7 +1090,7 @@ function render() {
   const app = document.getElementById('app');
   try {
     app.innerHTML =
-      ({ home: vHome, jobs: vJobs, calendar: vCalendar, walk: vWalk, contractors: vContractors, alerts: vAlerts })[view]();
+      ({ home: vHome, jobs: vJobs, calendar: vCalendar, walk: vWalk, customers: vCustomers, contractors: vContractors, alerts: vAlerts })[view]();
   } catch (err) {
     console.error(err);
     app.innerHTML = `<section class="card"><h2>That didn't draw</h2>
@@ -913,6 +1133,29 @@ document.addEventListener('click', e => {
     case 'nav': openJob = null; go(d.v); break;
     case 'open': go('jobs', d.id); break;
     case 'goHome': openJob = null; go('home'); break;
+    case 'showStandby': ui.jf.status = 'standby'; openJob = null; go('jobs'); break;
+    case 'markStandby': ui.statusFor = { id: d.id, status: 'standby' }; ui.retrieveFor = null; render(); focus('status-reason'); break;
+    case 'retrieve': ui.retrieveFor = d.id; ui.statusFor = null; render(); focus('rt-' + d.id); break;
+    case 'cancelRetrieve': ui.retrieveFor = null; render(); break;
+
+    /* ---- customers ---- */
+    case 'openCust': ui.cust.open = ui.cust.open === d.c ? null : d.c; ui.cust.edit = null; ui.cust.mergeFrom = null; render(); break;
+    case 'openCustFrom': ui.cust.open = d.c; ui.cust.edit = null; go('customers'); break;
+    case 'editCust': ui.cust.edit = d.c; ui.cust.add = false; render(); focus('cu-name-' + d.c); break;
+    case 'showAddCust': ui.cust.add = true; ui.cust.edit = null; render(); focus('cu-name-new'); break;
+    case 'cancelCust': ui.cust.edit = null; ui.cust.add = false; render(); break;
+    case 'mergeCust': ui.cust.mergeFrom = d.c; render(); focus('mg-' + d.c); break;
+    case 'cancelMerge': ui.cust.mergeFrom = null; render(); break;
+    case 'exportCustomers': downloadCsv('flatout-customers', Data.exportCustomersCsv()); break;
+    case 'noMatch': ui.paste.useMatch = false; refreshMatch(); break;
+    case 'yesMatch': ui.paste.useMatch = true; refreshMatch(); break;
+    case 'planMigrate': ui.cust.migrate = Data.customerMigrationPlan(); render(); break;
+    case 'cancelMigrate': ui.cust.migrate = null; render(); break;
+    case 'runMigrate': {
+      const res = Data.runCustomerMigration(ui.cust.migrate, owner());
+      ui.cust.migrate = null;
+      toast(`${res.made} customer${res.made === 1 ? '' : 's'} created, ${res.linked} job${res.linked === 1 ? '' : 's'} linked`);
+      render(); break; }
     case 'back': go('jobs', null); break;
     case 'alerts': openJob = null; go('alerts'); break;
     case 'cancelDraft': draft = null; render(); break;
@@ -949,6 +1192,7 @@ document.addEventListener('click', e => {
       copy(jobOrderText(jb, po)); break; }
     case 'markLost': case 'markCancelled': {
       ui.statusFor = { id: d.id, status: d.act === 'markLost' ? 'lost' : 'cancelled' };
+      ui.retrieveFor = null;
       render(); focus('status-reason'); break; }
     case 'cancelStatus': ui.statusFor = null; render(); break;
     case 'reopen': Data.setJobStatus(d.id, 'active', '', owner()); toast('Job reopened'); render(); break;
@@ -1028,21 +1272,35 @@ document.addEventListener('submit', e => {
     ui.paste.dup = dup;
     ui.paste.dupOn = dup
       ? (dup.cust.ref && dup.cust.ref === parsed.ref ? 'quote reference'
-        : dup.cust.phone === parsed.phone ? 'phone or email' : 'address')
+        : 'same person and the same move-out date')
       : null;
+    // A known phone or email is a returning customer, not a duplicate.
+    ui.paste.match = Data.findCustomerByContact(parsed.phone, parsed.email);
+    ui.paste.useMatch = true;
     render();
     return;
   }
   if (kind === 'newjob') {
     const services = form.getAll('services');
+    const phone = (form.get('phone') || '').trim(), email = (form.get('email') || '').trim();
+    if (!phone && !email) {
+      toast('Add a phone number or an email — otherwise there is no way to reach them.');
+      focus('nj-phone');
+      return;
+    }
+    if (form.get('contact') === 'Email' && !email) { toast('They want email, so add an email address.'); focus('nj-email'); return; }
+    if (form.get('contact') === 'Text' && !phone) { toast('They want text, so add a phone number.'); focus('nj-phone'); return; }
     const cust = {
       name: form.get('name').trim(), ref: form.get('ref').trim() || '—',
       contact: form.get('contact'), phone: form.get('phone').trim(),
+      email: (form.get('email') || '').trim(),
       address: form.get('address').trim(), moveDate: form.get('moveDate'),
       people: Number(form.get('people')) || 0, special: form.get('special').trim()
     };
-    const job = Data.createJob(cust, owner(), services);
-    ui.paste = { kind: ui.paste.kind, parsed: null, dup: null };
+    // Either onto the customer you confirmed, or a fresh record.
+    const useId = ui.paste.match && ui.paste.useMatch ? ui.paste.match.id : '';
+    const job = Data.createJob(cust, owner(), services, useId || undefined);
+    ui.paste = { kind: ui.paste.kind, parsed: null, dup: null, match: null, useMatch: true };
     if (form.get('then') === 'walk') {
       draft = { jobId: job.id, cust: job.cust, sections: JSON.parse(JSON.stringify(job.sections)) };
       if (!Object.keys(draft.sections).length) draft.sections.cleaning = Data.newSection('cleaning');
@@ -1054,6 +1312,38 @@ document.addEventListener('submit', e => {
     }
     return;
   }
+  if (kind === 'cust') {
+    const fields = { name: form.get('name'), phone: form.get('phone'),
+      email: form.get('email'), contact: form.get('contact'), notes: form.get('notes') };
+    if (f.dataset.c) {
+      const res = Data.updateCustomer(f.dataset.c, fields, owner());
+      if (res.error) { toast(res.error); return; }
+      ui.cust.edit = null;
+      toast(res.jobs.length
+        ? `Saved · updated on ${res.jobs.length} job${res.jobs.length === 1 ? '' : 's'}`
+        : 'Saved');
+      if (res.clash) {
+        toast(`Saved — but ${res.clash.name} has the same number or email. Merge them if they're the same person.`);
+      }
+    } else {
+      const res = Data.createCustomer(fields, owner());
+      if (res.error) { toast(res.error); return; }
+      ui.cust.add = false;
+      ui.cust.open = res.customer.id;
+      toast('Customer added');
+    }
+    render();
+    return;
+  }
+  if (kind === 'merge') {
+    const res = Data.mergeCustomers(f.dataset.c, form.get('into'), owner());
+    if (res.error) { toast(res.error); return; }
+    ui.cust.mergeFrom = null;
+    ui.cust.open = res.customer.id;
+    toast(`Merged · ${res.moved.length} job${res.moved.length === 1 ? '' : 's'} moved to ${res.customer.name}`);
+    render();
+    return;
+  }
   if (kind === 'note') {
     Data.addNote(f.dataset.id, form.get('text'), owner());
     render();
@@ -1062,7 +1352,15 @@ document.addEventListener('submit', e => {
   if (kind === 'status') {
     Data.setJobStatus(f.dataset.id, f.dataset.status, form.get('reason'), owner());
     ui.statusFor = null;
-    toast('Job marked ' + f.dataset.status);
+    toast(f.dataset.status === 'standby' ? 'Put on standby' : 'Job marked ' + f.dataset.status);
+    render();
+    return;
+  }
+  if (kind === 'retrieve') {
+    const res = Data.retrieveJob(f.dataset.id, form.get('moveDate'), owner());
+    if (res.error) { toast(res.error); return; }
+    ui.retrieveFor = null;
+    toast(`Back in the pipeline at ${Data.STAGES[res.job.stage]}`);
     render();
     return;
   }
@@ -1138,8 +1436,53 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   const t = e.target;
   if (t.dataset.jf === 'q') { ui.jf.q = t.value; refreshJobs(); return; }
+  if (t.dataset.act === 'custQ') {
+    ui.cust.q = t.value;
+    const box = document.getElementById('custrows');
+    if (box) box.innerHTML = custRows();
+    return;
+  }
   if (t.dataset.act === 'notes') draft.sections[t.dataset.k].notes = t.value;
 });
+
+/* Typed in by hand rather than pasted: check for a known phone or email
+   when you leave the field, so a returning customer is still obvious.
+   On blur rather than per keystroke, so the page doesn't move while you
+   are still typing. */
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id !== 'nj-phone' && t.id !== 'nj-email' && t.id !== 'nj-address') return;
+  const phone = (document.getElementById('nj-phone') || {}).value || '';
+  const email = (document.getElementById('nj-email') || {}).value || '';
+  const found = Data.findCustomerByContact(phone, email);
+  const same = (found && found.id) === (ui.paste.match && ui.paste.match.id);
+  if (same && t.id !== 'nj-address') return;
+  ui.paste.match = found;
+  if (!same) ui.paste.useMatch = true;
+  refreshMatch();
+});
+
+/* Redraws the "before you save" card on its own. Deliberately NOT a full
+   render: this fires as you leave a field, and redrawing the whole view
+   would destroy the field you were moving into, losing the keystroke
+   and the focus with it. */
+function refreshMatch() {
+  const box = document.getElementById('matchcard');
+  if (!box) return;
+  ui.paste.parsed = Object.assign({}, ui.paste.parsed, readNewJobForm());
+  box.innerHTML = matchCard();
+}
+
+function readNewJobForm() {
+  const g = id => { const el = document.getElementById(id); return el ? el.value : undefined; };
+  const out = { name: g('nj-name'), ref: g('nj-ref'), contact: g('nj-contact'),
+    phone: g('nj-phone'), email: g('nj-email'), moveDate: g('nj-date'),
+    people: Number(g('nj-people')) || 0, address: g('nj-address'), special: g('nj-special') };
+  const ticked = Array.from(document.querySelectorAll('input[name="services"]:checked')).map(i => i.value);
+  if (ticked.length) out.services = ticked;
+  Object.keys(out).forEach(k => out[k] === undefined && delete out[k]);
+  return out;
+}
 
 document.getElementById('owner').addEventListener('change', render);
 

@@ -16,6 +16,7 @@
    One blob per record, keyed by id:
 
      job/J-1001           one job
+     customer/mere-harris one customer, and how to reach them
      contractor/gecs      one contractor and their rate card
      template/estimate    one message template
      alert/<id>           one alert
@@ -31,7 +32,7 @@
 import { getStore } from '@netlify/blobs';
 
 const STORE = 'flatout-panel';
-const KINDS = ['job', 'contractor', 'template', 'alert'];
+const KINDS = ['job', 'contractor', 'customer', 'template', 'alert'];
 
 export default async (req) => {
   const denied = checkAuth(req);
@@ -102,16 +103,16 @@ function timingSafeEqual(a, b) {
 
 /* ---------- reads ------------------------------------------------- */
 async function loadAll(store) {
-  const out = { jobs: [], contractors: [], templates: [], alerts: [], settings: null };
+  const out = { jobs: [], contractors: [], customers: [], templates: [], alerts: [], settings: null };
+  const PLURAL = { job: 'jobs', contractor: 'contractors', customer: 'customers',
+    template: 'templates', alert: 'alerts' };
 
   for (const kind of KINDS) {
     const { blobs } = await store.list({ prefix: kind + '/' });
     const records = await Promise.all(
       blobs.map(b => store.get(b.key, { type: 'json' }).catch(() => null))
     );
-    out[kind === 'job' ? 'jobs'
-      : kind === 'contractor' ? 'contractors'
-      : kind === 'template' ? 'templates' : 'alerts'] = records.filter(Boolean);
+    out[PLURAL[kind]] = records.filter(Boolean);
   }
 
   out.settings = await store.get('settings', { type: 'json' }).catch(() => null);

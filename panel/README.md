@@ -49,6 +49,59 @@ seeds again.
 
 ---
 
+## Customers
+
+**Customers** is a tab of its own. One record per person, with their
+name, phone, email and which of the two they want to be contacted on.
+A job points at a customer rather than carrying its own copy, so
+**changing a phone number or email changes it on every job of theirs**,
+and writes a line into each of those jobs' history.
+
+Phone and email are two separate fields. The quote form only ever asks
+for one of them, so a customer who chose email usually has no phone
+number on file until you add one. Where that matters — they want email
+and there is no email address — the panel says so rather than quietly
+pointing at the wrong field.
+
+**Customers appear on their own as you enter jobs.** "Add customer" is
+there for someone who got in touch another way.
+
+### Returning customers
+
+When a pasted row or a typed-in number matches a customer you already
+have, the panel says so before you save and offers to put the job on
+their existing record. Matching is on **phone and email only** — never
+the address, because students move every year and two flatmates share
+one address while being two different people. A phone number matches on
+its last eight digits, so `021 123 4567` and `+64 21 123 4567` are the
+same person.
+
+Their job page then shows "3rd job with FlatOut" and lists what they
+had before, so you can price with that in front of you. There is no
+automatic discount — that call is yours.
+
+If there is already a job at the same address it says so separately.
+That is usually two flatmates booking individually, which is fine; it
+is flagged in case one whole-flat job has gone in twice.
+
+### When one person ends up with two records
+
+New number, a flatmate booking on their behalf, a maiden name. Open
+either record and use **Same person as another record**. The jobs move
+across, the notes are kept, and the record you merged away goes.
+
+**A customer cannot be deleted** — only merged. A job pointing at a
+record that has gone is exactly the kind of thing that breaks a page.
+
+### Jobs entered before customers existed
+
+Those jobs carry their customer's details inside them. The Customers
+tab offers a one-off tidy-up: it builds a record for each person,
+groups anyone sharing a phone or email, and shows you the whole list
+before writing anything. Check the phone and email columns on that
+list, then run it. It is the only thing in the panel that rewrites
+records you already have.
+
 ## How a job runs
 
 Eight stages. Every one of them you move yourself — nothing in here
@@ -66,9 +119,34 @@ somewhere else.
 | **Job orders out** | Contractors have their orders. | They accept, do it, and you sign it off |
 | **Done** | Signed off. | — |
 
-A job can also be marked **lost** or **cancelled**, with a reason. It
-keeps its record but drops out of the pipeline counts and the attention
-list. You can reopen it later.
+A job can also be marked **lost**, **cancelled** or **on standby**, with
+a reason. It keeps its record but drops out of the pipeline counts and
+the attention list. You can reopen it later.
+
+## Standby
+
+For the flat that is doing it themselves but wants you on file in case
+they need a last-minute clean. Put the job on standby and it goes quiet:
+nothing owed, nothing chased, no contractor told, out of the pipeline and
+off the attention list.
+
+It stays on the calendar in grey — handy for spotting a parked flat on a
+day you are already working nearby — and it can never cause a clash,
+because nobody is booked.
+
+**Nothing deletes itself.** There is no server ticking away: the panel
+only does anything when one of you has it open. So on their move-out
+date it appears on **Home** under "Needs you", marked *Coming up* rather
+than urgent, saying the date has passed. From there:
+
+- They rang and want it after all → **They got in touch — bring it back**.
+  It returns to the stage it was at and asks for a new date, since the
+  old one has almost certainly gone by.
+- You never heard → **Mark cancelled**. The record is kept, as with any
+  cancelled job.
+
+Either way their name, phone and email are safe on the Customers tab
+regardless, because customers are never deleted.
 
 ## Starting a job from a quote request
 
@@ -113,8 +191,8 @@ contractor by itself.
 
 ## Getting your data out
 
-**Jobs** and **Contractors** each have an **Export to spreadsheet**
-button. They download as CSV, which opens straight in Excel or Google
+**Jobs**, **Customers** and **Contractors** each have an **Export to
+spreadsheet** button. They download as CSV, which opens straight in Excel or Google
 Sheets.
 
 Worth knowing: a spreadsheet flattens things, so a job's individual line
@@ -169,6 +247,7 @@ One blob per record, keyed by id:
 
 ```
 job/J-1001           one job
+customer/mere-harris one customer and how to reach them
 contractor/gecs      one contractor and their rate card
 template/estimate    one message template
 alert/<id>           one alert
