@@ -217,10 +217,40 @@ const Data = (() => {
     if (alertListener) alertListener(a);
   }
 
-  /* ---------- money ------------------------------------------------ */
+  /* ---------- money ------------------------------------------------
+     A job is priced off the contractor's rate card, and rate cards
+     change. Once an estimate has gone to a customer those numbers have
+     to stop moving: putting GECS's hourly rate up must not quietly
+     rewrite what a job you finished in March says it cost, or what a
+     customer was quoted and has already paid.
+
+     So sending the estimate takes a copy of every rate the job uses,
+     and from then on the job is priced from its own copy. Jobs that
+     have not been quoted yet still follow the live rate card, which is
+     what you want while you are still pricing. */
+  function lineItem(section, iid) {
+    return (section.frozen && section.frozen[iid]) || getRateItem(section.contractorId, iid);
+  }
+  /* Copy the rates this section currently uses onto the section itself.
+     `only` fills gaps without touching rates already frozen, which is
+     what happens when an item is added to a job that is already out. */
+  function freezeSection(s, onlyGaps) {
+    const frozen = onlyGaps ? Object.assign({}, s.frozen) : {};
+    Object.keys(s.lines).forEach(iid => {
+      if (onlyGaps && frozen[iid]) return;
+      const i = getRateItem(s.contractorId, iid);
+      if (i) frozen[iid] = { id: i.id, name: i.name, unit: i.unit, type: i.type, rate: i.rate, section: i.section };
+    });
+    s.frozen = frozen;
+  }
+  function freezeJob(j, onlyGaps) {
+    Object.values(j.sections).forEach(s => freezeSection(s, onlyGaps));
+    if (!onlyGaps) j.pricedAt = isoDate(new Date());
+  }
+
   function sectionCost(section) {
     return Object.entries(section.lines).reduce((t, [iid, q]) => {
-      const i = getRateItem(section.contractorId, iid);
+      const i = lineItem(section, iid);
       return t + (i ? q * i.rate : 0);
     }, 0);
   }
@@ -584,6 +614,7 @@ const Data = (() => {
       const kept = {};
       Object.entries(sections).forEach(([k, sec]) => { kept[k] = sec; });
       j.sections = kept;
+      if (j.pricedAt) freezeJob(j, true);
       const priced = Object.values(kept).some(sec => Object.keys(sec.lines).length);
       if (priced && j.stage === 0) {
         j.stage = 1;
@@ -611,6 +642,166 @@ const Data = (() => {
     },
     JOB_STATUS,
     parseSheetRow,
+
+    /* ---- picking up the other owner's changes ---------------------
+       Everything is loaded once at boot, so you and Rocky each work
+       from your own copy and neither sees the other until a reload.
+       This re-reads quietly and reports what moved, so the UI can say
+       so rather than you finding out by overwriting something.
+
+       It deliberately does not touch a record you have unsaved changes
+       queued for: your own work in progress always wins, and the next
+       poll picks the change up once your save has gone through. */
+    async refresh() {
+      if (pending.size) return { skipped: 'saving' };
+      let d;
+      try {
+        const res = await fetch(API + '?action=load');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        d = await res.json();
+        if (d.error) throw new Error(d.error);
+      } catch (err) {
+        return { error: err.message };
+      }
+      if (pending.size) return { skipped: 'saving' };   // a save started while we waited
+
+      const before = new Map(jobs.map(j => [j.id, JSON.stringify(j)]));
+      const fresh = (d.jobs || []).map(migrateJob)
+        .sort((a, b) => String(b.id).localeCompare(String(a.id)));
+      const changed = fresh.filter(j => before.has(j.id) && before.get(j.id) !== JSON.stringify(j)).map(j => j.id);
+      const added = fresh.filter(j => !before.has(j.id)).map(j => j.id);
+
+      jobs = fresh;
+      contractors = d.contractors || contractors;
+      customers = (d.customers || []).sort((a, b) => a.name.localeCompare(b.name));
+      templates = d.templates || templates;
+      alerts = (d.alerts || []).sort((a, b) => String(b.id).localeCompare(String(a.id)));
+      if (d.settings) alertSettings = d.settings;
+
+      return { changed, added, any: changed.length + added.length > 0 };
+    },
+
+    /* ---- what's on today -----------------------------------------
+       One screen for the morning: the jobs happening, who is meant to
+       be there, and what needs chasing before they are.
+       Named daySheet, not today: Data.today() is the clock. */
+    daySheet(forOwner, mineOnly = false) {
+      const t = startOfDay(new Date());
+      const todayIso = isoDate(t);
+      const tomorrowIso = isoDate(addDays(t, 1));
+      const mine = j => !mineOnly || j.owner === forOwner;
+      const pick = iso => jobs
+        .filter(j => j.status === 'active' && j.cust.moveDate === iso && mine(j))
+        .sort((a, b) => String(a.cust.address).localeCompare(String(b.cust.address)))
+        .map(j => ({
+          job: j,
+          crews: livePos(j)
+            .filter(p => p.status !== 'replaced')
+            .map(p => ({ no: p.no, status: p.status, section: SERVICES[p.key],
+              name: getContractor(p.contractorId)?.name || 'Contractor removed',
+              phone: getContractor(p.contractorId)?.phone || '' })),
+          unconfirmed: livePos(j).filter(p => p.status === 'awaiting' || p.status === 'silent').length,
+          notReady: j.stage < 6
+        }));
+      return { date: todayIso, today: pick(todayIso), tomorrow: pick(tomorrowIso) };
+    },
+
+    /* ---- going back a stage ---------------------------------------
+       Stages only ever went forward, so one mis-click on "Paid" left
+       you with no way back short of deleting the job and entering it
+       again. Every step back is logged: this is a correction, and the
+       record should show that it happened. */
+    stepBack(id, byOwner) {
+      const j = getJob(id);
+      if (!j || j.stage <= 0) return { error: 'It is already at the start.' };
+      const from = STAGES[j.stage], to = STAGES[j.stage - 1];
+      j.stage -= 1;
+      j.log.push(`Stage put back from ${from} to ${to} by ${byOwner}`);
+      saveJobRecord(j);
+      return { job: j, from, to };
+    },
+
+    /* What stepping back from here would undo, so it can be said out
+       loud before it happens rather than discovered afterwards. */
+    stepBackWarning(j) {
+      if (j.stage === 6 && j.pos.length) {
+        return 'The job orders you have already issued stay as they are — going back here does not unsend them.';
+      }
+      if (j.stage === 2 && j.pricedAt) {
+        return 'Prices stay locked at the rates from when the estimate went out. Re-price it if they need to move.';
+      }
+      if (j.stage === 6 || j.stage === 7) {
+        return 'Contractor replies and sign-off tickings are kept.';
+      }
+      return '';
+    },
+
+    /* ---- editing a job after it exists ----------------------------
+       Everything here was write-once until now, which meant a typo in
+       an address or a customer moving their date could only be fixed by
+       deleting the job and entering it again. */
+    updateJobDetails(id, fields, byOwner) {
+      const j = getJob(id);
+      if (!j) return { error: 'That job no longer exists.' };
+      if (!String(fields.address || '').trim()) return { error: 'A job needs an address.' };
+      if (!fields.moveDate) return { error: 'A job needs a move-out date.' };
+
+      const changed = [];
+      const set = (key, label, value) => {
+        const was = j.cust[key] == null ? '' : String(j.cust[key]);
+        const now = value == null ? '' : String(value);
+        if (was === now) return;
+        changed.push(`${label} ${was || 'blank'} → ${now || 'blank'}`);
+        j.cust[key] = key === 'people' ? Number(value) || 0 : value;
+      };
+      set('address', 'address', String(fields.address).trim());
+      set('ref', 'reference', String(fields.ref || '').trim() || '—');
+      set('people', 'people', Number(fields.people) || 0);
+      set('special', 'what they told us', String(fields.special || '').trim());
+
+      const dateMoved = j.cust.moveDate !== fields.moveDate;
+      const oldDate = j.cust.moveDate;
+      if (dateMoved) {
+        changed.push(`job date ${oldDate || 'unset'} → ${fields.moveDate}`);
+        j.cust.moveDate = fields.moveDate;
+      }
+
+      if (!changed.length) return { job: j, changed: [], toldContractors: [] };
+      j.log.push(`Details changed by ${byOwner}: ${changed.join('; ')}`);
+
+      /* A date change is not just a label: it moves the payment dates,
+         and any contractor already holding an order is holding the old
+         one. The panel can't tell them, so it says who needs telling. */
+      const toldContractors = dateMoved
+        ? livePos(j).filter(p => p.status === 'awaiting' || p.status === 'accepted')
+            .map(p => ({ no: p.no, name: getContractor(p.contractorId)?.name || 'Contractor removed' }))
+        : [];
+      if (toldContractors.length) {
+        j.log.push(`Job orders ${toldContractors.map(c => c.no).join(', ')} still show ${oldDate} — contractors need telling`);
+      }
+      saveJobRecord(j);
+      return { job: j, changed, dateMoved, oldDate, toldContractors };
+    },
+
+    /* ---- prices ---------------------------------------------------
+       lineItem is how the UI should look up a priced line: it returns
+       the job's own frozen copy once one exists, and the live rate card
+       before that. Reading the rate card directly would make a finished
+       job's figures change whenever a contractor puts their prices up. */
+    lineItem,
+
+    /* Deliberate re-pricing: the contractor's price genuinely changed
+       before the customer accepted, so take a fresh copy. */
+    repriceJob(id, byOwner) {
+      const j = getJob(id);
+      if (!j) return null;
+      const before = jobCost(j);
+      freezeJob(j);
+      const after = jobCost(j);
+      j.log.push(`Re-priced at today's rates by ${byOwner}: ${fmtMoney(customerPrice(before))} → ${fmtMoney(customerPrice(after))}`);
+      saveJobRecord(j);
+      return { job: j, before: customerPrice(before), after: customerPrice(after) };
+    },
 
     /* ---- standby ------------------------------------------------- */
     listStandby: () => jobs.filter(j => j.status === 'standby'),
@@ -701,8 +892,9 @@ const Data = (() => {
 
     sendEstimate(id, byOwner) {
       const j = getJob(id);
+      freezeJob(j);
       j.stage = 2;
-      j.log.push(`Estimate sent to the customer by ${byOwner}`);
+      j.log.push(`Estimate sent to the customer by ${byOwner} — prices locked at today's rates`);
       saveJobRecord(j);
       return j;
     },
@@ -789,6 +981,9 @@ const Data = (() => {
       });
       s.contractorId = newContractorId;
       s.lines = lines;
+      // The new contractor's items are new ids, so they need their own
+      // frozen rates; the old ones are no longer referenced.
+      if (j.pricedAt) freezeJob(j, true);
       if (old.status === 'silent') old.wasSilent = true;
       old.status = 'replaced';
       const fresh = { no: nextPoNoFor(j), key: old.key, contractorId: newContractorId,
@@ -800,6 +995,31 @@ const Data = (() => {
         (matched ? 'Items were matched by name, so check the price.' : 'None of the items matched, so re-price this section.'));
       saveJobRecord(j);
       return { po: fresh, matched };
+    },
+
+    /* Same contractor, corrected order. You could only replace an order
+       with a different contractor before, so a wrong quantity or a
+       changed date left the contractor holding a sheet you couldn't
+       correct. The old number is superseded rather than edited, so
+       there is never a question about which sheet is the live one. */
+    reissuePurchaseOrder(jobId, poNo, what, byOwner) {
+      const j = getJob(jobId), old = findPo(j, poNo);
+      if (!old) return { error: 'That job order no longer exists.' };
+      if (old.status === 'replaced') return { error: 'That order has already been superseded.' };
+      if (old.status === 'done') return { error: 'That one is already marked done.' };
+      const c = getContractor(old.contractorId);
+      if (old.status === 'silent') old.wasSilent = true;
+      old.status = 'replaced';
+      old.reason = '';          // not their fault, so no strike and no decline
+      const fresh = { no: nextPoNoFor(j), key: old.key, contractorId: old.contractorId,
+        status: 'awaiting', issued: isoDate(new Date()),
+        due: isoDate(addBusinessDays(new Date(), 2)), photos: 0,
+        corrects: old.no };
+      j.pos.push(fresh);
+      j.log.push(`${fresh.no} re-issued to ${c?.name || 'contractor'}, correcting ${old.no}` +
+        (what ? `: ${what}` : '') + `, by ${byOwner}`);
+      saveJobRecord(j);
+      return { po: fresh, replaced: old.no, contractor: c?.name || 'the contractor' };
     },
 
     signOffJob(id, byOwner) {

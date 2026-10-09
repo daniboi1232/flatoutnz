@@ -199,6 +199,62 @@ Worth knowing: a spreadsheet flattens things, so a job's individual line
 items become one summary column. It is for reading, records and your
 accountant — **not a file you could restore the panel from**.
 
+## Changing things after the fact
+
+**Edit details** on a job header changes the address, date, reference,
+number of people and what they told you. The customer's name, phone and
+email are not here — those live on their customer record, because
+changing them should change every job of theirs.
+
+**Moving the date** moves the payment dates with it. If a contractor is
+already holding a job order, the panel says who, both before you save
+and in the job's history. It cannot tell them; you have to.
+
+**Put it back to <stage>** under the next action undoes a stage ticked
+by mistake. Nothing else is undone and the correction is written into
+the history.
+
+**Something changed — re-issue this order** on a job order supersedes it
+and sends a fresh number to the same contractor, with their reply window
+started again. No strike: this is your correction, not their silence.
+Change the items or the date first, then re-issue. To move the work to a
+*different* contractor, use the replace flow on a declined order instead.
+
+## Prices stop moving once you quote
+
+A job is priced from the contractor's rate card, and rate cards change.
+So **sending the estimate takes a copy of every rate the job uses**, and
+from then on that job is priced from its own copy.
+
+Without this, putting GECS's hourly rate up would quietly rewrite what
+every past job says it cost — including ones already quoted, accepted
+and paid.
+
+While a job is still being priced it follows the live rate card, which
+is what you want. After it is locked the owner breakdown says
+"Prices locked" with the date, and there is a **Re-price at today's
+rates** link for when a contractor's price genuinely changes before the
+customer accepts. That one tells you what the customer was already
+quoted, because if it moves you need to tell them.
+
+## Today
+
+A tab for the morning: what is on today and tomorrow, which contractors
+are meant to be there, and whether they have actually confirmed. Phone
+numbers are tap-to-call. Jobs whose orders haven't gone out are flagged
+in red.
+
+## Seeing each other's work
+
+The panel re-checks the server every 45 seconds and when you switch back
+to the tab, so Rocky's changes turn up without a reload.
+
+It never redraws while you are in the middle of something: not with a
+form open, not while you are typing, and not while one of your own saves
+is still going. If the job you have open is the one that changed, a bar
+appears at the top saying so and you tap it when you are ready, rather
+than the page changing under you.
+
 ## How to remove the whole thing
 
 1. Delete the `panel/` folder.
@@ -274,9 +330,10 @@ your change is safe in the browser but hasn't reached the server; it
 keeps retrying and goes back to "Saved" when it gets through. **Don't
 close the tab while it says that.**
 
-**You won't see Rocky's changes until you reload**, and he won't see
-yours. At two people and a few jobs a week that is fine. If it starts
-causing confusion the fix is a periodic refresh.
+**Rocky's changes arrive on their own** — see "Seeing each other's
+work" above. You still each hold your own copy between refreshes, so a
+change you both make to the same job in the same minute is last-write-
+wins on that record.
 
 **Photos are downscaled in the browser before upload** — to 1600px on
 the long edge — so a 4MB phone photo arrives as a few hundred KB. They

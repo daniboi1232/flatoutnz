@@ -235,6 +235,7 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
       <button data-view="jobs">Jobs</button>
       <button data-view="calendar">Calendar</button>
       <button data-view="walk">Walk-through</button>
+      <button data-view="today">Today</button>
       <button data-view="customers">Customers</button>
       <button data-view="contractors">Contractors</button>
     </nav>
@@ -267,7 +268,7 @@ const S = Data.SERVICES, KEYS = Data.SERVICE_KEYS, OWNERS = Data.OWNERS, STAGES 
 /* ---------- view state (not data) -------------------------------- */
 let view = 'home', openJob = null, draft = null;
 const ui = { jf: { q: '', stage: 'all', who: 'all', suburb: 'all', status: 'active' }, addC: false, editC: null,
-  statusFor: null, retrieveFor: null, confirmDelete: null, confirmDelC: null, calWeek: false,
+  statusFor: null, retrieveFor: null, repriceFor: null, editJob: null, stepBackFor: null, poFixFor: null, confirmDelete: null, confirmDelC: null, calWeek: false,
   paste: { kind: 'tenant', parsed: null, dup: null, match: null, useMatch: true },
   addItemFor: null, bookFor: null, tpl: {}, editTpl: null, signoff: {},
   cust: { q: '', open: null, edit: null, add: false, mergeFrom: null, migrate: null },
@@ -282,6 +283,7 @@ function toast(m) {
 Data.onAlert(a => { if (a.to.includes(owner())) toast('Phone alert: ' + a.text); });
 
 function go(v, id) {
+  clearBanner();
   view = v;
   if (id !== undefined) openJob = id;
   document.querySelectorAll('#tabs button').forEach(b => {
@@ -323,7 +325,7 @@ const suggested = j => j.stage === 0 ? 'visit'
   : j.stage <= 4 ? 'payment'
   : j.stage === 6 ? 'daybefore'
   : j.stage === 7 ? 'review' : 'estimate';
-const lineText = (s, iid, q) => { const i = Data.getRateItem(s.contractorId, iid); return i ? `${q} × ${i.name}` : ''; };
+const lineText = (s, iid, q) => { const i = Data.lineItem(s, iid); return i ? `${q} × ${i.name}` : ''; };
 
 /* ---------- home -------------------------------------------------- */
 function vHome() {
@@ -484,7 +486,7 @@ function vJob(j) {
   <div><button class="btn sm ghost" data-act="back">← All jobs</button></div>
   ${j.status === 'standby' ? standbyBanner(j)
     : j.status !== 'active' ? `<p class="note">This job is marked ${esc(Data.JOB_STATUS[j.status].toLowerCase())}${j.statusReason ? ': ' + esc(j.statusReason) : ''}. It is out of your pipeline until you reopen it.</p>` : ''}
-  <div class="card-head" style="margin:0"><div><h2>${esc(j.cust.name)}</h2><p class="muted small" style="margin-top:4px">${j.id} · ${esc(j.cust.address)} · job ${fd(j.cust.moveDate)} · prepared by ${esc(j.preparedBy)}</p></div><div class="chips"><label class="small muted" for="own-d-${j.id}">Owner</label><select class="select inline" id="own-d-${j.id}" data-act="setOwner" data-id="${j.id}">${OWNERS.map(o => `<option value="${o}" ${o === j.owner ? 'selected' : ''}>${o}</option>`).join('')}</select>${stagePill(j.stage, j)}</div></div>
+  <div class="card-head" style="margin:0"><div><h2>${esc(j.cust.name)}</h2><p class="muted small" style="margin-top:4px">${j.id} · ${esc(j.cust.address)} · job ${fd(j.cust.moveDate)} · prepared by ${esc(j.preparedBy)} · <button class="linkbtn" data-act="editJob" data-id="${j.id}">Edit details</button></p></div><div class="chips"><label class="small muted" for="own-d-${j.id}">Owner</label><select class="select inline" id="own-d-${j.id}" data-act="setOwner" data-id="${j.id}">${OWNERS.map(o => `<option value="${o}" ${o === j.owner ? 'selected' : ''}>${o}</option>`).join('')}</select>${stagePill(j.stage, j)}</div></div>
   <section class="card"><div class="steps">${STAGES.map((s, i) => `<div class="step ${i < j.stage ? 'done' : i === j.stage ? 'now' : ''}">${s}</div>`).join('')}</div>
     ${j.status === 'active' ? `<div class="next"><div style="flex:1 1 220px">
       <p><b>${na.waiting}</b></p>
@@ -493,20 +495,33 @@ function vJob(j) {
     <div class="chips">
       ${na.label ? `<button class="btn" data-act="${na.act}" data-id="${j.id}">${na.label}</button>` : ''}
       ${na.second ? `<button class="btn ghost" data-act="${na.second.act}" data-id="${j.id}">${na.second.label}</button>` : ''}
-    </div></div>` : `<div class="next"><div style="flex:1 1 220px">
+      ${j.stage > 0 ? `<button class="linkbtn" data-act="stepBack" data-id="${j.id}">Put it back to ${esc(Data.STAGES[j.stage - 1])}</button>` : ''}
+    </div></div>
+    ${ui.stepBackFor === j.id ? `<div class="formbox">
+      <p class="small"><b>Put ${j.id} back from ${esc(Data.STAGES[j.stage])} to ${esc(Data.STAGES[j.stage - 1])}?</b></p>
+      <p class="small muted">Use this when a stage was ticked by mistake. Nothing else is undone and the change is written into the job's history.${Data.stepBackWarning(j) ? ' ' + esc(Data.stepBackWarning(j)) : ''}</p>
+      <div class="chips"><button class="btn sm" data-act="reallyStepBack" data-id="${j.id}">Put it back</button><button class="btn sm ghost" data-act="cancelStepBack">Leave it</button></div>
+    </div>` : ''}` : `<div class="next"><div style="flex:1 1 220px">
       <p><b>${j.status === 'standby' ? 'Parked. Nothing to do unless they get in touch.' : `This job is ${esc(Data.JOB_STATUS[j.status].toLowerCase())}.`}</b></p>
       <p class="small muted" style="margin-top:6px">The stages above are where it got to. ${j.status === 'standby' ? 'Bring it back' : 'Reopen it'} at the bottom of the page to carry on.</p>
     </div></div>`}</section>
   ${allDone ? signoffCard(j) : ''}
   ${customerCard(j)}
+  ${ui.editJob === j.id ? jobDetailsForm(j) : ''}
   <div class="grid2">
-    <section class="card"><div class="card-head"><h3>Owner breakdown</h3><span class="eyebrow">Not shown to customer</span></div>
+    <section class="card"><div class="card-head"><h3>Owner breakdown</h3><span class="eyebrow">${j.pricedAt ? 'Prices locked ' + fd(j.pricedAt) : 'Not shown to customer'}</span></div>
       <div class="tablewrap"><table><thead><tr><th>Section</th><th>Contractor</th><th class="num">Cost</th></tr></thead><tbody>
       ${Object.entries(j.sections).map(([k, s]) => `<tr><td><b>${S[k]}</b><br><span class="small muted">${Object.entries(s.lines).map(([iid, q]) => lineText(s, iid, q)).filter(Boolean).join(', ')}</span></td><td>${esc(cName(s.contractorId))}</td><td class="num">${money(Data.sectionCost(s))}</td></tr>`).join('')}
       <tr><td colspan="2">Contractor cost</td><td class="num">${money(cost)}</td></tr>
       <tr><td colspan="2">Margin (15%)</td><td class="num">${money(total - cost)}</td></tr>
       <tr class="total"><td colspan="2">Customer price</td><td class="num">${money(total)}</td></tr></tbody></table></div>
-      <p class="small muted" style="margin-top:10px">${t.note}.</p></section>
+      <p class="small muted" style="margin-top:10px">${t.note}.</p>
+      ${j.pricedAt ? `<p class="small muted">These figures were fixed when the estimate went out, so changing a contractor's rate card now won't move them.${j.stage < 4 ? ' <button class="linkbtn" data-act="reprice" data-id="' + j.id + '">Re-price at today\u2019s rates</button>' : ''}</p>` : ''}
+      ${ui.repriceFor === j.id ? `<div class="formbox">
+        <p class="small"><b>Re-price ${esc(j.cust.name)} at today's rates?</b></p>
+        <p class="small muted">Only do this if a contractor's price has genuinely changed since you quoted. The customer has already been told ${money(total)}, so if this moves you need to tell them.</p>
+        <div class="chips"><button class="btn sm" data-act="reallyReprice" data-id="${j.id}">Re-price it</button><button class="btn sm ghost" data-act="cancelReprice">Leave it</button></div>
+      </div>` : ''}</section>
     ${priced ? estimateCard(j) : `<section class="card"><div class="card-head"><h3>Customer estimate</h3><span class="eyebrow">Nothing priced yet</span></div>
       <p class="muted small">Once you have walked through the property and added items, the estimate the customer sees appears here.</p></section>`}
   </div>
@@ -559,7 +574,7 @@ function posCard(j) {
     const others = Data.contractorsCovering(p.key).filter(o => o.id !== p.contractorId);
     const overdue = p.status === 'awaiting' && Data.parseDate(p.due) < new Date(new Date().toDateString());
     const sub = p.status === 'declined' ? 'They said no: ' + esc(p.reason || 'no reason given')
-      : p.status === 'replaced' ? 'Replaced by a later order'
+      : p.status === 'replaced' ? 'Superseded by a later order'
       : p.status === 'silent' ? 'No reply. Reply was due ' + fd(p.due)
       : p.status === 'done' ? `Marked done · ${p.photos} photo${p.photos === 1 ? '' : 's'}`
       : p.status === 'accepted' ? 'Accepted · booked for ' + fd(j.cust.moveDate)
@@ -577,7 +592,15 @@ function posCard(j) {
       <button class="btn sm ghost" data-act="poDecline" data-id="${j.id}" data-po="${p.no}">They declined</button>
       <button class="btn sm ghost" data-act="poSilent" data-id="${j.id}" data-po="${p.no}">No reply</button>
     </div>` : ''}
-    ${p.status === 'accepted' ? `<button class="btn sm ghost" data-act="poDone" data-id="${j.id}" data-po="${p.no}">They've finished it</button>` : ''}
+    ${p.status === 'accepted' ? `<div class="chips"><button class="btn sm ghost" data-act="poDone" data-id="${j.id}" data-po="${p.no}">They've finished it</button></div>` : ''}
+    ${p.status === 'awaiting' || p.status === 'accepted' ? `<button class="linkbtn" data-act="poFix" data-id="${j.id}" data-po="${p.no}">Something changed \u2014 re-issue this order</button>` : ''}
+    ${ui.poFixFor === p.no ? `<form class="formbox" data-form="poFix" data-id="${j.id}" data-po="${p.no}">
+      <p class="small"><b>Re-issue ${p.no} to ${esc(cName(p.contractorId))}</b></p>
+      <p class="small muted">Change the items or the date first ${p.status === 'accepted' ? '(Edit the walk-through, or Edit details for the date), ' : '(Edit the walk-through, or Edit details for the date), '}then re-issue. ${p.no} is marked superseded so there is no doubt which sheet is live, a fresh number goes out, and their reply window starts again. No strike against them \u2014 this is your correction, not their silence.</p>
+      <div class="field" style="margin-top:10px"><label for="pf-${p.no}">What changed? <span class="muted" style="font-weight:400">(goes in the job history, not to them)</span></label>
+        <input class="input" id="pf-${p.no}" name="what" placeholder="Date moved to the 14th"></div>
+      <div class="chips"><button class="btn sm" type="submit">Re-issue it</button><button class="btn sm ghost" type="button" data-act="cancelPoFix">Cancel</button></div>
+    </form>` : ''}
     ${(p.status === 'declined' || p.status === 'silent')
       ? (others.length ? `<div class="chips"><select class="select inline" id="bk-${p.no}" aria-label="Who to send it to instead">${others.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select><button class="btn sm" data-act="backup" data-id="${j.id}" data-po="${p.no}">Send to them instead</button></div>`
         : '<span class="small muted">Nobody else covers this. Add a contractor under Contractors.</span>') : ''}</div>`;
@@ -592,7 +615,7 @@ function jobOrderText(j, p) {
   const c = Data.getContractor(p.contractorId);
   const sec = j.sections[p.key];
   const items = Object.entries(sec.lines)
-    .map(([iid, q]) => { const i = Data.getRateItem(sec.contractorId, iid); return i ? `  - ${i.name} x ${q}${i.type === 'hourly' ? ' hrs' : ''}` : ''; })
+    .map(([iid, q]) => { const i = Data.lineItem(sec, iid); return i ? `  - ${i.name} x ${q}${i.type === 'hourly' ? ' hrs' : ''}` : ''; })
     .filter(Boolean).join('\n');
   return [
     `FlatOut job order ${p.no}`,
@@ -656,6 +679,25 @@ function standbyBanner(j) {
       : ' There is no move-out date on it, so it will sit here until you deal with it.'}</div>`;
 }
 
+/* The job's own details, as opposed to the customer's. Address and
+   date belong to the job because a student has a different flat every
+   year; name, phone and email belong to the customer record. */
+function jobDetailsForm(j) {
+  const holding = Data.livePos(j).filter(p => p.status === 'awaiting' || p.status === 'accepted');
+  return `<section class="card"><div class="card-head"><h3>Edit ${j.id}</h3><span class="eyebrow">Name, phone and email live on their customer record</span></div>
+  <form data-form="jobdetails" data-id="${j.id}">
+    <div class="form-grid">
+      <div class="field"><label for="ej-date-${j.id}">Move-out date</label><input class="input" id="ej-date-${j.id}" name="moveDate" type="date" required value="${esc(j.cust.moveDate)}"></div>
+      <div class="field"><label for="ej-ref-${j.id}">Their reference</label><input class="input" id="ej-ref-${j.id}" name="ref" value="${j.cust.ref === '—' ? '' : esc(j.cust.ref)}" placeholder="FO-261005-1234"></div>
+      <div class="field"><label for="ej-people-${j.id}">People in the flat</label><input class="input" id="ej-people-${j.id}" name="people" type="number" min="0" max="12" value="${j.cust.people || 0}"></div>
+    </div>
+    <div class="field"><label for="ej-addr-${j.id}">Address</label><input class="input" id="ej-addr-${j.id}" name="address" required value="${esc(j.cust.address)}"></div>
+    <div class="field"><label for="ej-special-${j.id}">What they told us</label><textarea class="textarea" id="ej-special-${j.id}" name="special">${esc(j.cust.special || '')}</textarea></div>
+    ${holding.length ? `<p class="note">Moving the date changes when payment is due. ${holding.length === 1 ? 'One contractor is' : holding.length + ' contractors are'} holding a job order with the old date on it — ${esc(holding.map(p => cName(p.contractorId)).join(', '))} — and the panel can't tell them. You'll need to.</p>` : ''}
+    <div class="chips" style="margin-top:12px"><button class="btn" type="submit">Save changes</button><button class="btn ghost" type="button" data-act="cancelEditJob">Cancel</button></div>
+  </form></section>`;
+}
+
 function customerCard(j) {
   const c = j.cust, rec = j.custId ? Data.getCustomer(j.custId) : null;
   const hist = rec ? Data.customerHistory(rec.id, j.id) : { count: 0, previous: [] };
@@ -703,7 +745,7 @@ function estimateCard(j) {
   return `<section class="estimate" aria-label="Customer estimate preview"><div class="est-head"><div class="logo"><img src="/images/logo-icon.png" alt=""><div><b>FlatOut</b><span>Moving out? We'll sort it.</span></div></div><div class="small" style="text-align:right"><b>Estimate · ${j.id}</b><br><span class="muted">${fd(Data.today())}</span></div></div>
   <div class="est-body"><div class="eyebrow">What the customer sees</div>
   <div><b>${esc(j.cust.name)}</b><br><span class="small muted">${esc(j.cust.address)} · ${fd(j.cust.moveDate)}</span></div>
-  ${Object.entries(j.sections).map(([k, s]) => `<div><b>${S[k]}</b><ul class="small">${Object.entries(s.lines).map(([iid, q]) => { const i = Data.getRateItem(s.contractorId, iid); return i ? `<li>${esc(i.name)}${q !== 1 ? ` × ${q}${i.type === 'hourly' ? ' hrs' : ''}` : ''}</li>` : ''; }).join('')}</ul></div>`).join('')}
+  ${Object.entries(j.sections).map(([k, s]) => `<div><b>${S[k]}</b><ul class="small">${Object.entries(s.lines).map(([iid, q]) => { const i = Data.lineItem(s, iid); return i ? `<li>${esc(i.name)}${q !== 1 ? ` × ${q}${i.type === 'hourly' ? ' hrs' : ''}` : ''}</li>` : ''; }).join('')}</ul></div>`).join('')}
   <div class="est-total"><span>All-in price</span><b>${money(total)}</b></div>
   <p class="small muted">${t.kind}: ${money(t.amount)} due ${fd(t.due)}${t.balance ? `, balance ${money(t.balance)} due ${fd(t.balanceDue)}` : ''}. This is an estimate. The formal quote follows once contractors confirm.</p>
   <p class="small">Prepared by ${esc(j.preparedBy)}${title} · FlatOut NZ</p></div></section>`;
@@ -984,6 +1026,35 @@ function mergeForm(c) {
   </form>`;
 }
 
+/* The morning screen. Deliberately narrow and large-text: this is the
+   one you read on a phone, standing up, before you drive anywhere. */
+function dayBlock(title, list, isToday) {
+  if (!list.length) return `<section class="card"><h3>${title}</h3><p class="muted" style="margin-top:10px">Nothing on.</p></section>`;
+  return `<section class="card"><div class="card-head"><h3>${title}</h3><span class="eyebrow">${list.length} job${list.length === 1 ? '' : 's'}</span></div>
+  <div class="rows" style="margin-top:12px">${list.map(({ job: j, crews, unconfirmed, notReady }) => `<div class="row">
+    <div class="main">
+      <b>${esc(j.cust.address)}</b> <span class="muted small">${j.id}</span><br>
+      <span class="small">${esc(j.cust.name)}${j.cust.phone ? ' · <a href="tel:' + esc(j.cust.phone.replace(/\s/g, '')) + '">' + esc(j.cust.phone) + '</a>' : ''}</span><br>
+      ${crews.length ? crews.map(c => `<span class="small muted">${esc(c.section)}: ${esc(c.name)}${c.phone ? ' · <a href="tel:' + esc(c.phone.replace(/\s/g, '')) + '">' + esc(c.phone) + '</a>' : ' · no number on file'}${c.status === 'accepted' ? '' : c.status === 'done' ? ' · done' : ' · <b>not confirmed</b>'}</span>`).join('<br>')
+        : '<span class="small muted">No job orders out.</span>'}
+      ${notReady ? `<br><span class="small" style="color:var(--red)">Still at ${esc(Data.STAGES[j.stage])} — orders have not gone out.</span>`
+        : unconfirmed ? `<br><span class="small" style="color:var(--red)">${unconfirmed} contractor${unconfirmed === 1 ? ' has' : 's have'} not confirmed.</span>` : ''}
+    </div>
+    <button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button>
+  </div>`).join('')}</div></section>`;
+}
+
+function vToday() {
+  const d = Data.daySheet(owner(), Data.getAlertSettings(owner())?.mineOnly);
+  const n = d.today.length, m = d.tomorrow.length;
+  return `<div class="view">
+  <div><h2>Today</h2><p class="muted small" style="margin-top:4px">${fd(Data.today())} · ${n === 0 ? 'nothing on today' : `${n} job${n === 1 ? '' : 's'} on`}${m ? `, ${m} tomorrow` : ''}</p></div>
+  ${dayBlock('On today', d.today, true)}
+  ${dayBlock('Tomorrow', d.tomorrow, false)}
+  <p class="small muted">Numbers are tap-to-call on a phone. Contractors shown as not confirmed have had their order but haven't said yes.</p>
+</div>`;
+}
+
 function vCustomers() {
   const all = Data.listCustomers();
   const list = ui.cust.q.trim() ? all.filter(c => [c.name, c.phone, c.email].join(' ').toLowerCase().includes(ui.cust.q.trim().toLowerCase())) : all;
@@ -1090,7 +1161,7 @@ function render() {
   const app = document.getElementById('app');
   try {
     app.innerHTML =
-      ({ home: vHome, jobs: vJobs, calendar: vCalendar, walk: vWalk, customers: vCustomers, contractors: vContractors, alerts: vAlerts })[view]();
+      ({ home: vHome, jobs: vJobs, calendar: vCalendar, walk: vWalk, today: vToday, customers: vCustomers, contractors: vContractors, alerts: vAlerts })[view]();
   } catch (err) {
     console.error(err);
     app.innerHTML = `<section class="card"><h2>That didn't draw</h2>
@@ -1133,6 +1204,25 @@ document.addEventListener('click', e => {
     case 'nav': openJob = null; go(d.v); break;
     case 'open': go('jobs', d.id); break;
     case 'goHome': openJob = null; go('home'); break;
+    case 'poFix': ui.poFixFor = d.po; render(); focus('pf-' + d.po); break;
+    case 'cancelPoFix': ui.poFixFor = null; render(); break;
+    case 'stepBack': ui.stepBackFor = d.id; render(); break;
+    case 'cancelStepBack': ui.stepBackFor = null; render(); break;
+    case 'reallyStepBack': {
+      const r = Data.stepBack(d.id, owner());
+      ui.stepBackFor = null;
+      if (r.error) { toast(r.error); render(); break; }
+      toast(`Back to ${r.to}`);
+      render(); break; }
+    case 'editJob': ui.editJob = d.id; render(); focus('ej-date-' + d.id); break;
+    case 'cancelEditJob': ui.editJob = null; render(); break;
+    case 'reprice': ui.repriceFor = d.id; render(); break;
+    case 'cancelReprice': ui.repriceFor = null; render(); break;
+    case 'reallyReprice': {
+      const r = Data.repriceJob(d.id, owner());
+      ui.repriceFor = null;
+      toast(r.before === r.after ? 'No change — rates are the same' : `Re-priced: ${money(r.before)} → ${money(r.after)}`);
+      render(); break; }
     case 'showStandby': ui.jf.status = 'standby'; openJob = null; go('jobs'); break;
     case 'markStandby': ui.statusFor = { id: d.id, status: 'standby' }; ui.retrieveFor = null; render(); focus('status-reason'); break;
     case 'retrieve': ui.retrieveFor = d.id; ui.statusFor = null; render(); focus('rt-' + d.id); break;
@@ -1356,6 +1446,28 @@ document.addEventListener('submit', e => {
     render();
     return;
   }
+  if (kind === 'poFix') {
+    const res = Data.reissuePurchaseOrder(f.dataset.id, f.dataset.po, form.get('what'), owner());
+    ui.poFixFor = null;
+    if (res.error) { toast(res.error); render(); return; }
+    toast(`${res.po.no} replaces ${res.replaced} — send it to ${res.contractor}`);
+    render();
+    return;
+  }
+  if (kind === 'jobdetails') {
+    const res = Data.updateJobDetails(f.dataset.id, {
+      moveDate: form.get('moveDate'), address: form.get('address'),
+      ref: form.get('ref'), people: form.get('people'), special: form.get('special')
+    }, owner());
+    if (res.error) { toast(res.error); return; }
+    ui.editJob = null;
+    toast(!res.changed.length ? 'Nothing changed'
+      : res.toldContractors.length
+        ? `Saved. Tell ${res.toldContractors.map(c => c.name).join(' and ')} about the new date.`
+        : 'Saved');
+    render();
+    return;
+  }
   if (kind === 'retrieve') {
     const res = Data.retrieveJob(f.dataset.id, form.get('moveDate'), owner());
     if (res.error) { toast(res.error); return; }
@@ -1512,8 +1624,64 @@ document.getElementById('app').innerHTML =
   '<div id="boot"><section class="card"><p class="muted">Loading…</p></section></div>';
 
 Data.init()
-  .then(() => render())
+  .then(() => { render(); startPolling(); })
   .catch(err => bootError(err.message || 'Something went wrong loading the panel.'));
+
+/* ---------- picking up the other one's changes ---------------------
+   You and Rocky each work from a copy loaded at boot. Without this,
+   neither of you sees the other until a reload, which is how two people
+   end up ringing the same contractor.
+
+   It re-reads every 45 seconds, and only redraws when something
+   actually moved. It never redraws out from under you: not while a
+   form is open, not while you are typing, and not while one of your
+   own saves is still in flight. If the thing you are looking at is what
+   changed, it tells you rather than swapping it silently. */
+function busy() {
+  const a = document.activeElement;
+  if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== 'owner') return true;
+  if (document.querySelector('.formbox form, form[data-form="newjob"], form[data-form="cust"]')) return true;
+  if (draft) return true;                 // mid walk-through
+  return false;
+}
+
+let pollTimer = null;
+function startPolling() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(poll, 45000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+}
+
+async function poll() {
+  if (document.hidden || busy()) return;
+  const res = await Data.refresh();
+  if (!res || res.error || res.skipped || !res.any) return;
+  // If the job on screen is the one that moved, say so instead of
+  // redrawing mid-read.
+  if (openJob && res.changed.includes(openJob)) {
+    banner(`${openJob} was just changed by someone else.`, () => { clearBanner(); render(); });
+    return;
+  }
+  render();
+  if (res.added.length) toast(`${res.added.length} new job${res.added.length === 1 ? '' : 's'} from ${Data.OWNERS.filter(o => o !== owner())[0].split(' ')[0]}`);
+}
+
+function banner(text, onClick) {
+  let el = document.getElementById('livebanner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'livebanner';
+    el.className = 'proto';
+    el.style.cssText = 'background:var(--orange-wash,#FBEFE4);cursor:pointer;font-weight:600';
+    document.getElementById('app').before(el);
+  }
+  el.textContent = text + ' Tap to see it.';
+  el.onclick = onClick;
+}
+function clearBanner() {
+  const el = document.getElementById('livebanner');
+  if (el) el.remove();
+}
 })();
 </script>
 </body>
