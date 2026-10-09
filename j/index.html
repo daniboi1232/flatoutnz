@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<title>Your FlatOut job</title>
+<link rel="icon" href="/favicon-32.png" sizes="32x32">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Karla:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --navy-deep:#14283A; --navy:#1D3A50; --blue:#285D78; --teal:#3D8C82;
+  --orange:#D97A35; --cream:#F4F0E8; --off-white:#F7F8F6; --white:#fff;
+  --red:#C24444; --ok-ink:#2C6E66; --warn-ink:#9A5420;
+  --line:#E2E7EA; --ink-soft:#3B4A58; --muted:#5A6B78;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--off-white);color:var(--navy-deep);
+  font-family:Karla,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.5}
+.ser{font-family:Fraunces,Georgia,"Times New Roman",serif}
+a{color:var(--blue)}
+a:hover{color:var(--navy-deep)}
+.wrap{max-width:560px;margin:0 auto}
+header{background:var(--navy-deep);color:#fff;padding:20px 20px 24px}
+header .brand{display:flex;align-items:center;gap:10px}
+header .brand img{width:38px;height:38px;object-fit:contain}
+header .brand b{font-size:17px;font-weight:600;line-height:1.1;display:block}
+header .brand span{font-size:11px;color:#9FB0BD}
+header .eyebrow{margin-top:18px;font-size:11px;letter-spacing:1.4px;color:#9FC3C0;font-weight:700}
+header h1{font-size:23px;font-weight:600;margin:5px 0 0;line-height:1.25}
+header .sub{font-size:13px;color:#CFD9E0;margin-top:7px;line-height:1.5}
+main{padding:18px 20px 40px}
+.card{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:12px}
+.card h2{font-size:11px;letter-spacing:1.3px;color:var(--muted);font-weight:700;margin:0 0 12px;
+  font-family:Karla,system-ui,sans-serif}
+.big{font-size:38px;font-weight:600;margin:4px 0 0;line-height:1}
+.row{display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:4px 0}
+.muted{color:var(--muted)}
+.soft{color:var(--ink-soft)}
+.small{font-size:12.5px;line-height:1.55}
+.tiny{font-size:11px;line-height:1.6;color:var(--muted)}
+.hr{height:1px;background:#EDF0F2;margin:13px 0}
+.btn{display:block;width:100%;text-align:center;border-radius:10px;padding:16px;font-size:16px;
+  font-weight:700;font-family:Karla,system-ui,sans-serif;cursor:pointer;border:1.5px solid transparent;
+  text-decoration:none;min-height:54px}
+.btn.primary{background:var(--orange);color:#fff}
+.btn.primary:hover{background:#C96C2A}
+.btn.ghost{background:var(--white);color:var(--navy-deep);border-color:var(--navy-deep);font-size:14.5px;padding:14px}
+.btn.ghost:hover{background:var(--cream)}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+.pill{display:inline-block;border-radius:999px;padding:3px 10px;font-size:11.5px;font-weight:700}
+.pill.ok{background:#E4EFED;color:var(--ok-ink)}
+.pill.wait{background:#FBF1E8;color:var(--warn-ink)}
+.pill.grey{background:#EDF0F2;color:var(--muted)}
+.note{background:var(--cream);border-left:3px solid var(--orange);padding:13px 15px;border-radius:0 6px 6px 0;
+  font-size:13.5px;line-height:1.55;margin-bottom:12px}
+.note.good{background:#EBF2F1;border-color:var(--ok-ink)}
+.note.bad{background:#FDF4F4;border-color:var(--red)}
+.doc{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #EDF0F2}
+.doc:last-child{border-bottom:0}
+.doc .d-main{flex:1;min-width:0}
+.doc b{font-size:14px}
+.doc.void b{text-decoration:line-through;color:var(--muted)}
+.linkish{background:none;border:0;padding:0;font:inherit;color:var(--blue);text-decoration:underline;cursor:pointer}
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-top:4px}
+.photos img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+input[type=text]{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:14px 16px;
+  font-family:Karla,system-ui,sans-serif;font-size:22px;letter-spacing:8px;text-align:center;
+  color:var(--navy-deep);background:var(--white)}
+input[type=text]:focus{outline:2px solid var(--blue);outline-offset:1px;border-color:var(--blue)}
+label{display:block;font-size:13.5px;margin-bottom:8px;color:var(--ink-soft)}
+footer{text-align:center;padding:0 20px 36px;color:var(--muted);font-size:11px;line-height:1.7}
+.sheet{position:fixed;inset:0;background:rgba(20,40,58,.55);overflow-y:auto;padding:0;z-index:10}
+.sheet .inner{background:#EEF0F1;min-height:100%}
+.sheet .bar{position:sticky;top:0;background:var(--navy-deep);color:#fff;display:flex;
+  justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;z-index:2}
+.sheet .bar b{font-size:14px}
+.sheet .bar button{background:#fff;color:var(--navy-deep);border:0;border-radius:8px;
+  padding:9px 14px;font-family:Karla,system-ui,sans-serif;font-size:13.5px;font-weight:700;cursor:pointer;min-height:38px}
+.sheet .bar .close{background:transparent;color:#fff;font-size:22px;padding:4px 10px;line-height:1}
+.spin{text-align:center;padding:60px 20px;color:var(--muted)}
+@media print{
+  header,footer,.sheet .bar,.noprint{display:none !important}
+  body{background:#fff}
+  .sheet{position:static;background:#fff}
+}
+</style>
+</head>
+<body>
+<div id="app"><div class="spin">Loading…</div></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const money = n => '$' + Number(n || 0).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const plainDate = iso => {
+    if (!iso) return '';
+    const [y, m, d] = String(iso).split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' });
+  };
+  const shortDate = iso => {
+    if (!iso) return '';
+    const [y, m, d] = String(iso).split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+  };
+  const TYPE_LABEL = { estimate: 'Estimate', quote: 'Quote', invoice: 'Invoice', receipt: 'Receipt' };
+
+  /* The token rides in the fragment, after the #, so it is never sent
+     to the server in a request line and never lands in a server log or
+     a Referer header. */
+  const token = (location.hash || '').replace(/^#/, '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+  const app = document.getElementById('app');
+
+  /* The code is remembered on this device so it is typed once, not
+     every time they come back to check. Private browsing or a cleared
+     phone just means typing it again. */
+  const KEY = 'flatout-code-' + token;
+  function rememberedCode() {
+    try { return sessionStorage.getItem(KEY) || localStorage.getItem(KEY) || ''; } catch (e) { return ''; }
+  }
+  function remember(code) {
+    try { localStorage.setItem(KEY, code); } catch (e) { /* fine, they'll retype it */ }
+  }
+  function forget() {
+    try { localStorage.removeItem(KEY); sessionStorage.removeItem(KEY); } catch (e) {}
+  }
+
+  let state = { code: rememberedCode(), data: null, busy: false, error: '', locked: false, openDoc: null };
+
+  async function call(action, extra) {
+    const res = await fetch('/j/api', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(Object.assign({ token, code: state.code, action }, extra || {}))
+    });
+    return res.json().catch(() => ({ error: 'We could not reach FlatOut. Check your connection and try again.' }));
+  }
+
+  async function load() {
+    if (!token) { state.error = 'That link is missing its code. Check the message we sent you.'; return render(); }
+    state.busy = true; render();
+    const d = await call('open');
+    state.busy = false;
+    if (d.ok) { state.data = d; state.error = ''; remember(state.code); }
+    else { state.error = d.error || ''; state.locked = !!d.locked; if (!d.locked) forget(); }
+    render();
+  }
+
+  async function accept() {
+    state.busy = true; state.error = ''; render();
+    const d = await call('accept');
+    state.busy = false;
+    if (d.ok) state.data = d; else state.error = d.error || 'That did not go through. Try again, or text Dan.';
+    render();
+  }
+
+  /* ---------- views ------------------------------------------- */
+  const shell = inner => `<div class="wrap">${inner}</div>`;
+
+  function brandHeader(eyebrow, title, sub) {
+    return `<header><div class="wrap">
+      <div class="brand">
+        <img src="/images/logo-icon.png" alt="">
+        <div><b class="ser">FlatOut</b><span>Moving out? We'll sort it.</span></div>
+      </div>
+      ${eyebrow ? `<div class="eyebrow">${esc(eyebrow)}</div>` : ''}
+      ${title ? `<h1 class="ser">${esc(title)}</h1>` : ''}
+      ${sub ? `<div class="sub">${sub}</div>` : ''}
+    </div></header>`;
+  }
+
+  function codeScreen() {
+    return brandHeader('', 'Your move-out job', 'Enter the 4-digit code we texted you.') +
+      `<main>${shell(`
+      <div class="card">
+        ${state.locked
+          ? `<div class="note bad"><b>Too many wrong codes.</b> Text Dan on <a href="tel:0274086895">027 408 6895</a> and he'll send you a new one.</div>`
+          : state.error ? `<div class="note bad">${esc(state.error)}</div>` : ''}
+        <form id="codeform" ${state.locked ? 'hidden' : ''}>
+          <label for="code">The code from your text message</label>
+          <input type="text" id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="4"
+            pattern="[0-9]{4}" placeholder="0000" value="${esc(state.code)}" aria-label="4-digit code">
+          <button class="btn primary" type="submit" style="margin-top:14px" ${state.busy ? 'disabled' : ''}>
+            ${state.busy ? 'Checking…' : 'Open my job'}</button>
+        </form>
+        <p class="tiny" style="margin:14px 0 0;text-align:center">Didn't get a code? Text Dan on
+          <a href="tel:0274086895">027 408 6895</a>.</p>
+      </div>`)}</main>` + footer();
+  }
+
+  function errorScreen() {
+    return brandHeader('', 'We could not find that', '') +
+      `<main>${shell(`<div class="card"><div class="note bad">${esc(state.error || 'That link does not work.')}</div>
+      <p class="small soft">Check you tapped the whole link from our message. If it still doesn't work, text Dan on
+      <a href="tel:0274086895">027 408 6895</a> and he'll sort it.</p></div>`)}</main>` + footer();
+  }
+
+  function mainScreen() {
+    const d = state.data;
+    const m = d.money;
+    const a = d.accept;
+    const quote = d.documents.filter(x => x.type === 'quote' && x.status !== 'voided').pop();
+
+    return brandHeader(
+      `${esc(d.job.id)} · ${esc(d.job.stageLabel.toUpperCase())}`,
+      `Kia ora ${esc(d.customer.firstName)}`,
+      `${esc(d.job.address)}${d.job.date ? '<br>' + esc(plainDate(d.job.date)) : ''}`) +
+      `<main>${shell(`
+
+      ${a.already ? `<div class="note good"><b>You accepted this quote</b> on ${esc(shortDate(String(a.acceptedOn).slice(0, 10)))}. We'll be in touch with anything you need to do.</div>` : ''}
+      ${a.expired && !a.already ? `<div class="note"><b>This quote has expired.</b> It was valid until ${esc(shortDate(a.validUntil))}. Text Dan on <a href="tel:0274086895">027 408 6895</a> for a fresh one — prices move with our contractors' rates.</div>` : ''}
+      ${state.error ? `<div class="note bad">${esc(state.error)}</div>` : ''}
+
+      ${m.total != null ? `<div class="card">
+        <h2>${m.paid > 0 ? 'YOUR JOB' : 'ALL-IN PRICE'}</h2>
+        <div class="ser big">${esc(money(m.total))}</div>
+        ${m.paid > 0 ? `<div class="hr"></div>
+          <div class="row"><span class="soft">Paid so far</span><b>${esc(money(m.paid))}</b></div>
+          <div class="row"><span class="soft">Still to pay</span><b>${esc(money(m.outstanding))}</b></div>` : ''}
+        <p class="small soft" style="margin:10px 0 0">One figure covering everything.${d.business.gstRegistered ? '' : ' No GST and no booking fee.'}</p>
+      </div>` : ''}
+
+      ${a.possible ? `<button class="btn primary" id="acceptbtn" ${state.busy ? 'disabled' : ''}>
+          ${state.busy ? 'One moment…' : 'Accept this quote'}</button>
+        <p class="tiny" style="text-align:center;margin:9px 0 14px">Accepting confirms you've read our
+          <a href="/terms" target="_blank" rel="noopener">terms</a>, including the cancellation terms.
+          ${a.validUntil ? 'Valid until ' + esc(shortDate(a.validUntil)) + '.' : ''}</p>` : ''}
+
+      <div class="card">
+        <h2>WHERE IT'S UP TO</h2>
+        <div style="font-size:15px;font-weight:700">${esc(d.job.stageLabel)}</div>
+        ${d.crew.length ? `<div class="hr"></div>${d.crew.map(c => `
+          <div class="row" style="align-items:center">
+            <span>${esc(c.service)}${c.name ? ' · <span class="soft">' + esc(c.name) + '</span>' : ''}</span>
+            <span class="pill ${c.done ? 'ok' : c.confirmed ? 'ok' : 'wait'}">${c.done ? 'Done' : c.confirmed ? 'Confirmed' : 'Being confirmed'}</span>
+          </div>`).join('')}
+          <p class="tiny" style="margin:10px 0 0">We'll text you the morning of the job with who's coming and when.</p>`
+        : '<p class="small soft" style="margin:10px 0 0">Nothing booked with our crews yet.</p>'}
+      </div>
+
+      ${d.documents.length ? `<div class="card">
+        <h2>YOUR PAPERWORK</h2>
+        ${d.documents.map((x, i) => `<div class="doc ${x.status === 'voided' ? 'void' : ''}">
+          <div class="d-main">
+            <b>${esc(TYPE_LABEL[x.type] || x.type)} ${esc(x.no)}</b>
+            ${x.status === 'voided' ? ' <span class="pill grey">Cancelled</span>' : ''}
+            <br><span class="small muted">${esc(shortDate(x.issuedOn))}${x.dueDate ? ' · ' + esc(money(x.amountDue)) + ' due ' + esc(shortDate(x.dueDate)) : ''}</span>
+          </div>
+          <button class="btn ghost noprint" style="width:auto;padding:9px 14px;min-height:40px" data-doc="${i}">View</button>
+        </div>`).join('')}
+      </div>` : ''}
+
+      ${d.photos.length ? `<div class="card">
+        <h2>PHOTOS FROM THE JOB</h2>
+        <p class="small soft" style="margin:0 0 10px">Taken by our crews when they finished. Handy for your bond inspection.</p>
+        <div class="photos">${d.photos.map(k => `<img src="/j/api?action=photo&amp;key=${encodeURIComponent(k)}&amp;token=${encodeURIComponent(token)}&amp;code=${encodeURIComponent(state.code)}" alt="Photo from the job" loading="lazy">`).join('')}</div>
+      </div>` : ''}
+
+      <div class="card">
+        <h2>ANYTHING ELSE</h2>
+        <p class="small soft" style="margin:0">Text Dan on <a href="tel:0274086895">027 408 6895</a> or reply to the message we sent you. Plans change when you're moving out — we'd rather know early.</p>
+      </div>
+    `)}</main>` + footer() + (state.openDoc != null ? docSheet(d.documents[state.openDoc]) : '');
+  }
+
+  function docSheet(x) {
+    return `<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="${esc(TYPE_LABEL[x.type] || 'Document')} ${esc(x.no)}">
+      <div class="inner">
+        <div class="bar">
+          <b>${esc(TYPE_LABEL[x.type] || '')} ${esc(x.no)}</b>
+          <span><button id="printdoc">Save as PDF</button>
+          <button class="close" id="closedoc" aria-label="Close">×</button></span>
+        </div>
+        <div id="docbody"></div>
+      </div>
+    </div>`;
+  }
+
+  function footer() {
+    const b = (state.data && state.data.business) || {};
+    return `<footer>${esc(b.name || 'FlatOut NZ')} · ${esc(b.entity || 'A partnership')}${b.nzbn ? ' · NZBN ' + esc(b.nzbn) : ''}<br>
+      ${b.gstRegistered ? 'Registered for GST' : 'Not registered for GST'} ·
+      <a href="/terms">Terms</a>${b.termsVersion ? ' v' + esc(b.termsVersion) : ''} ·
+      <a href="/privacy">Privacy</a></footer>`;
+  }
+
+  function render() {
+    if (!token || (state.error && !state.data && !state.locked && !/code/i.test(state.error))) {
+      app.innerHTML = errorScreen();
+    } else if (!state.data) {
+      app.innerHTML = codeScreen();
+    } else {
+      app.innerHTML = mainScreen();
+    }
+    wire();
+  }
+
+  function wire() {
+    const form = document.getElementById('codeform');
+    if (form) {
+      const input = document.getElementById('code');
+      form.addEventListener('submit', e => {
+        e.preventDefault();
+        state.code = (input.value || '').replace(/\D/g, '').slice(0, 4);
+        if (state.code.length !== 4) { state.error = 'The code is four digits.'; render(); return; }
+        load();
+      });
+      if (!state.busy) setTimeout(() => input && input.focus(), 30);
+    }
+
+    const acc = document.getElementById('acceptbtn');
+    if (acc) acc.addEventListener('click', accept);
+
+    document.querySelectorAll('[data-doc]').forEach(b =>
+      b.addEventListener('click', () => { state.openDoc = Number(b.dataset.doc); render(); }));
+
+    const sheet = document.getElementById('sheet');
+    if (sheet) {
+      /* The frozen HTML is dropped in as-is. It is OUR document, built
+         and stored by the panel, not anything a customer sent us. */
+      const body = document.getElementById('docbody');
+      body.innerHTML = state.data.documents[state.openDoc].html;
+      document.getElementById('closedoc').addEventListener('click', () => { state.openDoc = null; render(); });
+      document.getElementById('printdoc').addEventListener('click', () => window.print());
+      sheet.addEventListener('click', e => { if (e.target === sheet) { state.openDoc = null; render(); } });
+      document.addEventListener('keydown', escClose);
+    } else {
+      document.removeEventListener('keydown', escClose);
+    }
+  }
+  function escClose(e) {
+    if (e.key === 'Escape') { state.openDoc = null; render(); }
+  }
+
+  if (state.code) load(); else render();
+})();
+</script>
+</body>
+</html>

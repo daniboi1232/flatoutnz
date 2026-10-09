@@ -189,6 +189,12 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
 .ev.est{background:var(--white);color:var(--navy-deep);box-shadow:inset 0 0 0 1px var(--line-strong)}
 .ev.visit{background:var(--teal-wash);color:var(--ok-ink)}
 .ev.standby{background:var(--white);color:var(--blue);box-shadow:inset 0 0 0 1px var(--line);opacity:.75;font-style:italic}
+.hrule{height:1px;background:var(--line);margin:18px 0 14px}
+.docview{position:fixed;inset:0;background:rgba(20,40,58,.6);overflow-y:auto;z-index:50}
+.docview .bar{position:sticky;top:0;background:var(--navy-deep);color:#fff;display:flex;
+  justify-content:space-between;align-items:center;gap:12px;padding:12px 18px}
+.docview .bar b{font-size:.95rem}
+.docview .inner{background:#EEF0F1;min-height:100%;padding-bottom:40px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;color:var(--blue);margin-top:12px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 
@@ -238,6 +244,7 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
       <button data-view="today">Today</button>
       <button data-view="customers">Customers</button>
       <button data-view="contractors">Contractors</button>
+      <button data-view="settings">Settings</button>
     </nav>
   </div>
 </header>
@@ -245,6 +252,7 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
 <main id="app"></main>
 <div class="toast" id="toast" hidden></div>
 
+<script src="/panel/docs.js"></script>
 <script src="/panel/data.js"></script>
 <script>
 /* =====================================================================
@@ -268,7 +276,8 @@ const S = Data.SERVICES, KEYS = Data.SERVICE_KEYS, OWNERS = Data.OWNERS, STAGES 
 /* ---------- view state (not data) -------------------------------- */
 let view = 'home', openJob = null, draft = null;
 const ui = { jf: { q: '', stage: 'all', who: 'all', suburb: 'all', status: 'active' }, addC: false, editC: null,
-  statusFor: null, retrieveFor: null, repriceFor: null, editJob: null, stepBackFor: null, poFixFor: null, confirmDelete: null, confirmDelC: null, calWeek: false,
+  statusFor: null, retrieveFor: null, repriceFor: null, editJob: null, stepBackFor: null, poFixFor: null,
+  voidFor: null, payFor: null, viewDoc: null, confirmDelete: null, confirmDelC: null, calWeek: false,
   paste: { kind: 'tenant', parsed: null, dup: null, match: null, useMatch: true },
   addItemFor: null, bookFor: null, tpl: {}, editTpl: null, signoff: {},
   cust: { q: '', open: null, edit: null, add: false, mergeFrom: null, migrate: null },
@@ -307,9 +316,24 @@ const poPill = (p, overdue) => ({ accepted: '<span class="pill p-ok">Accepted</s
   declined: '<span class="pill p-bad">Declined</span>', silent: '<span class="pill p-bad">No reply</span>',
   replaced: '<span class="pill p-grey">Replaced</span>' })[p.status]
   || (overdue ? '<span class="pill p-bad">Overdue</span>' : '<span class="pill p-warn">Waiting on them</span>');
-async function copy(text) {
-  try { await navigator.clipboard.writeText(text); toast('Copied'); }
+async function copy(text, said) {
+  try { await navigator.clipboard.writeText(text); toast(said || 'Copied'); }
   catch (e) { toast('Copy blocked here. Select the text and copy it instead'); }
+}
+
+/* Open one frozen document in its own window to print or save as PDF.
+   The stored HTML carries its own stylesheet, so nothing here has to
+   match what it was rendered with. */
+function printDocument(doc) {
+  const w = window.open('', '_blank');
+  if (!w) { toast('Your browser blocked the window. Allow pop-ups for this site.'); return; }
+  w.document.write(`<!doctype html><html lang="en-NZ"><head><meta charset="utf-8">
+    <title>${esc(doc.no)} FlatOut</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Karla:wght@400;500;600;700&display=swap">
+    <style>body{margin:0;background:#EEF0F1}</style></head><body>${doc.html}</body></html>`);
+  w.document.close();
+  // Give the fonts a moment, or the first print lays out in Georgia.
+  setTimeout(() => { w.focus(); w.print(); }, 600);
 }
 const fill = (tpl, ctx) => tpl.replace(/\{([a-z ]+)\}/g, (m, k) => ctx[k] ?? m);
 function jobCtx(j) {
@@ -528,6 +552,7 @@ function vJob(j) {
   ${j.pos.length ? posCard(j) : ''}
   ${messagesCard(j)}
   ${Object.keys(j.sections).length ? `<section class="card"><h3>Site notes for contractors</h3><div class="rows" style="margin-top:12px">${Object.entries(j.sections).map(([k, s]) => `<div class="row"><div class="main"><b>${S[k]}</b> <span class="small muted">→ ${esc(cName(s.contractorId))}</span><br><span class="small">${s.access.length ? esc(s.access.join(' · ')) : '<span class="muted">No on-site requirements ticked</span>'}</span>${s.notes ? `<br><span class="small muted">${esc(s.notes)}</span>` : ''}${s.photos.length ? `<div class="photos" style="margin-top:8px">${s.photos.map(u => `<img src="${Data.photoUrl(u)}" alt="Site photo">`).join('')}</div>` : ''}</div></div>`).join('')}</div></section>` : ''}
+  ${docsCard(j)}
   ${notesCard(j)}
   <section class="card"><h3>Activity</h3><ul class="log" style="margin-top:10px">${j.log.slice().reverse().map(l => `<li>${esc(l)}</li>`).join('')}</ul></section>
   <section class="card"><div class="card-head"><h3>This job</h3></div>
@@ -652,6 +677,116 @@ function signoffCard(j) {
 /* Notes you type. The activity log underneath only records what the
    panel did; this is for what actually happened — the phone call, the
    change of plan, the thing you'd otherwise forget by Thursday. */
+/* ---------- documents --------------------------------------------
+   Everything that leaves the building for this job, and the link the
+   customer opens. Nothing here sends anything by itself: you issue,
+   then you send the link yourself. */
+function docsCard(j) {
+  const docs = Data.listDocuments(j.id);
+  const plan = Data.paymentPlan(j);
+  const paid = Data.paidTotal(j.id);
+  const out = Math.max(0, plan.total - paid);
+  const priced = !!Data.jobCost(j);
+  const bankReady = Data.bankReady();
+  const portal = j.portal || null;
+  const hasQuote = !!Data.latestDocument(j.id, 'quote');
+
+  const canIssue = t => {
+    if (!priced) return 'Price the job first';
+    if ((t === 'invoice') && !bankReady) return 'Add the bank account under Settings';
+    if (t === 'invoice' && !hasQuote) return 'Send a quote first';
+    return null;
+  };
+
+  return `<section class="card"><div class="card-head"><h3>Documents</h3>
+    <span class="eyebrow">${docs.length ? docs.filter(d => d.status !== 'voided').length + ' issued' : 'None yet'}</span></div>
+
+  ${!priced ? '<p class="note" style="margin-top:12px">Nothing is priced yet, so there is nothing to put on a document. Do the walk-through first.</p>' : `
+
+  <div class="rows" style="margin-top:12px">
+    ${docs.length ? docs.slice().reverse().map(d => `<div class="row">
+      <div class="main">
+        <b${d.status === 'voided' ? ' style="text-decoration:line-through;color:var(--blue)"' : ''}>${esc(Data.DOC_TYPES[d.type].label)} ${esc(d.no)}</b>
+        ${d.status === 'voided' ? '<span class="pill p-grey">Voided</span>' : ''}
+        ${d.replaces ? `<span class="small muted">replaces ${esc(d.replaces)}</span>` : ''}
+        <br><span class="small muted">${fd(d.issuedOn)} · ${esc(d.issuedBy.split(' ')[0])}${d.dueDate ? ` · ${money(d.amountDue)} due ${fd(d.dueDate)}` : ''}${d.validUntil ? ` · valid to ${fd(d.validUntil)}` : ''}${d.voidReason ? ` · ${esc(d.voidReason)}` : ''}</span>
+      </div>
+      <button class="btn sm ghost" data-act="viewDoc" data-d="${d.id}">View</button>
+      ${d.status !== 'voided' ? `<button class="linkbtn" data-act="voidDoc" data-d="${d.id}">Void</button>` : ''}
+    </div>`).join('') : '<p class="muted small">Nothing issued yet.</p>'}
+  </div>
+
+  ${ui.voidFor ? (() => { const d = Data.getDocument(ui.voidFor); return d ? `<form class="formbox" data-form="void" data-d="${d.id}">
+    <p class="small"><b>Void ${esc(d.no)}?</b></p>
+    <p class="small muted">It keeps its number and stays on the customer's page with a VOIDED stamp — nothing disappears. Issue a replacement afterwards, or use "Void and replace" to do both at once.</p>
+    <div class="field" style="margin-top:10px"><label for="void-why">What was wrong with it?</label>
+      <input class="input" id="void-why" name="reason" placeholder="Wrong date"></div>
+    <div class="chips"><button class="btn sm" type="submit" name="then" value="void">Just void it</button>
+      <button class="btn sm" type="submit" name="then" value="replace">Void and replace</button>
+      <button class="btn sm ghost" type="button" data-act="cancelVoid">Cancel</button></div>
+  </form>` : ''; })() : ''}
+
+  <div class="chips" style="margin-top:14px">
+    ${['estimate', 'quote', 'invoice'].map(t => {
+      const why = canIssue(t);
+      return `<button class="btn sm ${t === 'quote' ? '' : 'ghost'}" data-act="issueDoc" data-t="${t}" data-id="${j.id}" ${why ? 'disabled title="' + esc(why) + '"' : ''}>Issue ${t === 'invoice' ? (Data.isInstalmentPaid(j.id, 'deposit') ? 'the balance invoice' : 'an invoice') : 'an ' + t}</button>`;
+    }).join('')}
+  </div>
+  ${!bankReady ? '<p class="small muted" style="margin-top:8px">Invoices need the bank account. Add it under <button class="linkbtn" data-act="nav" data-v="settings">Settings</button> — until then you can still send estimates and quotes.</p>' : ''}
+
+  <div class="hrule"></div>
+
+  <div class="card-head" style="margin-top:4px"><h3 style="font-size:1rem">Money</h3>
+    <span class="eyebrow">${paid ? money(paid) + ' in' : 'Nothing received'}${out ? ' · ' + money(out) + ' to come' : ''}</span></div>
+  <div class="rows">
+    ${plan.schedule.map(sx => {
+      const done = Data.isInstalmentPaid(j.id, sx.key);
+      const late = !done && sx.due < Data.isoDate(Data.today());
+      return `<div class="row"><div class="main"><b>${esc(sx.what)}</b> ${money(sx.amount)}<br>
+        <span class="small ${late ? '' : 'muted'}" ${late ? 'style="color:var(--red)"' : ''}>${done ? 'Received' : (late ? 'Was due ' : 'Due ') + fd(sx.due)}</span></div>
+        ${done ? '<span class="pill p-ok">Paid</span>' : `<button class="btn sm ghost" data-act="takePayment" data-id="${j.id}" data-k="${sx.key}" ${bankReady ? '' : 'disabled title="Add the bank account under Settings"'}>Mark received</button>`}
+      </div>`;
+    }).join('')}
+    ${(j.payments || []).map(p => `<div class="row"><div class="main"><span class="small muted">${money(p.amount)} on ${fd(p.on)} · ${esc(p.method)} · recorded by ${esc(p.by.split(' ')[0])}</span></div>
+      <button class="linkbtn danger" data-act="unpay" data-id="${j.id}" data-p="${p.id}">Remove</button></div>`).join('')}
+  </div>
+
+  ${ui.payFor && ui.payFor.id === j.id ? (() => {
+    const sx = plan.schedule.find(x => x.key === ui.payFor.key) || plan.schedule[0];
+    return `<form class="formbox" data-form="payment" data-id="${j.id}" data-k="${sx.key}">
+      <p class="small"><b>Record the ${esc(sx.what.toLowerCase())}</b></p>
+      <p class="small muted">Only tick this once you have actually seen it in the bank. The receipt is issued straight away and appears on the customer's page.</p>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="field"><label for="pay-amt">Amount received</label><input class="input" id="pay-amt" name="amount" type="number" step="0.01" min="0" value="${sx.amount}"></div>
+        <div class="field"><label for="pay-on">Date it landed</label><input class="input" id="pay-on" name="on" type="date" value="${Data.isoDate(Data.today())}"></div>
+        <div class="field"><label for="pay-how">How</label><select class="select" id="pay-how" name="method"><option>Bank transfer</option><option>Cash</option><option>Other</option></select></div>
+      </div>
+      <div class="chips"><button class="btn sm" type="submit">Record it and issue the receipt</button><button class="btn sm ghost" type="button" data-act="cancelPay">Cancel</button></div>
+    </form>`; })() : ''}
+
+  <div class="hrule"></div>
+
+  <div class="card-head" style="margin-top:4px"><h3 style="font-size:1rem">The customer's link</h3>
+    <span class="eyebrow">${(() => { const g = Data.portalGate(j.id); return g.openedAt ? 'Opened ' + fd(String(g.openedAt).slice(0, 10)) : 'Not opened yet'; })()}</span></div>
+  ${portal ? `<div class="rows">
+    <div class="row"><div class="main"><span class="small muted">Link</span><br><b class="small" style="word-break:break-all">${esc(Data.portalUrl(j))}</b></div>
+      <button class="btn sm ghost" data-act="copyPortal" data-id="${j.id}">Copy</button></div>
+    <div class="row"><div class="main"><span class="small muted">Code to text them separately</span><br><b style="font-size:1.3rem;letter-spacing:4px">${esc(portal.code)}</b>
+      ${(() => { const g = Data.portalGate(j.id); return (g.tries || 0) >= 8
+        ? '<br><span class="small" style="color:var(--red)">Locked — too many wrong codes. Give them a new code and text it to them.</span>'
+        : g.tries ? `<br><span class="small muted">${g.tries} wrong ${g.tries === 1 ? 'try' : 'tries'} so far</span>` : ''; })()}</div>
+      <button class="btn sm ghost" data-act="copySms" data-id="${j.id}">Copy the whole message</button>
+      <button class="linkbtn" data-act="resetCode" data-id="${j.id}">New code</button></div>
+  </div>
+  <p class="small muted" style="margin-top:10px">Send the link and the code in separate messages if you can — that is the point of having both.</p>`
+  : `<p class="small muted">A link is created the first time you issue something.</p>`}
+
+  ${(() => { const a = Data.getAcceptance(j.id); return a
+    ? `<p class="note" style="margin-top:14px"><b>Accepted ${esc(new Date(a.at).toLocaleString('en-NZ', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }))}</b> ${esc(a.how === 'online' ? 'on the customer page' : a.how)}${a.quoteNo ? `, quote ${esc(a.quoteNo)}` : ''}, terms v${esc(a.termsVersion || '—')}.</p>`
+    : hasQuote ? `<div class="chips" style="margin-top:14px"><button class="btn sm ghost" data-act="acceptOffline" data-id="${j.id}">They accepted by phone or text</button></div>` : ''; })()}
+  `}</section>`;
+}
+
 function notesCard(j) {
   return `<section class="card"><div class="card-head"><h3>Notes</h3><span class="eyebrow">${j.notes.length} note${j.notes.length === 1 ? '' : 's'}</span></div>
   <form data-form="note" data-id="${j.id}" class="chips" style="align-items:flex-end;gap:10px">
@@ -1111,6 +1246,60 @@ function migrateCard() {
     <div class="chips" style="margin-top:12px"><button class="btn" data-act="runMigrate">Create these ${plan.length} customers</button><button class="btn ghost" data-act="cancelMigrate">Not now</button></div></section>`;
 }
 
+/* What goes on every document, and nothing else. Changing anything
+   here affects documents issued from now on — the ones already sent
+   are frozen and stay as they were. */
+function vSettings() {
+  const b = Data.getBusiness();
+  const docCount = Data.listDocuments().length;
+  return `<div class="view">
+  <div><h2>Settings</h2><p class="muted small" style="margin-top:4px">The details that appear on estimates, quotes, invoices and receipts.</p></div>
+
+  <form class="card" data-form="business">
+    <div class="card-head"><h3>Bank account</h3><span class="eyebrow">${Data.bankReady() ? 'Set' : 'Needed before you can invoice'}</span></div>
+    ${Data.bankReady() ? '' : '<p class="note" style="margin-top:12px">Until this is filled in, you can send estimates and quotes but not invoices or receipts — an invoice nobody can pay is worse than no invoice.</p>'}
+    <div class="form-grid" style="margin-top:12px">
+      <div class="field"><label for="se-an">Account name</label><input class="input" id="se-an" name="accountName" value="${esc(b.bank.accountName)}" placeholder="FlatOut NZ"></div>
+      <div class="field"><label for="se-acc">Account number</label><input class="input" id="se-acc" name="accountNumber" value="${esc(b.bank.accountNumber)}" placeholder="00-0000-0000000-00"></div>
+      <div class="field"><label for="se-bank">Bank</label><input class="input" id="se-bank" name="bank" value="${esc(b.bank.bank)}" placeholder="ANZ"></div>
+    </div>
+    <p class="small muted">This is what a customer types into their banking app. Check it character by character before the first invoice goes out.</p>
+
+    <div class="hrule"></div>
+
+    <div class="card-head" style="margin-top:4px"><h3 style="font-size:1rem">GST</h3>
+      <span class="eyebrow">${b.gstRegistered ? 'Registered' : 'Not registered'}</span></div>
+    <div class="options" style="margin-top:10px">
+      <label class="option"><input type="checkbox" name="gstRegistered" ${b.gstRegistered ? 'checked' : ''}><span>FlatOut NZ is registered for GST</span></label>
+    </div>
+    <div class="field" style="margin-top:12px"><label for="se-gst">GST number</label><input class="input" id="se-gst" name="gstNumber" value="${esc(b.gstNumber)}" placeholder="123-456-789"></div>
+    <p class="small muted">Leave this off until you actually register. You must register once turnover passes $60,000 in any twelve months. Turning it on adds the GST lines, the number and the words "Tax Invoice"; leaving it off keeps every document saying plainly that no GST is charged.</p>
+
+    <div class="hrule"></div>
+
+    <div class="form-grid">
+      <div class="field"><label for="se-valid">Quotes stay valid for</label><input class="input" id="se-valid" name="quoteValidDays" type="number" min="1" max="90" value="${b.quoteValidDays}"><span class="small muted">days</span></div>
+      <div class="field"><label for="se-terms">Terms version</label><input class="input" id="se-terms" name="termsVersion" value="${esc(b.termsVersion)}"></div>
+    </div>
+    <p class="small muted">Bump the terms version whenever you change the terms page. Each acceptance records which version the customer actually saw, which is the whole point of having a number on it.</p>
+
+    <div class="chips" style="margin-top:14px"><button class="btn" type="submit">Save</button></div>
+  </form>
+
+  <section class="card">
+    <div class="card-head"><h3>Document numbering</h3><span class="eyebrow">${docCount} issued all up</span></div>
+    <div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Type</th><th>Next number</th><th class="num">Issued so far</th></tr></thead><tbody>
+    ${Object.entries(Data.DOC_TYPES).map(([k, t]) => {
+      const mine = Data.listDocuments().filter(d => d.type === k);
+      const max = mine.reduce((m, d) => Math.max(m, Number(String(d.no).replace(/\D/g, '')) || 0), 0);
+      return `<tr><td><b>${esc(t.label)}</b></td><td>${esc(t.prefix)}-${String(max + 1).padStart(4, '0')}</td><td class="num">${mine.length}</td></tr>`;
+    }).join('')}
+    </tbody></table></div>
+    <p class="small muted" style="margin-top:10px">Each type counts up on its own and never restarts. Numbers come from what already exists rather than a stored counter, so you and Rocky cannot both be handed the same one.</p>
+  </section>
+</div>`;
+}
+
 function vContractors() {
   const list = Data.listContractors();
   const rows = list.map(c => ({ c, s: Data.getScorecard(c.id) })).sort((a, b) => (b.s.rate ?? -1) - (a.s.rate ?? -1));
@@ -1161,7 +1350,7 @@ function render() {
   const app = document.getElementById('app');
   try {
     app.innerHTML =
-      ({ home: vHome, jobs: vJobs, calendar: vCalendar, walk: vWalk, today: vToday, customers: vCustomers, contractors: vContractors, alerts: vAlerts })[view]();
+      ({ home: vHome, jobs: vJobs, calendar: vCalendar, walk: vWalk, today: vToday, customers: vCustomers, contractors: vContractors, settings: vSettings, alerts: vAlerts })[view]();
   } catch (err) {
     console.error(err);
     app.innerHTML = `<section class="card"><h2>That didn't draw</h2>
@@ -1169,7 +1358,31 @@ function render() {
       <p class="small muted" style="margin-top:10px">${esc(err && err.message || String(err))}</p>
       <div class="actions" style="margin-top:14px"><button class="btn" data-act="goHome">Back to Home</button></div></section>`;
   }
+  docOverlay();
   bell();
+}
+
+/* The issued document, exactly as the customer sees it. Drawn over the
+   page rather than inside it so the A4 layout is not squeezed into a
+   column. */
+function docOverlay() {
+  const existing = document.getElementById('docview');
+  if (existing) existing.remove();
+  if (!ui.viewDoc) return;
+  const doc = Data.getDocument(ui.viewDoc);
+  if (!doc) { ui.viewDoc = null; return; }
+  const el = document.createElement('div');
+  el.className = 'docview';
+  el.id = 'docview';
+  el.innerHTML = `<div class="inner">
+    <div class="bar">
+      <b>${esc(Data.DOC_TYPES[doc.type].label)} ${esc(doc.no)}${doc.status === 'voided' ? ' · voided' : ''}</b>
+      <span class="chips"><button class="btn sm" data-act="printDoc">Save as PDF</button>
+      <button class="btn sm ghost" data-act="closeDoc">Close</button></span>
+    </div>
+    <div>${doc.html}</div></div>`;
+  el.addEventListener('click', e => { if (e.target === el) { ui.viewDoc = null; render(); } });
+  document.body.appendChild(el);
 }
 function refreshJobs() {
   const r = document.getElementById('jobrows');
@@ -1204,6 +1417,42 @@ document.addEventListener('click', e => {
     case 'nav': openJob = null; go(d.v); break;
     case 'open': go('jobs', d.id); break;
     case 'goHome': openJob = null; go('home'); break;
+    /* ---- documents ---- */
+    case 'issueDoc': {
+      const inst = Data.isInstalmentPaid(d.id, 'deposit') ? 'balance' : 'deposit';
+      const res = Data.issueDocument(d.id, d.t, owner(), d.t === 'invoice' ? { instalment: inst } : {});
+      if (res.error) { toast(res.error); break; }
+      ui.viewDoc = res.document.id;
+      toast(`${res.document.no} issued — send them the link`);
+      render(); break; }
+    case 'viewDoc': ui.viewDoc = d.d; render(); break;
+    case 'closeDoc': ui.viewDoc = null; render(); break;
+    case 'printDoc': {
+      const doc = Data.getDocument(ui.viewDoc);
+      if (doc) printDocument(doc);
+      break; }
+    case 'voidDoc': ui.voidFor = d.d; render(); focus('void-why'); break;
+    case 'cancelVoid': ui.voidFor = null; render(); break;
+    case 'takePayment': ui.payFor = { id: d.id, key: d.k }; render(); focus('pay-amt'); break;
+    case 'cancelPay': ui.payFor = null; render(); break;
+    case 'unpay': Data.deletePayment(d.id, d.p, owner()); toast('Payment removed — void the receipt too'); render(); break;
+    case 'acceptOffline': {
+      const res = Data.recordAcceptance(d.id, 'by phone or text');
+      toast(res.already ? 'Already recorded as accepted' : 'Recorded as accepted');
+      render(); break; }
+    case 'resetCode': {
+      const res = Data.resetPortalCode(d.id, owner());
+      if (res.error) { toast(res.error); break; }
+      toast('New code: ' + res.portal.code);
+      render(); break; }
+    case 'copyPortal': copy(Data.portalUrl(Data.getJob(d.id)), 'Link copied'); break;
+    case 'copySms': {
+      const j2 = Data.getJob(d.id);
+      const p2 = Data.getPortal(d.id);
+      copy(`Hi ${j2.cust.name.split(' ')[0]}, your FlatOut job for ${j2.cust.address} is here: ${Data.portalUrl(j2)}\n\nYour code is ${p2.code}.`,
+        'Message copied');
+      break; }
+
     case 'poFix': ui.poFixFor = d.po; render(); focus('pf-' + d.po); break;
     case 'cancelPoFix': ui.poFixFor = null; render(); break;
     case 'stepBack': ui.stepBackFor = d.id; render(); break;
@@ -1446,6 +1695,40 @@ document.addEventListener('submit', e => {
     render();
     return;
   }
+  if (kind === 'void') {
+    const replace = form.get('then') === 'replace';
+    const res = replace
+      ? Data.reissueDocument(f.dataset.d, form.get('reason'), owner())
+      : Data.voidDocument(f.dataset.d, form.get('reason'), owner());
+    ui.voidFor = null;
+    if (res.error) { toast(res.error); render(); return; }
+    toast(replace ? `Replaced by ${res.document.no}` : 'Voided');
+    render();
+    return;
+  }
+  if (kind === 'payment') {
+    const res = Data.recordPayment(f.dataset.id, {
+      amount: form.get('amount'), on: form.get('on'),
+      method: form.get('method'), instalment: f.dataset.k
+    }, owner());
+    if (res.error && !res.payment) { toast(res.error); return; }
+    ui.payFor = null;
+    toast(res.receipt ? `Recorded · ${res.receipt.no} issued` : 'Recorded');
+    render();
+    return;
+  }
+  if (kind === 'business') {
+    Data.saveBusinessDetails({
+      bank: { accountName: form.get('accountName').trim(), accountNumber: form.get('accountNumber').trim(), bank: form.get('bank').trim() },
+      gstRegistered: form.get('gstRegistered') === 'on',
+      gstNumber: form.get('gstNumber').trim(),
+      quoteValidDays: Number(form.get('quoteValidDays')) || 14,
+      termsVersion: form.get('termsVersion').trim() || '1.0'
+    }, owner());
+    toast('Saved. New documents will use these.');
+    render();
+    return;
+  }
   if (kind === 'poFix') {
     const res = Data.reissuePurchaseOrder(f.dataset.id, f.dataset.po, form.get('what'), owner());
     ui.poFixFor = null;
@@ -1656,6 +1939,10 @@ async function poll() {
   if (document.hidden || busy()) return;
   const res = await Data.refresh();
   if (!res || res.error || res.skipped || !res.any) return;
+  if (res.newlyAccepted) {
+    const moved = Data.applyPendingAcceptances(owner());
+    if (moved.length) toast(`${moved.length === 1 ? moved[0] + ' was' : moved.length + ' jobs were'} accepted by the customer`);
+  }
   // If the job on screen is the one that moved, say so instead of
   // redrawing mid-read.
   if (openJob && res.changed.includes(openJob)) {

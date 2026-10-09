@@ -17,6 +17,9 @@
 
      job/J-1001           one job
      customer/mere-harris one customer, and how to reach them
+     document/D-xyz       one issued document, frozen as it was sent
+     acceptance/J-1001    that the customer accepted their quote
+     portal/J-1001        wrong-code count for the customer's page
      contractor/gecs      one contractor and their rate card
      template/estimate    one message template
      alert/<id>           one alert
@@ -32,7 +35,7 @@
 import { getStore } from '@netlify/blobs';
 
 const STORE = 'flatout-panel';
-const KINDS = ['job', 'contractor', 'customer', 'template', 'alert'];
+const KINDS = ['job', 'contractor', 'customer', 'document', 'acceptance', 'portal', 'template', 'alert'];
 
 export default async (req) => {
   const denied = checkAuth(req);
@@ -103,8 +106,10 @@ function timingSafeEqual(a, b) {
 
 /* ---------- reads ------------------------------------------------- */
 async function loadAll(store) {
-  const out = { jobs: [], contractors: [], customers: [], templates: [], alerts: [], settings: null };
+  const out = { jobs: [], contractors: [], customers: [], documents: [], acceptances: [], portals: [],
+    templates: [], alerts: [], settings: null, business: null };
   const PLURAL = { job: 'jobs', contractor: 'contractors', customer: 'customers',
+    document: 'documents', acceptance: 'acceptances', portal: 'portals',
     template: 'templates', alert: 'alerts' };
 
   for (const kind of KINDS) {
@@ -116,6 +121,7 @@ async function loadAll(store) {
   }
 
   out.settings = await store.get('settings', { type: 'json' }).catch(() => null);
+  out.business = await store.get('business', { type: 'json' }).catch(() => null);
   return out;
 }
 
@@ -135,8 +141,8 @@ async function servePhoto(store, key) {
 
 /* ---------- writes ------------------------------------------------ */
 async function put(store, { kind, id, value }) {
-  if (kind === 'settings') {
-    await store.setJSON('settings', value);
+  if (kind === 'settings' || kind === 'business') {
+    await store.setJSON(kind, value);
     return { ok: true };
   }
   if (!KINDS.includes(kind)) return { error: 'Unknown kind' };

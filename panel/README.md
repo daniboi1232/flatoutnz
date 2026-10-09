@@ -255,10 +255,75 @@ is still going. If the job you have open is the one that changed, a bar
 appears at the top saying so and you tap it when you are ready, rather
 than the page changing under you.
 
+## Documents and the customer's page
+
+Four documents, issued from the job: **estimate**, **quote**,
+**invoice**, **receipt**. Each type has its own number run (EST-, QTE-,
+INV-, REC-) that counts up and never restarts.
+
+**Issued means frozen.** The moment you issue something, the exact
+document — its wording, its figures, its stylesheet — is stored. What
+the customer opens in six months is what you sent, whatever has changed
+since: the rate card, the terms, the logo, the code. That is the point.
+
+**A wrong document is never edited.** Void it, and it keeps its number
+and stays visible with a VOIDED stamp, or use **Void and replace** to
+issue a corrected one in the same move. Nothing disappears.
+
+### The customer's page
+
+One link per job, at `/j/#<token>`, plus a **4-digit code you text them
+separately**. The code is on the job in the panel so you can re-send it
+in a tap, and their phone remembers it so they type it once.
+
+They see: their documents, where the job is up to, what is paid and what
+is left, and the completion photos once the job is signed off. They can
+accept their quote there, which records who accepted what and against
+which version of your terms.
+
+They never see contractor costs, your margin, rate cards, your notes or
+the job's history. **Contractor names appear only from the morning of
+the job onwards** — before that it says "Cleaning crew, being
+confirmed". Your supplier list is the one thing a competitor would most
+like, and students talk to each other.
+
+After eight wrong codes the page locks. Give them a new code from the
+job and text it to them.
+
+**The quote's Accept button stops on its valid-until date.** The page
+stays readable — they can still see what they were quoted — but a
+document that says "valid until the 23rd" must not still be acceptable
+in March.
+
+### Money
+
+Recorded by hand: you read your bank, press **Mark received**, and the
+receipt is issued and appears on their page. The panel tells you on Home
+when an invoice is due or overdue, and when it is time to send the
+balance invoice. Nothing reaches a customer without you pressing
+something.
+
+### Before any of this works
+
+**Settings → Bank account.** Estimates and quotes work without it;
+invoices and receipts refuse to be issued until it is filled in, because
+an invoice nobody can pay is worse than no invoice. Check it character
+by character.
+
+**Settings → GST** is off, and every document says plainly that no GST
+is charged and that an invoice is not a tax invoice. You must register
+once turnover passes $60,000 in any twelve months — turn the switch on
+then, and new documents carry the GST lines, the number and the words
+"Tax Invoice". Documents already issued are frozen and stay as they
+were, which is correct.
+
+**Settings → Terms version.** Bump it whenever you change the terms
+page. Each acceptance records which version the customer actually saw.
+
 ## How to remove the whole thing
 
-1. Delete the `panel/` folder.
-2. Delete `netlify/` (the edge function and the storage function).
+1. Delete the `panel/` folder and `site/j/`.
+2. Delete `netlify/` (the edge function and both serverless functions).
 3. Delete `package.json` from the repo root.
 4. Remove the footer "Employees" links from the site pages.
 5. In Netlify: delete the `PANEL_USER` and `PANEL_PASS` environment
@@ -286,7 +351,10 @@ the Netlify site, not in the repo. To clear them, delete the
 | --- | --- |
 | `panel/index.html` | the whole interface |
 | `panel/data.js` | every read and write, and nothing else |
+| `panel/docs.js` | how the four documents are drawn |
+| `site/j/index.html` | the page the customer opens — no password |
 | `netlify/functions/panel-data.js` | storage — the only thing that touches Blobs |
+| `netlify/functions/panel-public.js` | the customer's endpoint, outside the gate |
 | `netlify/edge-functions/panel-auth.js` | the password gate |
 | `package.json` | so Netlify installs `@netlify/blobs` |
 
@@ -304,6 +372,9 @@ One blob per record, keyed by id:
 ```
 job/J-1001           one job
 customer/mere-harris one customer and how to reach them
+document/D-xyz       one issued document, frozen as it was sent
+acceptance/J-1001    that the customer accepted their quote
+portal/J-1001        wrong-code count for the customer's page
 contractor/gecs      one contractor and their rate card
 template/estimate    one message template
 alert/<id>           one alert
@@ -356,3 +427,27 @@ are nearly due and still unscoped.
 records contractor responses itself. You do quotes, invoices and
 payments in Zoho exactly as you do now, and tick the stage over here
 when the money lands. Nothing in the panel needs a paid Zoho plan.
+
+---
+
+## The one thing without a password
+
+`/j/` and `/j/api` sit outside the password gate, because the customer
+is not logging in. Everything protecting them is in
+`netlify/functions/panel-public.js`, and it is deliberately narrow:
+
+- It answers exactly two questions: *show me this one job* and *I accept
+  this quote*. It cannot list, search, or reach anything else.
+- It builds its answer field by field rather than handing back a record
+  with bits removed, so a field added to a job later cannot leak through
+  it by accident.
+- **It never writes a job.** The two things it records — that someone
+  got in, and that they accepted — go in blobs of their own. The panel
+  holds jobs in memory and saves them whole, so a write there could be
+  wiped by the next save from the panel; and an unauthenticated writer
+  should not be able to touch the record that holds everything.
+- The token is the real secret. The code is a second channel, not a
+  password, so wrong codes are counted and the page locks.
+
+If you ever change that file, those four things are the reason it is
+written the way it is.

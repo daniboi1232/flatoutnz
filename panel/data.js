@@ -107,9 +107,33 @@ const Data = (() => {
   }
 
   /* ---------- in-memory model, filled by init() -------------------- */
-  let contractors = [], jobs = [], templates = [], alerts = [], customers = [];
+  let contractors = [], jobs = [], templates = [], alerts = [], customers = [], documents = [];
+  let acceptances = [], portalGates = [];
   let alertSettings = {};
   let ready = false;
+
+  /* Everything that appears on a customer document and is not part of
+     a particular job. Stored with the settings blob so the two owners
+     share one set. GST is off until the partnership registers — it has
+     to be a switch rather than a rewrite, because crossing the $60k
+     threshold happens mid-season and not on a quiet afternoon. */
+  const BUSINESS_DEFAULTS = {
+    name: 'FlatOut NZ',
+    entity: 'A partnership',
+    nzbn: '9429053975751',
+    place: 'Christchurch, New Zealand',
+    phone: '027 408 6895',
+    web: 'flatoutnz.co.nz',
+    logo: '/images/logo-icon.png',
+    signature: '',
+    termsVersion: '1.0',
+    quoteValidDays: 14,
+    bank: { accountName: '', accountNumber: '', bank: '' },
+    gstRegistered: false,
+    gstNumber: '',
+    gstRate: 0.15
+  };
+  let business = Object.assign({}, BUSINESS_DEFAULTS);
 
   const getContractor = id => contractors.find(c => c.id === id) || null;
   const getCustomer = id => customers.find(c => c.id === id) || null;
@@ -193,6 +217,18 @@ const Data = (() => {
   const saveJobRecord = j => queueSave('job', j.id, j);
   const saveContractor = c => queueSave('contractor', c.id, c);
   const saveSettings = () => queueSave('settings', '', alertSettings);
+  const saveBusiness = () => queueSave('business', '', business);
+  const saveDocument = d => queueSave('document', d.id, d);
+  const saveAcceptance = a => queueSave('acceptance', a.jobId, a);
+
+  /* Acceptance is kept in its own record rather than on the job. The
+     customer's page writes it without a password, and the panel holds
+     jobs in memory and saves them whole — so a field on the job could
+     be wiped by the next save from here. Keeping it apart means
+     neither side can clobber the other. */
+  const getAcceptance = jobId => acceptances.find(a => a.jobId === jobId) || null;
+  const portalGate = jobId => portalGates.find(g => g.jobId === jobId)
+    || { jobId, tries: 0, openedAt: null };
 
   async function removeRecord(kind, id) {
     try {
@@ -444,6 +480,212 @@ const Data = (() => {
     return { made, linked };
   }
 
+  /* ---------- documents --------------------------------------------
+     An issued document is FROZEN: the HTML it rendered to is stored
+     with it. What the customer opens in six months is exactly what was
+     sent, whatever has changed since — the rate card, the terms, the
+     logo, this code. A document that can quietly re-render is worth
+     nothing if a price is ever disputed.
+
+     A wrong document is never edited. It is voided and replaced by a
+     new number that says what it replaces, the same way a contractor
+     job order is. */
+
+  /* Each type counts up on its own and never resets. Worked out from
+     what exists rather than a stored counter, so two people issuing at
+     once can't be handed the same number. */
+  function nextDocNo(type, extra = []) {
+    const prefix = Docs.TYPES[type].prefix;
+    const all = documents.concat(extra).filter(d => d.type === type);
+    const max = all.reduce((m, d) => Math.max(m, Number(String(d.no).replace(/\D/g, '')) || 0), 0);
+    return prefix + '-' + String(max + 1).padStart(4, '0');
+  }
+
+  const docsFor = jobId => documents
+    .filter(d => d.jobId === jobId)
+    .sort((a, b) => String(a.issuedAt).localeCompare(String(b.issuedAt)));
+  const liveDocs = jobId => docsFor(jobId).filter(d => d.status !== 'voided');
+  const latestDoc = (jobId, type) => liveDocs(jobId).filter(d => d.type === type).pop() || null;
+  const getDocument = id => documents.find(d => d.id === id) || null;
+
+  /* A random token long enough that guessing one is not a strategy, and
+     a 4-digit code sent by a different channel. The token is the real
+     secret; the code is there so a forwarded link alone is not enough.
+     Attempts are counted and the page locks — a 4-digit code with
+     unlimited guesses is not a second factor. */
+  function randomToken() {
+    const bytes = new Uint8Array(16);
+    (globalThis.crypto || {}).getRandomValues
+      ? crypto.getRandomValues(bytes)
+      : bytes.forEach((_, i) => { bytes[i] = Math.floor(Math.random() * 256); });
+    return Array.from(bytes, b => b.toString(36).padStart(2, '0')).join('').slice(0, 22);
+  }
+  function randomCode() {
+    const n = (globalThis.crypto || {}).getRandomValues
+      ? crypto.getRandomValues(new Uint32Array(1))[0]
+      : Math.floor(Math.random() * 4294967296);
+    return String(n % 10000).padStart(4, '0');
+  }
+  function ensurePortal(j) {
+    if (!j.portal || !j.portal.token) {
+      j.portal = { token: randomToken(), code: randomCode(), codeSetAt: new Date().toISOString() };
+    }
+    if (j.portal.tries == null) j.portal.tries = 0;
+    return j.portal;
+  }
+
+  /* What the customer owes and when, as a schedule rather than prose,
+     so the quote, the invoices and the portal all agree. */
+  function paymentPlan(job) {
+    const t = paymentTerms(job);
+    const total = customerPrice(jobCost(job));
+    if (t.kind === 'Full payment') {
+      return {
+        total,
+        schedule: [{ key: 'full', what: 'Full payment', amount: t.amount, due: isoDate(t.due) }],
+        sentence: `Jobs of $500 or less are paid in full two days before the job. On this job that is $${fmtMoney(t.amount).replace('$', '')} on ${fmtDate(isoDate(t.due))}.`,
+        warning: 'Payment is due two days before the job. If it has not arrived by then the job cannot go ahead.'
+      };
+    }
+    return {
+      total,
+      schedule: [
+        { key: 'deposit', what: '50% deposit', amount: t.amount, due: isoDate(t.due) },
+        { key: 'balance', what: 'Balance', amount: t.balance, due: isoDate(t.balanceDue) }
+      ],
+      sentence: `Jobs over $500 are a 50% deposit three business days before the job, with the balance 14 days after. On this job that is $${fmtMoney(t.amount).replace('$', '')} on ${fmtDate(isoDate(t.due))} and $${fmtMoney(t.balance).replace('$', '')} on ${fmtDate(isoDate(t.balanceDue))}.`,
+      warning: 'The deposit is due three business days before the job. If it has not arrived by then the job cannot go ahead — we would rather tell you early than send contractors to a job we cannot pay for.'
+    };
+  }
+
+  const paidTotal = jobId => (getJob(jobId)?.payments || [])
+    .reduce((t, p) => t + Number(p.amount || 0), 0);
+
+  /* The snapshot a document renders from. Everything the template needs
+     is read here, once, and never again. */
+  function buildCtx(job, type, opts, byOwner) {
+    const cust = job.custId ? getCustomer(job.custId) : null;
+    const plan = paymentPlan(job);
+    const nameParts = String(job.cust.name || '').trim().split(/\s+/);
+    return Object.assign({
+      type,
+      no: opts.no,
+      issued: isoDate(new Date()),
+      issuedBy: byOwner,
+      issuedByTitle: TITLES[byOwner] || '',
+      issuedVerb: type === 'invoice' || type === 'receipt' ? 'Issued by' : 'Prepared by',
+      termsVersion: business.termsVersion,
+      business: JSON.parse(JSON.stringify(business)),
+      customer: {
+        name: job.cust.name,
+        surname: nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0],
+        email: (cust && cust.email) || job.cust.email || '',
+        phone: (cust && cust.phone) || job.cust.phone || ''
+      },
+      job: { id: job.id, address: job.cust.address, date: job.cust.moveDate },
+      services: Object.entries(job.sections).map(([k, sec]) => ({
+        name: SERVICES[k],
+        when: job.cust.moveDate ? fmtDate(job.cust.moveDate) : '',
+        detail: Object.entries(sec.lines)
+          .map(([iid, q]) => { const i = lineItem(sec, iid); return i ? `${i.name}${q !== 1 ? ` × ${q}${i.type === 'hourly' ? ' hrs' : ''}` : ''}` : ''; })
+          .filter(Boolean).join('. ') + (sec.notes ? '. ' + sec.notes : '') || 'As discussed at the walk-through.'
+      })),
+      total: plan.total,
+      payment: plan,
+      voided: false
+    }, opts.ctx || {});
+  }
+
+  /* Issue: build the snapshot, render it, freeze it, store it. */
+  function issueDocument(jobId, type, byOwner, extra = {}) {
+    const job = getJob(jobId);
+    if (!job) return { error: 'That job no longer exists.' };
+    if (!Docs.TYPES[type]) return { error: 'Unknown document type.' };
+    if (!job.cust.address) return { error: 'The job needs an address before anything can be issued.' };
+    if (!job.cust.moveDate) return { error: 'The job needs a move-out date before anything can be issued.' };
+    if (type !== 'receipt' && !jobCost(job)) {
+      return { error: 'Nothing is priced yet, so there is nothing to put on a document.' };
+    }
+    if ((type === 'invoice' || type === 'receipt') && !(business.bank.accountName && business.bank.accountNumber)) {
+      return { error: 'Add the bank account under Settings first — an invoice without it cannot be paid.' };
+    }
+
+    ensurePortal(job);
+    const no = nextDocNo(type);
+    const plan = paymentPlan(job);
+    const ctx = buildCtx(job, type, { no, ctx: documentExtras(job, type, plan, extra) }, byOwner);
+    // Frozen means frozen: the stylesheet travels with the document,
+    // so it still renders exactly like this when docs.js has moved on.
+    const html = '<style>' + Docs.CSS + '</style>' + Docs.render(type, ctx);
+
+    const doc = {
+      id: 'D-' + Date.now().toString(36) + '-' + rid(),
+      no, type, jobId, custId: job.custId || null,
+      status: 'issued',
+      issuedAt: new Date().toISOString(),
+      issuedOn: ctx.issued,
+      issuedBy: byOwner,
+      total: ctx.total,
+      amountDue: ctx.amountDue != null ? ctx.amountDue : ctx.total,
+      dueDate: ctx.dueDate || null,
+      validUntil: ctx.validUntil || null,
+      instalment: extra.instalment || null,
+      replaces: extra.replaces || null,
+      html
+    };
+    documents.unshift(doc);
+    saveDocument(doc);
+    job.log.push(`${no} issued by ${byOwner}` + (extra.replaces ? `, replacing ${extra.replaces}` : ''));
+    saveJobRecord(job);
+    return { document: doc };
+  }
+
+  /* The per-type fields the shared snapshot doesn't cover. */
+  function documentExtras(job, type, plan, extra) {
+    const q = latestDoc(job.id, 'quote');
+    const paid = paidTotal(job.id);
+    if (type === 'estimate' || type === 'quote') {
+      return { validUntil: isoDate(addDays(new Date(), business.quoteValidDays)), portalUrl: portalUrl(job) };
+    }
+    if (type === 'invoice') {
+      const inst = plan.schedule.find(s => s.key === (extra.instalment || 'deposit')) || plan.schedule[0];
+      const others = plan.schedule.filter(s => s.key !== inst.key);
+      const notYetDue = others.filter(s => !isInstalmentPaid(job, s.key)).reduce((t, s) => t + s.amount, 0);
+      return {
+        quoteNo: q ? q.no : null,
+        acceptedOn: (getAcceptance(job.id) || {}).at ? getAcceptance(job.id).at.slice(0, 10) : null,
+        instalmentLabel: plan.schedule.length > 1
+          ? (inst.key === 'deposit' ? 'DEPOSIT · 1 OF 2' : 'BALANCE · 2 OF 2') : 'DUE IN FULL',
+        amountDue: inst.amount,
+        dueDate: inst.due,
+        alreadyPaid: paid || 0,
+        notYetDue,
+        balanceDue: (plan.schedule.find(s => s.key === 'balance') || {}).due || null
+      };
+    }
+    // receipt
+    const inv = extra.invoiceNo ? documents.find(d => d.no === extra.invoiceNo) : latestDoc(job.id, 'invoice');
+    return {
+      invoiceNo: inv ? inv.no : null,
+      received: Number(extra.received || 0),
+      receivedOn: extra.receivedOn || isoDate(new Date()),
+      method: extra.method || 'Bank transfer',
+      forWhat: extra.forWhat || 'Payment',
+      paidToDate: paid,
+      outstanding: Math.max(0, plan.total - paid),
+      balanceDue: (plan.schedule.find(s => s.key === 'balance') || {}).due || null
+    };
+  }
+
+  const isInstalmentPaid = (job, key) =>
+    (job.payments || []).some(p => p.instalment === key);
+
+  function portalUrl(job) {
+    const p = ensurePortal(job);
+    const origin = (typeof location !== 'undefined' && location.origin) || 'https://flatoutnz.co.nz';
+    return `${origin}/j/#${p.token}`;
+  }
+
   /* =================================================================
      PUBLIC API
      ================================================================= */
@@ -473,11 +715,16 @@ const Data = (() => {
 
       contractors = d.contractors || [];
       customers = (d.customers || []).sort((a, b) => a.name.localeCompare(b.name));
+      documents = (d.documents || []).sort((a, b) => String(b.issuedAt).localeCompare(String(a.issuedAt)));
+      acceptances = d.acceptances || [];
+      portalGates = d.portals || [];
       jobs = (d.jobs || []).map(migrateJob)
         .sort((a, b) => String(b.id).localeCompare(String(a.id)));
       templates = d.templates || [];
       alerts = (d.alerts || []).sort((a, b) => String(b.id).localeCompare(String(a.id)));
       alertSettings = d.settings || {};
+      business = Object.assign({}, BUSINESS_DEFAULTS, d.business || {},
+        { bank: Object.assign({}, BUSINESS_DEFAULTS.bank, (d.business || {}).bank) });
       OWNERS.forEach(o => {
         if (!alertSettings[o]) {
           alertSettings[o] = { types: { accept: true, pay: true, decline: true, silent: true, done: true, caccept: false }, mineOnly: false };
@@ -671,14 +918,21 @@ const Data = (() => {
       const changed = fresh.filter(j => before.has(j.id) && before.get(j.id) !== JSON.stringify(j)).map(j => j.id);
       const added = fresh.filter(j => !before.has(j.id)).map(j => j.id);
 
+      const accBefore = acceptances.length;
       jobs = fresh;
+      acceptances = d.acceptances || [];
+      portalGates = d.portals || [];
+      const newlyAccepted = acceptances.length > accBefore;
       contractors = d.contractors || contractors;
       customers = (d.customers || []).sort((a, b) => a.name.localeCompare(b.name));
       templates = d.templates || templates;
       alerts = (d.alerts || []).sort((a, b) => String(b.id).localeCompare(String(a.id)));
       if (d.settings) alertSettings = d.settings;
 
-      return { changed, added, any: changed.length + added.length > 0 };
+      // An acceptance arriving is itself worth a redraw, even if the
+      // job record did not change.
+      return { changed, added, newlyAccepted,
+        any: changed.length + added.length > 0 || newlyAccepted };
     },
 
     /* ---- what's on today -----------------------------------------
@@ -781,6 +1035,158 @@ const Data = (() => {
       }
       saveJobRecord(j);
       return { job: j, changed, dateMoved, oldDate, toldContractors };
+    },
+
+    /* ---- documents ------------------------------------------------ */
+    DOC_TYPES: Docs.TYPES,
+    listDocuments: jobId => (jobId ? docsFor(jobId) : documents.slice()),
+    liveDocuments: liveDocs,
+    latestDocument: latestDoc,
+    getDocument,
+    issueDocument,
+    paymentPlan,
+    paidTotal,
+    outstanding: jobId => Math.max(0, paymentPlan(getJob(jobId)).total - paidTotal(jobId)),
+    isInstalmentPaid: (jobId, key) => isInstalmentPaid(getJob(jobId), key),
+    portalUrl,
+    getPortal: jobId => { const j = getJob(jobId); if (!j) return null; const p = ensurePortal(j); saveJobRecord(j); return p; },
+
+    /* Reset the code when a customer says they never got it, or when
+       the page has locked itself after too many wrong guesses. */
+    resetPortalCode(jobId, byOwner) {
+      const j = getJob(jobId);
+      if (!j) return { error: 'That job no longer exists.' };
+      const p = ensurePortal(j);
+      p.code = randomCode();
+      p.codeSetAt = new Date().toISOString();
+      p.tries = 0;
+      j.log.push(`Portal code reset by ${byOwner}`);
+      saveJobRecord(j);
+      return { portal: p };
+    },
+
+    /* Voiding never deletes. The document keeps its number, gets a
+       VOIDED stamp drawn into its own frozen HTML, and says who did it
+       and why — a document that vanishes is worse than a wrong one. */
+    voidDocument(id, reason, byOwner) {
+      const d = getDocument(id);
+      if (!d) return { error: 'That document no longer exists.' };
+      if (d.status === 'voided') return { error: 'That one is already voided.' };
+      d.status = 'voided';
+      d.voidedAt = new Date().toISOString();
+      d.voidedBy = byOwner;
+      d.voidReason = String(reason || '').trim();
+      d.html = d.html.replace('class="fo-doc"', 'class="fo-doc fo-void"');
+      saveDocument(d);
+      const j = getJob(d.jobId);
+      if (j) {
+        j.log.push(`${d.no} voided by ${byOwner}${d.voidReason ? ': ' + d.voidReason : ''}`);
+        saveJobRecord(j);
+      }
+      return { document: d };
+    },
+
+    /* Void and issue a fresh one in a single move, which is what you
+       actually want when you spot a mistake. */
+    reissueDocument(id, reason, byOwner) {
+      const old = getDocument(id);
+      if (!old) return { error: 'That document no longer exists.' };
+      const v = this.voidDocument(id, reason, byOwner);
+      if (v.error) return v;
+      return issueDocument(old.jobId, old.type, byOwner,
+        { replaces: old.no, instalment: old.instalment });
+    },
+
+    /* ---- money in --------------------------------------------------
+       Recorded by hand: you read your bank and tick it here. Issuing
+       the receipt is part of the same action, because a payment with
+       no receipt is the thing you get asked about later. */
+    recordPayment(jobId, { amount, on, method, instalment }, byOwner) {
+      const j = getJob(jobId);
+      if (!j) return { error: 'That job no longer exists.' };
+      const amt = Number(amount);
+      if (!(amt > 0)) return { error: 'Enter the amount that landed.' };
+      if (!(business.bank.accountName && business.bank.accountNumber)) {
+        return { error: 'Add the bank account under Settings first, so the receipt can show it.' };
+      }
+      if (!Array.isArray(j.payments)) j.payments = [];
+      const plan = paymentPlan(j);
+      const key = instalment || (plan.schedule.find(s => !isInstalmentPaid(j, s.key)) || {}).key || 'full';
+      const label = (plan.schedule.find(s => s.key === key) || {}).what || 'Payment';
+      const pay = { id: rid(), amount: amt, on: on || isoDate(new Date()),
+        method: method || 'Bank transfer', instalment: key, by: byOwner };
+      j.payments.push(pay);
+      j.log.push(`${fmtMoney(amt)} received (${label.toLowerCase()}) recorded by ${byOwner}`);
+
+      // Money in moves the job on, but only from the stage before it.
+      if (j.stage === 4) j.stage = 5;
+      saveJobRecord(j);
+
+      const res = issueDocument(jobId, 'receipt', byOwner, {
+        received: amt, receivedOn: pay.on, method: pay.method, forWhat: label
+      });
+      raiseAlert(j, 'pay', `${fmtMoney(amt)} received from ${j.cust.name} for ${j.id}`);
+      return { payment: pay, receipt: res.document || null, error: res.error };
+    },
+
+    deletePayment(jobId, payId, byOwner) {
+      const j = getJob(jobId);
+      if (!j || !Array.isArray(j.payments)) return null;
+      const p = j.payments.find(x => x.id === payId);
+      j.payments = j.payments.filter(x => x.id !== payId);
+      if (p) j.log.push(`Payment of ${fmtMoney(p.amount)} removed by ${byOwner} — the receipt stays and should be voided`);
+      saveJobRecord(j);
+      return j;
+    },
+
+    /* ---- the business details that go on every document ---------- */
+    getBusiness: () => JSON.parse(JSON.stringify(business)),
+    saveBusinessDetails(fields, byOwner) {
+      business = Object.assign({}, business, fields,
+        { bank: Object.assign({}, business.bank, fields.bank || {}) });
+      business.gstRate = Number(business.gstRate) || 0.15;
+      saveBusiness();
+      return { business: JSON.parse(JSON.stringify(business)), by: byOwner };
+    },
+    bankReady: () => !!(business.bank.accountName && business.bank.accountNumber),
+
+    /* ---- the customer accepting a quote ---------------------------
+       Called from the panel when they ring, and by the public function
+       when they tap the button. Either way it is recorded against the
+       quote number and the terms version they were shown. */
+    getAcceptance,
+    portalGate,
+    recordAcceptance(jobId, how, at) {
+      const j = getJob(jobId);
+      if (!j) return { error: 'That job no longer exists.' };
+      if (getAcceptance(jobId)) return { job: j, already: true };
+      const q = latestDoc(jobId, 'quote');
+      const a = { jobId, at: at || new Date().toISOString(), how: how || 'online',
+        quoteNo: q ? q.no : null, termsVersion: business.termsVersion };
+      acceptances.push(a);
+      saveAcceptance(a);
+      if (j.stage < 3) j.stage = 3;
+      j.log.push(`Quote ${q ? q.no + ' ' : ''}accepted by the customer (${a.how}), terms v${a.termsVersion}`);
+      saveJobRecord(j);
+      raiseAlert(j, 'accept', `${j.cust.name} accepted ${q ? q.no : 'the quote'} for ${j.id}`);
+      return { job: j, acceptance: a };
+    },
+
+    /* The customer accepted on their own page; the panel notices on its
+       next refresh and moves the job along. The acceptance itself is
+       already recorded — this only catches the job up. */
+    applyPendingAcceptances(byOwner) {
+      const moved = [];
+      acceptances.forEach(a => {
+        const j = getJob(a.jobId);
+        if (!j || j.stage >= 3 || j.status !== 'active') return;
+        j.stage = 3;
+        j.log.push(`Quote ${a.quoteNo || ''} accepted by the customer online, terms v${a.termsVersion}`);
+        saveJobRecord(j);
+        raiseAlert(j, 'accept', `${j.cust.name} accepted ${a.quoteNo || 'the quote'} for ${j.id}`);
+        moved.push(j.id);
+      });
+      return moved;
     },
 
     /* ---- prices ---------------------------------------------------
@@ -1207,6 +1613,48 @@ const Data = (() => {
           out.push({ urgency: daysToJob <= 3 ? 0 : 1, jobId: j.id,
             what: `${j.cust.name} has paid but the job orders haven't gone out`,
             detail: `Job is ${fmtDate(j.cust.moveDate)}. Send the orders to your contractors.`,
+            action: 'Open' });
+        }
+      });
+
+      /* Documents waiting on you. These are the hand-offs the panel
+         deliberately does not do by itself: nothing reaches a customer
+         without someone pressing the button. */
+      jobs.filter(j => j.status === 'active' && mine(j)).forEach(j => {
+        const plan = paymentPlan(j);
+        if (!jobCost(j)) return;
+
+        // accepted, but the deposit invoice hasn't gone
+        if (getAcceptance(j.id) && !latestDoc(j.id, 'invoice')) {
+          out.push({ urgency: 1, jobId: j.id,
+            what: `${j.cust.name} accepted — the first invoice hasn't gone out`,
+            detail: this.bankReady()
+              ? `${fmtMoney(plan.schedule[0].amount)} due ${fmtDate(plan.schedule[0].due)}. Issue it from the job.`
+              : 'Add the bank account under Settings first — an invoice without it cannot be paid.',
+            action: 'Open' });
+        }
+
+        // an issued invoice that hasn't been paid by its date
+        liveDocs(j.id).filter(d => d.type === 'invoice' && !isInstalmentPaid(j, d.instalment || 'deposit'))
+          .forEach(d => {
+            if (!d.dueDate) return;
+            const days = Math.round((startOfDay(parseDate(d.dueDate)) - today) / 864e5);
+            if (days <= 2) {
+              out.push({ urgency: days < 0 ? 0 : 1, jobId: j.id,
+                what: `${d.no} for ${j.cust.name} ${days < 0 ? 'is overdue' : days === 0 ? 'is due today' : `is due in ${days} day${days === 1 ? '' : 's'}`}`,
+                detail: `${fmtMoney(d.amountDue)}. Check your bank, then record it on the job.`,
+                action: 'Open' });
+            }
+          });
+
+        // the balance invoice's turn has come round
+        const bal = plan.schedule.find(x => x.key === 'balance');
+        if (bal && !isInstalmentPaid(j, 'balance')
+            && !liveDocs(j.id).some(d => d.type === 'invoice' && d.instalment === 'balance')
+            && startOfDay(parseDate(bal.due)) - today <= 3 * 864e5) {
+          out.push({ urgency: 2, jobId: j.id,
+            what: `${j.cust.name}'s balance invoice is due to go out`,
+            detail: `${fmtMoney(bal.amount)}, payable ${fmtDate(bal.due)}. Issue it from the job.`,
             action: 'Open' });
         }
       });
