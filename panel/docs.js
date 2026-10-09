@@ -49,7 +49,11 @@ const Docs = (() => {
   font-family:Karla,system-ui,-apple-system,"Segoe UI",sans-serif;color:#14283A;display:flex;flex-direction:column}
 .fo-doc .ser{font-family:Fraunces,Georgia,"Times New Roman",serif}
 .fo-head{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
-.fo-head img{width:86px;height:86px;object-fit:contain}
+.fo-head .lockup{display:flex;align-items:center;gap:12px}
+.fo-head .lockup img{width:64px;height:64px;object-fit:contain}
+.fo-head .lockup .wm{line-height:1.05}
+.fo-head .lockup .wm b{display:block;font-size:30px;font-weight:600;letter-spacing:-.4px;color:#14283A}
+.fo-head .lockup .wm span{display:block;font-size:11.5px;color:#5A6B78;margin-top:3px}
 .fo-biz{text-align:right;font-size:12px;line-height:1.55;color:#3B4A58}
 .fo-biz b{display:block;font-size:17px;font-weight:600;color:#14283A;letter-spacing:.2px}
 .fo-title{display:flex;align-items:center;gap:18px;margin-top:34px}
@@ -72,11 +76,19 @@ const Docs = (() => {
 .fo-note.cream{background:#F4F0E8;border-color:#D97A35}
 .fo-note.amber{background:#FBF1E8;border-color:#9A5420}
 .fo-note.teal{background:#EBF2F1;border-color:#2C6E66}
+.fo-tbl{margin-top:26px}
+.fo-payrow{margin-top:26px;display:flex;gap:22px;align-items:stretch}
 .fo-doc table{width:100%;border-collapse:collapse;font-size:13px}
-.fo-doc thead tr{background:#14283A;color:#fff;text-align:left}
-.fo-doc th{padding:10px 14px;font-size:11px;letter-spacing:1.2px;font-weight:700}
-.fo-doc td{padding:13px 14px;vertical-align:top;line-height:1.6;border-bottom:1px solid #DCE2E7}
-.fo-doc td.num,.fo-doc th.num{text-align:right}
+.fo-doc thead tr{background:#14283A;text-align:left}
+.fo-doc thead th{padding:10px 14px;font-size:11px;letter-spacing:1.2px;font-weight:700;
+  color:#fff;background:#14283A;text-transform:none;border:0;white-space:normal}
+.fo-doc td{padding:13px 14px;vertical-align:top;line-height:1.6;border:0;
+  border-bottom:1px solid #DCE2E7;color:#14283A}
+.fo-doc td.num,.fo-doc thead th.num{text-align:right;white-space:nowrap}
+.fo-doc tr.svc td{background:#F7F8F6;font-weight:700;padding-top:11px;padding-bottom:11px}
+.fo-doc tr.item td{padding-top:9px;padding-bottom:9px}
+.fo-doc tr.item td:first-child{padding-left:28px}
+.fo-doc .qty{color:#5A6B78;font-size:12px}
 .fo-sum{margin-top:20px;display:flex;justify-content:flex-end}
 .fo-sum>div{width:340px}
 .fo-sum .line{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;color:#3B4A58}
@@ -109,14 +121,42 @@ const Docs = (() => {
 .fo-next>div{flex:1}
 .fo-next b{display:block;font-size:13px;margin-bottom:3px}
 .fo-next span{color:#3B4A58}
+@page{size:A4 portrait;margin:0}
 @media print{
-  body{margin:0;background:#fff}
-  .fo-doc{width:auto;min-height:0;padding:14mm 16mm;margin:0}
+  html,body{margin:0;padding:0;background:#fff}
+  .fo-doc{width:210mm;min-height:0;padding:11mm 13mm;margin:0;box-shadow:none}
+  .fo-title{margin-top:16px}
+  .fo-title span{font-size:19px}
+  .fo-parties{margin-top:14px}
+  .fo-parties .fo-to,.fo-parties .fo-meta{line-height:1.45}
+  .fo-badge{margin-top:7px;padding:4px 10px}
+  .fo-note{margin-top:13px;padding:10px 14px;font-size:12px;line-height:1.5}
+  .fo-tbl,.fo-payrow,.fo-box{margin-top:13px}
+  .fo-box{padding:12px 14px}
+  .fo-box .lbl{margin-bottom:8px}
+  .fo-sum{margin-top:12px}
+  .fo-sum .grand{padding-top:9px;margin-top:5px}
+  .fo-small{margin-top:11px;font-size:11px}
+  .fo-foot{margin-top:13px;padding-top:9px}
+  .fo-doc td{padding:7px 14px}
+  .fo-doc thead th{padding:7px 14px}
+  .fo-doc tr.svc td{padding-top:8px;padding-bottom:8px}
+  .fo-doc tr.item td{padding-top:6px;padding-bottom:6px}
+  .fo-next{font-size:11.5px}
+  .fo-head .lockup img{width:52px;height:52px}
+  .fo-head .lockup .wm b{font-size:24px}
+  .fo-biz{font-size:11px;line-height:1.45}
+  .fo-doc thead th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .fo-doc .fo-note,.fo-doc tr.svc td,.fo-doc .fo-badge{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .fo-noprint{display:none !important}
 }
-@media (max-width:820px){
+/* Screen only, and below A4's 794px: the printed page is narrower than
+   a desktop window, so an unscoped breakpoint here collapses the paper
+   into the phone layout. */
+@media screen and (max-width:640px){
   .fo-doc{width:100%;padding:24px 18px 28px}
-  .fo-head,.fo-parties,.fo-pay,.fo-next{flex-direction:column;gap:14px}
+  .fo-head,.fo-parties,.fo-pay,.fo-next,.fo-payrow{flex-direction:column;gap:14px}
+  .fo-payrow>div{width:auto !important}
   .fo-biz,.fo-meta{text-align:left}
   .fo-sum{justify-content:stretch}
   .fo-sum>div{width:100%}
@@ -132,7 +172,10 @@ const Docs = (() => {
   function head(ctx) {
     const b = ctx.business;
     return `<div class="fo-head">
-      ${b.logo ? `<img src="${esc(b.logo)}" alt="FlatOut">` : '<div style="width:86px"></div>'}
+      <div class="lockup">
+        ${b.logo ? `<img src="${esc(b.logo)}" alt="">` : ''}
+        <div class="wm"><b class="ser">FlatOut</b><span>Moving out? We'll sort it.</span></div>
+      </div>
       <div class="fo-biz">
         <b class="ser">${esc(b.name)}</b>
         <div>${esc(b.entity)}${b.nzbn ? ' · NZBN ' + esc(b.nzbn) : ''}</div>
@@ -153,7 +196,7 @@ const Docs = (() => {
       <div class="fo-to">
         <div class="lbl">${esc(label)}</div>
         <div class="nm">${esc(c.name)}</div>
-        <div>${esc(ctx.job.address)}</div>
+        ${ctx.job.address ? `<div>${esc(ctx.job.address)}</div>` : ''}
         ${c.email ? `<div style="margin-top:6px;color:#3B4A58">${esc(c.email)}</div>` : ''}
         ${!c.email && c.phone ? `<div style="margin-top:6px;color:#3B4A58">${esc(c.phone)}</div>` : ''}
       </div>
@@ -164,15 +207,21 @@ const Docs = (() => {
     </div>`;
   }
 
-  /* Services are described in full; the money is ONE figure. That is
-     what the terms promise the customer, and it keeps contractor rates
-     off a document that leaves the building. */
+  /* Itemised: every line the customer is paying for, with its own
+     price. The line prices are the customer's prices — they already
+     include the margin — and they are allocated so they add up to the
+     total exactly, because a document whose lines do not reconcile is
+     the first thing anyone queries. Contractor rates never appear. */
   function serviceTable(ctx, heading) {
-    return `<div style="margin-top:26px"><table>
-      <thead><tr><th style="width:34%">SERVICE</th><th>${esc(heading)}</th></tr></thead>
-      <tbody>${ctx.services.map(s => `<tr>
-        <td><b>${esc(s.name)}</b>${s.when ? `<br><span style="color:#5A6B78;font-size:12px">${esc(s.when)}</span>` : ''}</td>
-        <td>${esc(s.detail)}</td></tr>`).join('')}
+    return `<div class="fo-tbl"><table>
+      <thead><tr><th>${esc(heading)}</th><th class="num" style="width:120px">AMOUNT</th></tr></thead>
+      <tbody>${ctx.services.map(s => `
+        <tr class="svc"><td>${esc(s.name)}${s.when ? ` <span class="qty">· ${esc(s.when)}</span>` : ''}</td>
+          <td class="num"></td></tr>
+        ${(s.items || []).map(i => `<tr class="item">
+          <td>${esc(i.name)}${i.qty && i.qty !== 1 ? ` <span class="qty">× ${esc(i.qty)}${i.hourly ? ' hrs' : ''}</span>` : ''}</td>
+          <td class="num">${plain(i.amount)}</td></tr>`).join('')}
+      `).join('')}
       </tbody></table></div>`;
   }
 
@@ -227,18 +276,23 @@ const Docs = (() => {
     return wrap(ctx, head(ctx) + title('ESTIMATE') +
       parties(ctx, 'ESTIMATE FOR', [
         ['Estimate no.', ctx.no], ['Job no.', ctx.job.id],
-        ['Issued', longDate(ctx.issued)], ['Valid until', longDate(ctx.validUntil)]
+        ['Issued', longDate(ctx.issued)], ['Valid until', longDate(ctx.validUntil)],
+        ...(ctx.job.date ? [['Job date', longDate(ctx.job.date)]] : [])
       ], ['warn', 'INDICATIVE']) +
-      `<div class="fo-note amber"><b>This is an estimate, not a fixed price.</b> It is what we expect the job to cost based on walking through the property. Once our contractors confirm they can do it on your date, we will send a formal quote with a firm price. If anything changes the figure, we will tell you before any work starts — we will not do extra work and bill you for it.</div>` +
+      `<div class="fo-note amber"><b>This is an estimate, not a fixed price.</b> It is what we expect the job to cost, ${ctx.seen
+        ? 'based on walking through the property'
+        : 'based on what you have told us. We have not seen the property yet, so the figure can move once we have'}. Once our contractors confirm they can do it${ctx.job.date ? ' on your date' : ''}, we will send a formal quote with a firm price. If anything changes the figure, we will tell you before any work starts — we will not do extra work and bill you for it.</div>` +
       serviceTable(ctx, "WHAT WE'D DO") +
       totals(ctx, gstLines(ctx), 'Estimated all-in', money(ctx.total),
-        `One figure covering everything above.<br>${gstNote(ctx)}`) +
+        `Everything listed above, nothing else to pay.<br>${gstNote(ctx)}`) +
       `<div class="fo-box"><div class="lbl">WHAT HAPPENS NEXT</div><div class="fo-next">
         <div><b>1 &nbsp;You tell us you're keen</b><span>Reply to this, or text ${esc(ctx.business.phone)}. Nothing is booked and nothing is owed yet.</span></div>
-        <div><b>2 &nbsp;We confirm contractors</b><span>We check the crews can do ${esc(shortDate(ctx.job.date))} and hold the slot.</span></div>
+        <div><b>2 &nbsp;${ctx.seen ? 'We confirm contractors' : 'We come and look'}</b><span>${ctx.seen
+          ? `We check the crews can do ${esc(shortDate(ctx.job.date))} and hold the slot.`
+          : 'A twenty-minute walk-through, then we confirm the crews and hold your slot.'}</span></div>
         <div><b>3 &nbsp;You get a firm quote</b><span>A fixed price you can accept online. Payment only becomes due after that.</span></div>
       </div></div>` +
-      `<div class="fo-small"><b>If you go ahead.</b> ${esc(ctx.payment.sentence)} You can cancel or reschedule at no cost up to 48 hours before the job.</div>` +
+      `<div class="fo-small"><b>If you go ahead.</b> ${esc(ctx.payment.sentence)} You can cancel or reschedule at no cost up to 48 hours before the job.${ctx.job.address ? '' : ' This estimate is not tied to a property yet — tell us the address and the date and we will firm it up.'}</div>` +
       foot(ctx), ctx.voided);
   }
 
@@ -251,8 +305,8 @@ const Docs = (() => {
       `<div class="fo-note cream"><b>Move-out at ${esc(ctx.job.address)} on ${esc(shortDate(ctx.job.date))}.</b> Your contractors are confirmed and this price is fixed for the work described below.</div>` +
       serviceTable(ctx, "WHAT'S INCLUDED") +
       totals(ctx, gstLines(ctx), 'All-in price', money(ctx.total),
-        `One figure covering everything above.<br>${gstNote(ctx)}`) +
-      `<div style="margin-top:26px;display:flex;gap:22px;align-items:stretch">
+        `Everything listed above, nothing else to pay.<br>${gstNote(ctx)}`) +
+      `<div class="fo-payrow">
         <div style="flex:1;border:1px solid #DCE2E7;border-radius:6px;padding:16px 18px">
           <div class="lbl" style="font-size:11px;letter-spacing:1.4px;color:#5A6B78;font-weight:700;margin-bottom:10px">WHEN IT'S DUE</div>
           <table style="border-collapse:collapse;width:100%"><tbody>
@@ -283,7 +337,7 @@ const Docs = (() => {
         ...(ctx.quoteNo ? [['Quote no.', ctx.quoteNo]] : []),
         ['Job no.', ctx.job.id], ['Issued', longDate(ctx.issued)]
       ], ctx.voided ? ['void', 'VOIDED'] : ['warn', ctx.instalmentLabel || 'DUE']) +
-      `<div style="margin-top:26px"><table>
+      `<div class="fo-tbl"><table>
         <thead><tr><th>DESCRIPTION</th><th class="num" style="width:140px">AMOUNT</th></tr></thead>
         <tbody>
           <tr><td><b>Move-out services at ${esc(ctx.job.address)}</b><br>
@@ -329,7 +383,7 @@ const Docs = (() => {
           ? `Your move-out on <b>${esc(shortDate(ctx.job.date))}</b> is confirmed.`
           : `That settles your account in full. Thanks for using FlatOut.`}</div>
       </div>` +
-      `<div style="margin-top:26px"><table>
+      `<div class="fo-tbl"><table>
         <thead><tr><th>PAYMENT RECEIVED</th><th style="width:150px">DATE</th><th class="num" style="width:130px">AMOUNT</th></tr></thead>
         <tbody><tr>
           <td><b>${esc(ctx.forWhat)}</b><br><span style="color:#3B4A58;font-size:12.5px">${esc(ctx.method)}${ctx.invoiceNo ? `, ref ${esc(ctx.invoiceNo)}` : ''}</span></td>

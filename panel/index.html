@@ -268,6 +268,10 @@ const money = n => n.toLocaleString('en-NZ', { style: 'currency', currency: 'NZD
 function cName(id) { const c = Data.getContractor(id); return c ? c.name : 'Contractor removed'; }
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fd = d => (typeof d === 'string' ? Data.parseDate(d) : new Date(d)).toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
+/* A job can exist before you know its date — a phone enquiry you want
+   to price. Anywhere a date is shown, say so plainly rather than
+   printing "Invalid Date". */
+const fdOr = (d, fallback = 'date to come') => (d ? fd(d) : fallback);
 const ft = t => { const [h, m] = t.split(':').map(Number); return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''}${h < 12 ? 'am' : 'pm'}`; };
 const first = n => n.replace(/^Sample:\s*/, '').split(' ')[0];
 const iso = Data.isoDate;
@@ -327,8 +331,11 @@ async function copy(text, said) {
 function printDocument(doc) {
   const w = window.open('', '_blank');
   if (!w) { toast('Your browser blocked the window. Allow pop-ups for this site.'); return; }
+  // The page title becomes the suggested filename in the save dialog,
+  // so it is written to be the name you'd want on disk.
+  const name = `FlatOut ${Data.DOC_TYPES[doc.type].label} ${doc.no}`;
   w.document.write(`<!doctype html><html lang="en-NZ"><head><meta charset="utf-8">
-    <title>${esc(doc.no)} FlatOut</title>
+    <title>${esc(name)}</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Karla:wght@400;500;600;700&display=swap">
     <style>body{margin:0;background:#EEF0F1}</style></head><body>${doc.html}</body></html>`);
   w.document.close();
@@ -341,7 +348,8 @@ function jobCtx(j) {
   return { 'first name': first(c.name), sender: owner().split(' ')[0], address: c.address,
     visit: c.visit ? `${fd(c.visit.date)} at ${ft(c.visit.time)}` : '(no visit booked)',
     price: money(Data.customerPrice(Data.jobCost(j))), payment: t.kind.toLowerCase(),
-    amount: money(t.amount), 'due date': fd(t.due), 'job date': fd(c.moveDate),
+    amount: money(t.amount), 'due date': fdOr(t.due, 'once we have your date'),
+    'job date': fdOr(c.moveDate, 'your move-out day'),
     services: Object.keys(j.sections).map(k => S[k].toLowerCase()).join(', ') };
 }
 const suggested = j => j.stage === 0 ? 'visit'
@@ -384,7 +392,7 @@ function vHome() {
       <div class="rows" style="margin-top:14px">${live.slice(0, 6).map(j => `<div class="row"><div class="main"><b>${esc(j.cust.name)}</b> <span class="muted small">${j.id}</span><br><span class="small muted">${j.cust.moveDate ? fd(j.cust.moveDate) : 'no date'} · ${money(Data.customerPrice(Data.jobCost(j)))} · ${esc(j.owner.split(' ')[0])}</span></div>${stagePill(j.stage, j)}<button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button></div>`).join('') || '<p class="muted">No jobs yet.</p>'}</div></section>
 
     <section class="card"><div class="card-head"><h3>Payments</h3><span class="eyebrow">You record these from Zoho</span></div>
-      <div class="rows">${pay.map(({ job: j, terms: t, paid, overdue }) => `<div class="row"><div class="main"><b>${esc(j.cust.name)}</b> <span class="muted small">${j.id}</span><br><span class="small muted">${paid ? (t.balance ? `Balance ${money(t.balance)} due ${fd(t.balanceDue)}` : 'Paid in full') : `${t.kind} ${money(t.amount)} due ${fd(t.due)}`}</span></div>${paid ? (t.balance ? '<span class="pill p-warn">Balance owing</span>' : '<span class="pill p-ok">Paid</span>') : overdue ? '<span class="pill p-bad">Overdue</span>' : '<span class="pill p-grey">Not yet due</span>'}</div>`).join('') || '<p class="muted">Nothing owing.</p>'}</div>
+      <div class="rows">${pay.map(({ job: j, terms: t, paid, overdue }) => `<div class="row"><div class="main"><b>${esc(j.cust.name)}</b> <span class="muted small">${j.id}</span><br><span class="small muted">${paid ? (t.balance ? `Balance ${money(t.balance)} due ${fdOr(t.balanceDue)}` : 'Paid in full') : `${t.kind} ${money(t.amount)} due ${fdOr(t.due)}`}</span></div>${paid ? (t.balance ? '<span class="pill p-warn">Balance owing</span>' : '<span class="pill p-ok">Paid</span>') : overdue ? '<span class="pill p-bad">Overdue</span>' : '<span class="pill p-grey">Not yet due</span>'}</div>`).join('') || '<p class="muted">Nothing owing.</p>'}</div>
       <p class="small muted" style="margin-top:12px">Invoices and payments live in Zoho. This only reflects what you have recorded here.</p></section>
   </div></div>`;
 }
@@ -402,7 +410,7 @@ function filteredJobs() {
 }
 function jobRows() {
   const list = filteredJobs();
-  return list.length ? list.map(j => `<tr><td>${j.id}</td><td><b>${esc(j.cust.name)}</b><br><span class="small muted">${esc(j.cust.address)}</span></td><td>${fd(j.cust.moveDate)}</td>
+  return list.length ? list.map(j => `<tr><td>${j.id}</td><td><b>${esc(j.cust.name)}</b><br><span class="small muted">${esc(j.cust.address)}</span></td><td>${fdOr(j.cust.moveDate)}</td>
     <td><select class="select inline" id="own-${j.id}" data-act="setOwner" data-id="${j.id}" aria-label="Job owner for ${j.id}">${OWNERS.map(o => `<option value="${o}" ${o === j.owner ? 'selected' : ''}>${o.split(' ')[0]}</option>`).join('')}</select></td>
     <td>${stagePill(j.stage, j)}</td><td class="num">${money(Data.customerPrice(Data.jobCost(j)))}</td><td><button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button></td></tr>`).join('')
     : '<tr><td colspan="7" class="muted">No jobs match. Clear a filter or search for something else.</td></tr>';
@@ -469,7 +477,7 @@ function nextAction(j) {
         todo: 'Confirm the details with your contractors, then send the formal quote from Zoho.',
         label: "I've sent the formal quote", act: 'quote' };
     case 4:
-      return { waiting: `Waiting on the ${t.kind.toLowerCase()} of ${money(t.amount)}, due ${fd(t.due)}.`,
+      return { waiting: `Waiting on the ${t.kind.toLowerCase()} of ${money(t.amount)}${t.due ? `, due ${fd(t.due)}` : ''}.`,
         todo: 'When the money shows up in Zoho, record it here. The job does not go ahead until it has.',
         label: 'Payment has landed', act: 'pay' };
     case 5:
@@ -510,7 +518,7 @@ function vJob(j) {
   <div><button class="btn sm ghost" data-act="back">← All jobs</button></div>
   ${j.status === 'standby' ? standbyBanner(j)
     : j.status !== 'active' ? `<p class="note">This job is marked ${esc(Data.JOB_STATUS[j.status].toLowerCase())}${j.statusReason ? ': ' + esc(j.statusReason) : ''}. It is out of your pipeline until you reopen it.</p>` : ''}
-  <div class="card-head" style="margin:0"><div><h2>${esc(j.cust.name)}</h2><p class="muted small" style="margin-top:4px">${j.id} · ${esc(j.cust.address)} · job ${fd(j.cust.moveDate)} · prepared by ${esc(j.preparedBy)} · <button class="linkbtn" data-act="editJob" data-id="${j.id}">Edit details</button></p></div><div class="chips"><label class="small muted" for="own-d-${j.id}">Owner</label><select class="select inline" id="own-d-${j.id}" data-act="setOwner" data-id="${j.id}">${OWNERS.map(o => `<option value="${o}" ${o === j.owner ? 'selected' : ''}>${o}</option>`).join('')}</select>${stagePill(j.stage, j)}</div></div>
+  <div class="card-head" style="margin:0"><div><h2>${esc(j.cust.name)}</h2><p class="muted small" style="margin-top:4px">${j.id}${j.cust.address ? ' · ' + esc(j.cust.address) : ' · no address yet'} · job ${fdOr(j.cust.moveDate)} · prepared by ${esc(j.preparedBy)} · <button class="linkbtn" data-act="editJob" data-id="${j.id}">Edit details</button></p></div><div class="chips"><label class="small muted" for="own-d-${j.id}">Owner</label><select class="select inline" id="own-d-${j.id}" data-act="setOwner" data-id="${j.id}">${OWNERS.map(o => `<option value="${o}" ${o === j.owner ? 'selected' : ''}>${o}</option>`).join('')}</select>${stagePill(j.stage, j)}</div></div>
   <section class="card"><div class="steps">${STAGES.map((s, i) => `<div class="step ${i < j.stage ? 'done' : i === j.stage ? 'now' : ''}">${s}</div>`).join('')}</div>
     ${j.status === 'active' ? `<div class="next"><div style="flex:1 1 220px">
       <p><b>${na.waiting}</b></p>
@@ -602,7 +610,7 @@ function posCard(j) {
       : p.status === 'replaced' ? 'Superseded by a later order'
       : p.status === 'silent' ? 'No reply. Reply was due ' + fd(p.due)
       : p.status === 'done' ? `Marked done · ${p.photos} photo${p.photos === 1 ? '' : 's'}`
-      : p.status === 'accepted' ? 'Accepted · booked for ' + fd(j.cust.moveDate)
+      : p.status === 'accepted' ? 'Accepted · booked for ' + fdOr(j.cust.moveDate)
       : overdue ? `No answer yet. Reply was due ${fd(p.due)}` : 'Sent. Reply due ' + fd(p.due);
     return `<div class="row"><div class="main">
       <b>${p.no}</b> · ${esc(c?.name || 'Contractor removed')} <span class="muted small">(${S[p.key]})</span><br>
@@ -649,7 +657,7 @@ function jobOrderText(j, p) {
     '',
     `Job: ${S[p.key]}`,
     `Address: ${j.cust.address}`,
-    `Date: ${fd(j.cust.moveDate)}`,
+    `Date: ${fdOr(j.cust.moveDate, 'to be confirmed')}`,
     '',
     'What we need:',
     items || '  (to be confirmed)',
@@ -741,9 +749,12 @@ function docsCard(j) {
   <div class="rows">
     ${plan.schedule.map(sx => {
       const done = Data.isInstalmentPaid(j.id, sx.key);
-      const late = !done && sx.due < Data.isoDate(Data.today());
+      const late = !done && !!sx.due && sx.due < Data.isoDate(Data.today());
+      const when = done ? 'Received'
+        : !sx.due ? 'Due date follows the job date — set one'
+        : (late ? 'Was due ' : 'Due ') + fd(sx.due);
       return `<div class="row"><div class="main"><b>${esc(sx.what)}</b> ${money(sx.amount)}<br>
-        <span class="small ${late ? '' : 'muted'}" ${late ? 'style="color:var(--red)"' : ''}>${done ? 'Received' : (late ? 'Was due ' : 'Due ') + fd(sx.due)}</span></div>
+        <span class="small ${late ? '' : 'muted'}" ${late ? 'style="color:var(--red)"' : ''}>${esc(when)}</span></div>
         ${done ? '<span class="pill p-ok">Paid</span>' : `<button class="btn sm ghost" data-act="takePayment" data-id="${j.id}" data-k="${sx.key}" ${bankReady ? '' : 'disabled title="Add the bank account under Settings"'}>Mark received</button>`}
       </div>`;
     }).join('')}
@@ -822,11 +833,11 @@ function jobDetailsForm(j) {
   return `<section class="card"><div class="card-head"><h3>Edit ${j.id}</h3><span class="eyebrow">Name, phone and email live on their customer record</span></div>
   <form data-form="jobdetails" data-id="${j.id}">
     <div class="form-grid">
-      <div class="field"><label for="ej-date-${j.id}">Move-out date</label><input class="input" id="ej-date-${j.id}" name="moveDate" type="date" required value="${esc(j.cust.moveDate)}"></div>
+      <div class="field"><label for="ej-date-${j.id}">Move-out date</label><input class="input" id="ej-date-${j.id}" name="moveDate" type="date" value="${esc(j.cust.moveDate)}"></div>
       <div class="field"><label for="ej-ref-${j.id}">Their reference</label><input class="input" id="ej-ref-${j.id}" name="ref" value="${j.cust.ref === '—' ? '' : esc(j.cust.ref)}" placeholder="FO-261005-1234"></div>
       <div class="field"><label for="ej-people-${j.id}">People in the flat</label><input class="input" id="ej-people-${j.id}" name="people" type="number" min="0" max="12" value="${j.cust.people || 0}"></div>
     </div>
-    <div class="field"><label for="ej-addr-${j.id}">Address</label><input class="input" id="ej-addr-${j.id}" name="address" required value="${esc(j.cust.address)}"></div>
+    <div class="field"><label for="ej-addr-${j.id}">Address</label><input class="input" id="ej-addr-${j.id}" name="address" value="${esc(j.cust.address)}" placeholder="Street, suburb"></div>
     <div class="field"><label for="ej-special-${j.id}">What they told us</label><textarea class="textarea" id="ej-special-${j.id}" name="special">${esc(j.cust.special || '')}</textarea></div>
     ${holding.length ? `<p class="note">Moving the date changes when payment is due. ${holding.length === 1 ? 'One contractor is' : holding.length + ' contractors are'} holding a job order with the old date on it — ${esc(holding.map(p => cName(p.contractorId)).join(', '))} — and the panel can't tell them. You'll need to.</p>` : ''}
     <div class="chips" style="margin-top:12px"><button class="btn" type="submit">Save changes</button><button class="btn ghost" type="button" data-act="cancelEditJob">Cancel</button></div>
@@ -879,10 +890,13 @@ function estimateCard(j) {
   const title = Data.TITLES[j.preparedBy] ? ', ' + Data.TITLES[j.preparedBy] : '';
   return `<section class="estimate" aria-label="Customer estimate preview"><div class="est-head"><div class="logo"><img src="/images/logo-icon.png" alt=""><div><b>FlatOut</b><span>Moving out? We'll sort it.</span></div></div><div class="small" style="text-align:right"><b>Estimate · ${j.id}</b><br><span class="muted">${fd(Data.today())}</span></div></div>
   <div class="est-body"><div class="eyebrow">What the customer sees</div>
-  <div><b>${esc(j.cust.name)}</b><br><span class="small muted">${esc(j.cust.address)} · ${fd(j.cust.moveDate)}</span></div>
+  <div><b>${esc(j.cust.name)}</b><br><span class="small muted">${esc(j.cust.address || 'Address to come')} · ${fdOr(j.cust.moveDate)}</span></div>
   ${Object.entries(j.sections).map(([k, s]) => `<div><b>${S[k]}</b><ul class="small">${Object.entries(s.lines).map(([iid, q]) => { const i = Data.lineItem(s, iid); return i ? `<li>${esc(i.name)}${q !== 1 ? ` × ${q}${i.type === 'hourly' ? ' hrs' : ''}` : ''}</li>` : ''; }).join('')}</ul></div>`).join('')}
   <div class="est-total"><span>All-in price</span><b>${money(total)}</b></div>
-  <p class="small muted">${t.kind}: ${money(t.amount)} due ${fd(t.due)}${t.balance ? `, balance ${money(t.balance)} due ${fd(t.balanceDue)}` : ''}. This is an estimate. The formal quote follows once contractors confirm.</p>
+  <p class="small muted">${(() => { const pl = Data.paymentPlan(j);
+    return pl.dated
+      ? pl.schedule.map(x => `${x.what}: ${money(x.amount)} due ${fd(x.due)}`).join(', ')
+      : pl.schedule.map(x => `${x.what}: ${money(x.amount)}`).join(', ') + ' — dates follow once the job date is set'; })()}. This is an estimate. The formal quote follows once contractors confirm.</p>
   <p class="small">Prepared by ${esc(j.preparedBy)}${title} · FlatOut NZ</p></div></section>`;
 }
 
@@ -1012,17 +1026,17 @@ function vNewJob() {
         <div class="field"><label for="nj-contact">Contact by</label><select class="select" id="nj-contact" name="contact"><option ${p && p.contact === 'Text' ? 'selected' : ''}>Text</option><option ${p && p.contact === 'Email' ? 'selected' : ''}>Email</option></select></div>
         <div class="field"><label for="nj-phone">Phone</label><input class="input" id="nj-phone" name="phone" type="tel" value="${v('phone')}" placeholder="027 000 0000"></div>
         <div class="field"><label for="nj-email">Email</label><input class="input" id="nj-email" name="email" type="email" value="${v('email')}" placeholder="name@example.com"></div>
-        <div class="field"><label for="nj-date">Move-out date</label><input class="input" id="nj-date" name="moveDate" type="date" required value="${v('moveDate')}"></div>
+        <div class="field"><label for="nj-date">Move-out date <span class="muted" style="font-weight:400">(if known)</span></label><input class="input" id="nj-date" name="moveDate" type="date" value="${v('moveDate')}"></div>
         <div class="field"><label for="nj-people">People in the flat</label><input class="input" id="nj-people" name="people" type="number" min="0" max="12" value="${p && p.people ? p.people : 4}"></div>
       </div>
-      <div class="field"><label for="nj-address">Address</label><input class="input" id="nj-address" name="address" required value="${v('address')}" placeholder="Street, suburb"></div>
+      <div class="field"><label for="nj-address">Address <span class="muted" style="font-weight:400">(if known)</span></label><input class="input" id="nj-address" name="address" value="${v('address')}" placeholder="Street, suburb"></div>
       <div class="field"><label for="nj-special">What they told us <span class="muted" style="font-weight:400">(optional)</span></label><textarea class="textarea" id="nj-special" name="special" placeholder="Bedrooms, how much stuff, anything they flagged">${v('special')}</textarea></div>
       <div class="field"><span class="flabel">Services they asked for</span><div class="options">${KEYS.map(k => `<label class="option"><input type="checkbox" name="services" value="${k}" ${p && p.services && p.services.includes(k) ? 'checked' : ''}><span>${S[k]}</span></label>`).join('')}</div></div>
       <div class="chips">
         <button class="btn" type="submit" name="then" value="save">Save job</button>
         <button class="btn ghost" type="submit" name="then" value="walk">Save and start walk-through</button>
       </div>
-      <p class="small muted">Saving puts it on the board as <b>New</b>. Nothing is owed and nothing needs doing until you visit.</p>
+      <p class="small muted">Saving puts it on the board as <b>New</b>. Nothing is owed and nothing needs doing until you visit. Address and date can come later — you can still price it and send an estimate without them.</p>
     </form>
   </section>
   </div>`;
@@ -1377,7 +1391,7 @@ function docOverlay() {
   el.innerHTML = `<div class="inner">
     <div class="bar">
       <b>${esc(Data.DOC_TYPES[doc.type].label)} ${esc(doc.no)}${doc.status === 'voided' ? ' · voided' : ''}</b>
-      <span class="chips"><button class="btn sm" data-act="printDoc">Save as PDF</button>
+      <span class="chips"><button class="btn sm" data-act="printDoc">Download PDF</button>
       <button class="btn sm ghost" data-act="closeDoc">Close</button></span>
     </div>
     <div>${doc.html}</div></div>`;

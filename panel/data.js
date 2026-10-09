@@ -297,6 +297,21 @@ const Data = (() => {
 
   function paymentTerms(job) {
     const total = customerPrice(jobCost(job));
+
+    /* A job can be priced before it has a date. The shape stays the
+       same so nothing downstream has to special-case it; the dates are
+       simply null, and whatever displays them says so. */
+    if (!job.cust.moveDate) {
+      if (total <= 500) {
+        return { kind: 'Full payment', amount: total, due: null,
+          note: 'Paid in full 2 days before the job' };
+      }
+      const half = Math.round(total / 2);
+      return { kind: '50% deposit', amount: half, due: null, balance: total - half,
+        balanceDue: null,
+        note: '50% deposit 3 business days before the job, balance 14 days after the deposit' };
+    }
+
     const move = parseDate(job.cust.moveDate);
     if (total <= 500) {
       return { kind: 'Full payment', amount: total, due: addDays(move, -2),
@@ -537,18 +552,39 @@ const Data = (() => {
   /* What the customer owes and when, as a schedule rather than prose,
      so the quote, the invoices and the portal all agree. */
   function paymentPlan(job) {
-    const t = paymentTerms(job);
     const total = customerPrice(jobCost(job));
+
+    /* No date yet, so there are no due dates — only the rule. Said as
+       the rule rather than with invented dates, which would be worse
+       than saying nothing. */
+    if (!job.cust.moveDate) {
+      if (total <= 500) {
+        return { total, dated: false,
+          schedule: [{ key: 'full', what: 'Full payment', amount: total, due: null }],
+          sentence: 'Jobs of $500 or less are paid in full two days before the job.',
+          warning: 'Payment is due two days before the job, once we have a date.' };
+      }
+      const half = Math.round(total / 2);
+      return { total, dated: false,
+        schedule: [
+          { key: 'deposit', what: '50% deposit', amount: half, due: null },
+          { key: 'balance', what: 'Balance', amount: total - half, due: null }
+        ],
+        sentence: 'Jobs over $500 are a 50% deposit three business days before the job, with the balance 14 days after.',
+        warning: 'The deposit is due three business days before the job, once we have a date.' };
+    }
+
+    const t = paymentTerms(job);
     if (t.kind === 'Full payment') {
       return {
-        total,
+        total, dated: true,
         schedule: [{ key: 'full', what: 'Full payment', amount: t.amount, due: isoDate(t.due) }],
         sentence: `Jobs of $500 or less are paid in full two days before the job. On this job that is $${fmtMoney(t.amount).replace('$', '')} on ${fmtDate(isoDate(t.due))}.`,
         warning: 'Payment is due two days before the job. If it has not arrived by then the job cannot go ahead.'
       };
     }
     return {
-      total,
+      total, dated: true,
       schedule: [
         { key: 'deposit', what: '50% deposit', amount: t.amount, due: isoDate(t.due) },
         { key: 'balance', what: 'Balance', amount: t.balance, due: isoDate(t.balanceDue) }
@@ -583,17 +619,51 @@ const Data = (() => {
         phone: (cust && cust.phone) || job.cust.phone || ''
       },
       job: { id: job.id, address: job.cust.address, date: job.cust.moveDate },
-      services: Object.entries(job.sections).map(([k, sec]) => ({
-        name: SERVICES[k],
-        when: job.cust.moveDate ? fmtDate(job.cust.moveDate) : '',
-        detail: Object.entries(sec.lines)
-          .map(([iid, q]) => { const i = lineItem(sec, iid); return i ? `${i.name}${q !== 1 ? ` × ${q}${i.type === 'hourly' ? ' hrs' : ''}` : ''}` : ''; })
-          .filter(Boolean).join('. ') + (sec.notes ? '. ' + sec.notes : '') || 'As discussed at the walk-through.'
-      })),
+      seen: !!(job.cust.address && job.cust.moveDate),
+      services: itemiseJob(job),
       total: plan.total,
       payment: plan,
       voided: false
     }, opts.ctx || {});
+  }
+
+  /* Every line the customer is paying for, with its own price.
+     The customer's price for a line is its cost plus the margin. Those
+     round individually, and rounded parts do not have to add up to a
+     rounded whole — so the leftover cent or two is pushed onto the
+     largest line. The lines then always sum to the figure at the
+     bottom, which is the first thing anyone checks. */
+  function itemiseJob(job) {
+    const rows = [];
+    Object.entries(job.sections).forEach(([k, sec]) => {
+      Object.entries(sec.lines).forEach(([iid, q]) => {
+        const i = lineItem(sec, iid);
+        if (!i || !q) return;
+        rows.push({ key: k, name: i.name, qty: q, hourly: i.type === 'hourly',
+          cost: q * i.rate, amount: 0 });
+      });
+    });
+
+    const total = customerPrice(rows.reduce((t, r) => t + r.cost, 0));
+    rows.forEach(r => { r.amount = Math.round(r.cost * (1 + MARGIN)); });
+    const drift = total - rows.reduce((t, r) => t + r.amount, 0);
+    if (drift && rows.length) {
+      const biggest = rows.reduce((a, b) => (b.amount > a.amount ? b : a), rows[0]);
+      biggest.amount += drift;
+    }
+
+    return Object.entries(job.sections).map(([k, sec]) => {
+      const items = rows.filter(r => r.key === k);
+      return {
+        name: SERVICES[k],
+        when: job.cust.moveDate ? fmtDate(job.cust.moveDate) : '',
+        items,
+        // sec.notes is written for the contractor ("keys with the
+        // tenant", "dog on site") and has no business on a customer
+        // document, so it is deliberately not carried through.
+        detail: items.map(i => i.name).join('. ') || 'As discussed at the walk-through.'
+      };
+    });
   }
 
   /* Issue: build the snapshot, render it, freeze it, store it. */
@@ -601,8 +671,15 @@ const Data = (() => {
     const job = getJob(jobId);
     if (!job) return { error: 'That job no longer exists.' };
     if (!Docs.TYPES[type]) return { error: 'Unknown document type.' };
-    if (!job.cust.address) return { error: 'The job needs an address before anything can be issued.' };
-    if (!job.cust.moveDate) return { error: 'The job needs a move-out date before anything can be issued.' };
+    /* An estimate goes out before you have been to the property, so it
+       asks for nothing but a name and a price. A quote is the firm
+       document and an invoice asks for money, so those do need to say
+       which property and which day. */
+    if (type !== 'estimate') {
+      if (!job.cust.address) return { error: 'A ' + type + ' needs the address. Add it with Edit details.' };
+      if (!job.cust.moveDate) return { error: 'A ' + type + ' needs the move-out date. Add it with Edit details.' };
+    }
+    if (!String(job.cust.name || '').trim()) return { error: 'The job needs a customer name.' };
     if (type !== 'receipt' && !jobCost(job)) {
       return { error: 'Nothing is priced yet, so there is nothing to put on a document.' };
     }
@@ -997,8 +1074,8 @@ const Data = (() => {
     updateJobDetails(id, fields, byOwner) {
       const j = getJob(id);
       if (!j) return { error: 'That job no longer exists.' };
-      if (!String(fields.address || '').trim()) return { error: 'A job needs an address.' };
-      if (!fields.moveDate) return { error: 'A job needs a move-out date.' };
+      // Both can legitimately be blank early on; the documents and the
+      // job page say when they are missing rather than refusing.
 
       const changed = [];
       const set = (key, label, value) => {
@@ -1617,20 +1694,33 @@ const Data = (() => {
         }
       });
 
+      /* Priced but still missing the details a quote needs. */
+      jobs.filter(j => j.status === 'active' && mine(j) && jobCost(j) && (!j.cust.address || !j.cust.moveDate))
+        .forEach(j => {
+          const missing = [!j.cust.address && 'an address', !j.cust.moveDate && 'a date'].filter(Boolean).join(' and ');
+          out.push({ urgency: 2, jobId: j.id,
+            what: `${j.cust.name} is priced but has no ${missing}`,
+            detail: 'An estimate can go out without it. A quote, an invoice and a place on the calendar cannot.',
+            action: 'Open' });
+        });
+
       /* Documents waiting on you. These are the hand-offs the panel
          deliberately does not do by itself: nothing reaches a customer
          without someone pressing the button. */
       jobs.filter(j => j.status === 'active' && mine(j)).forEach(j => {
-        const plan = paymentPlan(j);
         if (!jobCost(j)) return;
+        const plan = paymentPlan(j);
 
         // accepted, but the deposit invoice hasn't gone
         if (getAcceptance(j.id) && !latestDoc(j.id, 'invoice')) {
+          const first = plan.schedule[0];
           out.push({ urgency: 1, jobId: j.id,
             what: `${j.cust.name} accepted — the first invoice hasn't gone out`,
-            detail: this.bankReady()
-              ? `${fmtMoney(plan.schedule[0].amount)} due ${fmtDate(plan.schedule[0].due)}. Issue it from the job.`
-              : 'Add the bank account under Settings first — an invoice without it cannot be paid.',
+            detail: !this.bankReady()
+              ? 'Add the bank account under Settings first — an invoice without it cannot be paid.'
+              : first.due
+                ? `${fmtMoney(first.amount)} due ${fmtDate(first.due)}. Issue it from the job.`
+                : `${fmtMoney(first.amount)}. Set the job date first, then issue it.`,
             action: 'Open' });
         }
 
@@ -1648,7 +1738,8 @@ const Data = (() => {
           });
 
         // the balance invoice's turn has come round
-        const bal = plan.schedule.find(x => x.key === 'balance');
+        // An undated job has a schedule with no due dates on it.
+        const bal = plan.schedule.find(x => x.key === 'balance' && x.due);
         if (bal && !isInstalmentPaid(j, 'balance')
             && !liveDocs(j.id).some(d => d.type === 'invoice' && d.instalment === 'balance')
             && startOfDay(parseDate(bal.due)) - today <= 3 * 864e5) {
@@ -1738,7 +1829,7 @@ const Data = (() => {
       // From the estimate going out until the job is signed off. Paid
       // is stage 5 and everything after it; before that the money is
       // still owed, and overdue once the due date has gone by.
-      return jobs.filter(j => j.stage >= 2 && j.stage < 7 && j.status === 'active').map(j => {
+      return jobs.filter(j => j.stage >= 2 && j.stage < 7 && j.status === 'active' && j.cust.moveDate).map(j => {
         const t = paymentTerms(j);
         const paid = j.stage >= 5;
         return { job: j, terms: t, paid, overdue: !paid && startOfDay(t.due) < now };

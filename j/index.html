@@ -84,9 +84,10 @@ footer{text-align:center;padding:0 20px 36px;color:var(--muted);font-size:11px;l
 .sheet .bar .close{background:transparent;color:#fff;font-size:22px;padding:4px 10px;line-height:1}
 .spin{text-align:center;padding:60px 20px;color:var(--muted)}
 @media print{
-  header,footer,.sheet .bar,.noprint{display:none !important}
-  body{background:#fff}
-  .sheet{position:static;background:#fff}
+  header,footer,.sheet .bar,.noprint,main>.card,main>.note,main>.btn,main>p{display:none !important}
+  html,body{background:#fff;margin:0}
+  .sheet{position:static;background:#fff;overflow:visible}
+  .sheet .inner{background:#fff;min-height:0}
 }
 </style>
 </head>
@@ -275,7 +276,7 @@ footer{text-align:center;padding:0 20px 36px;color:var(--muted);font-size:11px;l
       <div class="inner">
         <div class="bar">
           <b>${esc(TYPE_LABEL[x.type] || '')} ${esc(x.no)}</b>
-          <span><button id="printdoc">Save as PDF</button>
+          <span><button id="printdoc">Download PDF</button>
           <button class="close" id="closedoc" aria-label="Close">×</button></span>
         </div>
         <div id="docbody"></div>
@@ -328,7 +329,16 @@ footer{text-align:center;padding:0 20px 36px;color:var(--muted);font-size:11px;l
       const body = document.getElementById('docbody');
       body.innerHTML = state.data.documents[state.openDoc].html;
       document.getElementById('closedoc').addEventListener('click', () => { state.openDoc = null; render(); });
-      document.getElementById('printdoc').addEventListener('click', () => window.print());
+      document.getElementById('printdoc').addEventListener('click', () => {
+        /* The page title is what the browser suggests as the filename,
+           so it is set to the document's name for the print and put
+           back afterwards. */
+        const was = document.title;
+        const x = state.data.documents[state.openDoc];
+        document.title = `FlatOut ${TYPE_LABEL[x.type] || 'Document'} ${x.no}`;
+        window.print();
+        setTimeout(() => { document.title = was; }, 500);
+      });
       sheet.addEventListener('click', e => { if (e.target === sheet) { state.openDoc = null; render(); } });
       document.addEventListener('keydown', escClose);
     } else {

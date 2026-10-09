@@ -261,6 +261,35 @@ Four documents, issued from the job: **estimate**, **quote**,
 **invoice**, **receipt**. Each type has its own number run (EST-, QTE-,
 INV-, REC-) that counts up and never restarts.
 
+**An estimate needs almost nothing.** A name, a phone number or email,
+and a price. No address and no date — because an estimate is what you
+send after a phone call, before you have been anywhere. The document
+adjusts: it says you have not seen the property, offers to come and
+look, and states the payment rule instead of inventing due dates.
+
+A **quote, invoice or receipt** does need the address and the date.
+Those are firm documents and one without a property or a day on it is
+not worth much. Add them with **Edit details**, and Home nudges you
+about any priced job still missing them.
+
+**Estimates and quotes are itemised.** Every line the customer pays for
+has its own price — "Bedroom clean × 4 · 437.00" — and the lines always
+add up to the figure at the bottom. The line prices are the customer's
+prices, margin already in them; contractor rates never appear on
+anything that leaves the building, and nor do the site notes you write
+for contractors.
+
+One thing to know: your terms page says prices are "a single all-in
+figure". That is still true of what they pay, but the documents now
+show the breakdown behind it. Worth a look at that wording next time
+you touch the terms.
+
+**Download PDF** is on every document, in the panel and on the
+customer's page. It opens the browser's print dialog — choose "Save as
+PDF" as the destination. The file is named for you: *FlatOut Quote
+QTE-0014.pdf*. The documents are laid out to come out as one clean A4
+page with nothing of the browser on it.
+
 **Issued means frozen.** The moment you issue something, the exact
 document — its wording, its figures, its stylesheet — is stored. What
 the customer opens in six months is what you sent, whatever has changed
