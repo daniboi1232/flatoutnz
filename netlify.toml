@@ -1,0 +1,84 @@
+# Headers and caching for flatoutnz.co.nz.
+#
+# The site has no build step; this file exists only so Netlify sends
+# sensible headers. Netlify sends almost none by default, which left
+# the site embeddable in anyone else's page and every font and image
+# re-downloading on each visit.
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Nobody should be framing this site. A copy of the quote form
+    # inside someone else's page, collecting students' addresses and
+    # phone numbers, is the thing this prevents.
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    # No part of the site needs a camera, a microphone or a location.
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    # Two years, and ask to be preloaded. Only safe because the site is
+    # already HTTPS-only on Netlify.
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    # Scripts are inline and the only outside connections are Google
+    # Fonts (stylesheets), the Apps Script endpoint the forms post to,
+    # and the panel's own API. Anything else is refused by the browser.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; form-action 'self' https://script.google.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+
+# Fonts and images never change without changing their filename, so
+# they can be held for a year. This is the difference between a repeat
+# visit being instant and re-fetching everything.
+[[headers]]
+  for = "/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.png"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+# The stylesheet DOES change in place, so it is revalidated rather than
+# held. A day of caching with a check on each visit.
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# Nothing behind the panel or a customer's link should ever be cached
+# by a shared proxy, or kept on a phone after the job is done.
+[[headers]]
+  for = "/panel/*"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/j/*"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow"
+
+# Two files that shouldn't be in the repo: "quote:index.html" (a stray
+# copy of the quote page, whose canonical tag still points at the old
+# flatoutnz.netlify.app domain, so Google sees a duplicate claiming to
+# live elsewhere) and a root-level site.css duplicating css/site.css.
+#
+# force = true makes these win over the actual files, so they stop
+# being served now. Still delete them from GitHub when you get a
+# chance — this hides the problem rather than removing it.
+[[redirects]]
+  from = "/quote:index.html"
+  to = "/quote"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/site.css"
+  to = "/css/site.css"
+  status = 301
+  force = true

@@ -124,7 +124,7 @@
         <div class="form-row form-row--2">
           <div class="form-group">
             <label class="form-label" for="currentLocation">Current location</label>
-            <input class="form-input" type="text" id="currentLocation" name="currentLocation" placeholder="e.g. Ilam" autocomplete="off" required />
+            <input class="form-input" type="text" id="currentLocation" name="currentLocation" placeholder="e.g. Ilam" autocomplete="address-level2" required />
             <p class="form-error-message" id="currentLocation-error">Tell us your current suburb.</p>
           </div>
           <div class="form-group">
@@ -298,7 +298,6 @@
         <ul class="site-footer__list">
           <li><a href="/#how-it-works">How It Works</a></li><li><a href="/#services">Services</a></li><li><a href="/#landlord">For Landlords</a></li><li><a href="/#contact">Contact</a></li>
           <li><a href="/terms">Terms</a></li>
-          <li><a href="https://books.zohosecure.com.au/portal/flatoutnz" target="_blank" rel="noopener">Customer portal</a></li>
           <li><a href="/panel">Employees</a></li>
           <li><a href="/quote">Get a Quote</a></li>
         </ul>
@@ -553,9 +552,23 @@
 
     var data = collectData();
 
+    /* One submission a minute from a device. The honeypot and the
+       too-fast check below catch a crude bot; this catches one that
+       gets past them and would otherwise fill the sheet with hundreds
+       of rows, and the double-tap on a slow connection. */
+    var RATE_KEY = "flatout_last_submit";
+    var since = 0;
+    try { since = Date.now() - Number(localStorage.getItem(RATE_KEY) || 0); } catch (err) { since = 1e9; }
+    if (since < 60000) {
+      statusBox.textContent = "That's already on its way to us \u2014 give it a moment. If you need to send another, wait a minute or text 027 408 6895.";
+      statusBox.classList.add("is-visible");
+      return;
+    }
+
     // Spam checks — honeypot filled, or submitted implausibly fast
     var elapsed = Date.now() - Number(data.started_at || Date.now());
     var looksLikeSpam = data.website || elapsed < 2500;
+    try { localStorage.setItem(RATE_KEY, String(Date.now())); } catch (err) {}
 
     var ref = makeReference();
 

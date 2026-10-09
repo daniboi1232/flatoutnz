@@ -713,8 +713,22 @@ const Data = (() => {
     documents.unshift(doc);
     saveDocument(doc);
     job.log.push(`${no} issued by ${byOwner}` + (extra.replaces ? `, replacing ${extra.replaces}` : ''));
+
+    /* Issuing the document IS the thing the stage was recording, so
+       the stage follows it. Otherwise you do the same job twice: send
+       the quote, then separately remember to tick "quote sent". Only
+       ever forwards, and never past a stage that means something else
+       has happened (accepted, paid). */
+    const was = job.stage;
+    if (type === 'estimate' && job.stage < 2) job.stage = 2;
+    // A quote only moves the stage on from Accepted. Issuing one
+    // earlier must not jump the job past Accepted, which has not
+    // happened yet — the stages are in the order they really occur.
+    if (type === 'quote' && job.stage === 3) job.stage = 4;
+    if (job.stage !== was) job.log.push(`Moved to ${STAGES[job.stage]} by issuing ${no}`);
+
     saveJobRecord(job);
-    return { document: doc };
+    return { document: doc, stageMoved: job.stage !== was };
   }
 
   /* The per-type fields the shared snapshot doesn't cover. */
@@ -1505,12 +1519,24 @@ const Data = (() => {
       return { po: fresh, replaced: old.no, contractor: c?.name || 'the contractor' };
     },
 
-    signOffJob(id, byOwner) {
+    /* Signing a job off is where it leaves your pipeline, so it is the
+       last moment anyone looks at it. Letting that happen with money
+       still owing is how a balance quietly never gets chased.
+       Overridable - sometimes you have agreed something - but it has
+       to be a decision rather than an oversight, and it is logged. */
+    signOffJob(id, byOwner, anyway) {
       const j = getJob(id);
+      if (!j) return { error: 'That job no longer exists.' };
+      const owing = Math.max(0, paymentPlan(j).total - paidTotal(id));
+      if (owing > 0 && !anyway) {
+        return { blocked: true, owing, why: fmtMoney(owing) + ' is still owing on this job.' };
+      }
       j.stage = 7;
-      j.log.push(`Completion check signed off by ${byOwner}`);
+      j.log.push(owing > 0
+        ? 'Signed off by ' + byOwner + ' with ' + fmtMoney(owing) + ' still owing'
+        : 'Completion check signed off by ' + byOwner);
       saveJobRecord(j);
-      return j;
+      return { job: j, owing };
     },
 
     newSection(key) {
@@ -1765,6 +1791,120 @@ const Data = (() => {
       });
 
       return out.sort((a, b) => a.urgency - b.urgency);
+    },
+
+    /* ---- what the business actually made --------------------------
+       Two different questions that look like one. WORK DONE is by job
+       date: what you sold that month and what it cost you. CASH IN is
+       by payment date: what actually landed. They rarely match, because
+       a deposit arrives before the job and a balance two weeks after,
+       so they are reported separately rather than averaged into
+       something that is true of neither. */
+    earnings(forOwner, mineOnly = false) {
+      const mine = j => !mineOnly || j.owner === forOwner;
+      const months = {};
+      const row = k => (months[k] = months[k] || {
+        key: k, sold: 0, cost: 0, margin: 0, jobs: 0, received: 0, lost: 0, lostJobs: 0
+      });
+      const monthOf = iso => String(iso || '').slice(0, 7);
+
+      jobs.filter(mine).forEach(j => {
+        const cost = jobCost(j);
+        if (!cost) return;
+        if (j.status === 'active' && j.cust.moveDate) {
+          const r = row(monthOf(j.cust.moveDate));
+          const price = customerPrice(cost);
+          r.sold += price; r.cost += cost; r.margin += price - cost; r.jobs++;
+        }
+        if (j.status === 'lost' && j.cust.moveDate) {
+          const r = row(monthOf(j.cust.moveDate));
+          r.lost += customerPrice(cost); r.lostJobs++;
+        }
+        (j.payments || []).forEach(pm => { row(monthOf(pm.on)).received += Number(pm.amount || 0); });
+      });
+
+      const list = Object.values(months).sort((a, b) => b.key.localeCompare(a.key));
+      const totals = list.reduce((t, m) => ({
+        sold: t.sold + m.sold, cost: t.cost + m.cost, margin: t.margin + m.margin,
+        jobs: t.jobs + m.jobs, received: t.received + m.received,
+        lost: t.lost + m.lost, lostJobs: t.lostJobs + m.lostJobs
+      }), { sold: 0, cost: 0, margin: 0, jobs: 0, received: 0, lost: 0, lostJobs: 0 });
+
+      // Everything invoiced and not yet paid, whatever month it sits in.
+      const owing = jobs.filter(j => mine(j) && j.status === 'active' && jobCost(j))
+        .map(j => ({ job: j, owing: Math.max(0, paymentPlan(j).total - paidTotal(j.id)) }))
+        .filter(x => x.owing > 0 && liveDocs(x.job.id).some(d => d.type === 'invoice'))
+        .sort((a, b) => String(a.job.cust.moveDate).localeCompare(String(b.job.cust.moveDate)));
+
+      return { months: list, totals, owing,
+        owed: owing.reduce((t, x) => t + x.owing, 0),
+        marginRate: totals.sold ? totals.margin / totals.sold : MARGIN };
+    },
+
+    /* ---- the day before -------------------------------------------
+       Everything happening tomorrow, with the message already written
+       for the customer and for each crew. */
+    tomorrow(forOwner, mineOnly = false) {
+      const iso = isoDate(addDays(startOfDay(new Date()), 1));
+      const mine = j => !mineOnly || j.owner === forOwner;
+      return jobs.filter(j => j.status === 'active' && mine(j) && j.cust.moveDate === iso)
+        .map(j => ({
+          job: j,
+          crews: livePos(j).map(p => ({
+            no: p.no, key: p.key, service: SERVICES[p.key], status: p.status,
+            name: getContractor(p.contractorId)?.name || 'Contractor removed',
+            phone: getContractor(p.contractorId)?.phone || '',
+            confirmed: p.status === 'accepted' || p.status === 'done'
+          })),
+          unconfirmed: livePos(j).filter(p => p.status !== 'accepted' && p.status !== 'done').length,
+          owing: Math.max(0, paymentPlan(j).total - paidTotal(j.id))
+        }));
+    },
+
+    /* ---- the whole lot, as one file -------------------------------
+       The panel's data lives with the Netlify site and nowhere else.
+       One wrong setting and there is no copy anywhere, so there needs
+       to be a way to take one. */
+    backup() {
+      return {
+        format: 'flatout-panel-backup',
+        version: 1,
+        takenAt: new Date().toISOString(),
+        counts: { jobs: jobs.length, customers: customers.length,
+          contractors: contractors.length, documents: documents.length },
+        jobs, customers, contractors, documents, acceptances,
+        portals: portalGates, templates, alerts,
+        settings: alertSettings, business
+      };
+    },
+
+    /* Put a backup back. Everything currently stored is replaced, so
+       the UI asks properly before calling this. */
+    async restore(data, byOwner) {
+      if (!data || data.format !== 'flatout-panel-backup') {
+        return { error: "That is not a FlatOut backup file." };
+      }
+      const put = (kind, id, value) => queueSave(kind, id, value);
+      (data.contractors || []).forEach(c => put('contractor', c.id, c));
+      (data.customers || []).forEach(c => put('customer', c.id, c));
+      (data.jobs || []).forEach(j => put('job', j.id, j));
+      (data.documents || []).forEach(d => put('document', d.id, d));
+      (data.acceptances || []).forEach(a => put('acceptance', a.jobId, a));
+      (data.portals || []).forEach(g => put('portal', g.jobId, g));
+      (data.templates || []).forEach(t => put('template', t.id, t));
+      if (data.settings) put('settings', '', data.settings);
+      if (data.business) put('business', '', data.business);
+
+      contractors = data.contractors || [];
+      customers = (data.customers || []).sort((a, b) => a.name.localeCompare(b.name));
+      jobs = (data.jobs || []).map(migrateJob).sort((a, b) => String(b.id).localeCompare(String(a.id)));
+      documents = data.documents || [];
+      acceptances = data.acceptances || [];
+      portalGates = data.portals || [];
+      templates = data.templates || templates;
+      if (data.settings) alertSettings = data.settings;
+      if (data.business) business = Object.assign({}, BUSINESS_DEFAULTS, data.business);
+      return { restored: data.counts || {}, by: byOwner };
     },
 
     /* ---- export --------------------------------------------------

@@ -1,4 +1,11 @@
 User-agent: *
 Allow: /
 
+# The employees panel is password-protected and a customer's job page
+# needs a token, so neither is reachable anyway — but there is no
+# reason to publish that they exist.
+Disallow: /panel
+Disallow: /j
+Disallow: /thanks
+
 Sitemap: https://flatoutnz.co.nz/sitemap.xml

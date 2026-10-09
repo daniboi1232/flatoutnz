@@ -290,6 +290,11 @@ PDF" as the destination. The file is named for you: *FlatOut Quote
 QTE-0014.pdf*. The documents are laid out to come out as one clean A4
 page with nothing of the browser on it.
 
+**Issuing moves the stage.** Sending the estimate puts the job at
+Estimate sent; issuing a quote once they have accepted puts it at
+Quote sent. One action, not two. A quote issued before they have
+accepted leaves the stage alone, because nothing has been accepted yet.
+
 **Issued means frozen.** The moment you issue something, the exact
 document — its wording, its figures, its stylesheet — is stored. What
 the customer opens in six months is what you sent, whatever has changed
@@ -348,6 +353,66 @@ were, which is correct.
 
 **Settings → Terms version.** Bump it whenever you change the terms
 page. Each acceptance records which version the customer actually saw.
+
+## Getting around
+
+**The back button works inside the panel.** Every tab and every job
+you open gets its own address, so Back goes Job → Jobs → Home and only
+leaves the panel once you are already at Home. Swipe-back on a phone
+does the same thing.
+
+**Every screen has a link.** `/panel/#jobs/J-1004` opens that job
+straight away — handy for sending Rocky a job rather than telling him
+where to find it. A link to a job that has since gone falls back to the
+jobs list rather than a blank page.
+
+**The logo goes Home**, and the **Website** link opens the public site
+in a new tab so it never navigates the panel away from under you.
+
+## Money
+
+A tab of its own, with two things kept apart on purpose.
+
+**Work done** is by job date: what customers were charged that month,
+what the contractors cost, and what you kept. **Cash in** is by the day
+a payment actually landed. They never match — a deposit arrives before
+the job and the balance a fortnight after — and a single number
+pretending otherwise would be wrong both ways.
+
+**Still owed** lists every invoice issued and not yet paid, oldest job
+first, with anything past its job date in red.
+
+The "you kept" figure is before your own time, fuel, phone and
+anything you refund. It is the margin, not the profit.
+
+## The day before
+
+Jobs happening tomorrow appear on **Home** with the messages already
+written: one for the customer, one for the crews. Copy and send. A crew
+that hasn't confirmed is flagged in red — ring those rather than
+texting.
+
+## Signing off
+
+A job cannot be signed off while money is still owing. You can override
+it — sometimes you have agreed something — but it has to be a decision,
+and it goes in the job's history either way. Sign-off is the last time
+anyone looks at a job, so a balance left there is a balance that never
+gets chased.
+
+## Backing it up
+
+**Settings → Backup → Download a backup.** Everything in the panel
+lives with the Netlify site and nowhere else: one wrong setting and
+there is no copy anywhere. This takes a complete one — every job,
+customer, contractor, document, payment and setting — as a single file.
+
+Unlike the spreadsheet exports, this is a file you could actually
+restore from. **Keep it somewhere that is not Netlify.** Do it before
+November, and again whenever you have done a solid week's work.
+
+**Restore** replaces everything currently stored. There is no undo, so
+it asks you to type the word first.
 
 ## How to remove the whole thing
 

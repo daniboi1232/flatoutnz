@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FlatOut Employees Panel</title>
 <meta name="robots" content="noindex">
+<link rel="icon" href="/favicon-32.png" sizes="32x32">
+<link rel="icon" href="/favicon-16.png" sizes="16x16">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preload" href="/fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin>
 <style>
@@ -40,7 +43,9 @@ p{margin:0}
 
 header.top{background:var(--white);border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
 .top-inner{max-width:72rem;margin:0 auto;padding-inline:16px;padding-block:10px 0;display:flex;gap:12px 20px;align-items:center;flex-wrap:wrap}
-.logo{display:flex;align-items:center;gap:10px}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;border-radius:8px}
+.logo:hover b{color:var(--teal)}
+.logo:focus-visible{outline:2px solid var(--teal);outline-offset:3px}
 .logo img{width:36px;height:36px}
 .logo b{font-family:var(--display);font-weight:600;font-size:1.3rem;line-height:1}
 .logo span{display:block;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);font-weight:700;margin-top:3px}
@@ -226,10 +231,10 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
 <body>
 <header class="top">
   <div class="top-inner">
-    <div class="logo"><img src="/images/logo-icon.png" alt=""><div><b>FlatOut</b><span>Employees panel</span></div></div>
+    <a class="logo" href="#home" title="Back to the panel home"><img src="/images/logo-icon.png" alt=""><div><b>FlatOut</b><span>Employees panel</span></div></a>
     <span class="savestate" id="savestate" title="Whether your changes have reached the server">Saved</span>
     <button class="bell" id="bell" data-act="alerts" aria-label="Alerts"><span>Alerts</span><b id="bellcount" hidden></b></button>
-    <a class="tosite" href="/" title="Open the public FlatOut website">
+    <a class="tosite" href="/" target="_blank" rel="noopener" title="Open the public FlatOut website in a new tab">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
       <span>Website</span>
     </a>
@@ -244,6 +249,7 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
       <button data-view="today">Today</button>
       <button data-view="customers">Customers</button>
       <button data-view="contractors">Contractors</button>
+      <button data-view="money">Money</button>
       <button data-view="settings">Settings</button>
     </nav>
   </div>
@@ -281,7 +287,7 @@ const S = Data.SERVICES, KEYS = Data.SERVICE_KEYS, OWNERS = Data.OWNERS, STAGES 
 let view = 'home', openJob = null, draft = null;
 const ui = { jf: { q: '', stage: 'all', who: 'all', suburb: 'all', status: 'active' }, addC: false, editC: null,
   statusFor: null, retrieveFor: null, repriceFor: null, editJob: null, stepBackFor: null, poFixFor: null,
-  voidFor: null, payFor: null, viewDoc: null, confirmDelete: null, confirmDelC: null, calWeek: false,
+  voidFor: null, payFor: null, viewDoc: null, signoffOwing: null, restoring: false, confirmDelete: null, confirmDelC: null, calWeek: false,
   paste: { kind: 'tenant', parsed: null, dup: null, match: null, useMatch: true },
   addItemFor: null, bookFor: null, tpl: {}, editTpl: null, signoff: {},
   cust: { q: '', open: null, edit: null, add: false, mergeFrom: null, migrate: null },
@@ -295,17 +301,58 @@ function toast(m) {
 }
 Data.onAlert(a => { if (a.to.includes(owner())) toast('Phone alert: ' + a.text); });
 
+/* ---------- where you are, in the address bar ----------------------
+   The panel is one page, so without this the browser has a single
+   history entry for the whole thing and Back drops you out of it
+   entirely — which on a phone is just a swipe. Putting the current
+   screen in the hash gives every tab and every job its own entry, so
+   Back walks Job → Jobs → Home and only leaves once you are at Home.
+
+   The hash is the one place the state lives while navigating: go()
+   sets it, and the hashchange handler is what actually draws. That
+   way a tap, a Back press and a pasted link all take the same path.
+
+   Side benefit: screens are linkable, so a job can be sent to Rocky. */
+const VIEWS = ['home', 'jobs', 'calendar', 'walk', 'today', 'customers', 'contractors', 'money', 'settings', 'alerts'];
+
+function currentHash() {
+  if (view === 'jobs' && openJob) return '#jobs/' + openJob;
+  if (view === 'customers' && ui.cust.open) return '#customers/' + ui.cust.open;
+  return '#' + view;
+}
+
 function go(v, id) {
   clearBanner();
   view = v;
   if (id !== undefined) openJob = id;
+  const want = currentHash();
+  if (location.hash !== want) {
+    location.hash = want;   // pushes history; hashchange then paints
+    return;
+  }
+  paint();
+}
+
+/* Draw whatever the hash says. Anything unrecognised — a typo, an old
+   link, a job since deleted — lands on Home rather than a blank page. */
+function applyHash() {
+  const [v, id] = (location.hash || '').replace(/^#/, '').split('/');
+  view = VIEWS.includes(v) ? v : 'home';
+  openJob = view === 'jobs' && id && Data.getJob(id) ? id : null;
+  if (view === 'customers') ui.cust.open = id && Data.getCustomer(id) ? id : null;
+  paint();
+}
+
+function paint() {
   document.querySelectorAll('#tabs button').forEach(b => {
-    if (b.dataset.view === v) b.setAttribute('aria-current', 'page');
+    if (b.dataset.view === view) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
   });
   render();
   window.scrollTo(0, 0);
 }
+
+window.addEventListener('hashchange', applyHash);
 function bell() {
   const n = Data.unreadCount(owner()), b = document.getElementById('bellcount');
   b.hidden = !n; b.textContent = n;
@@ -360,6 +407,30 @@ const suggested = j => j.stage === 0 ? 'visit'
 const lineText = (s, iid, q) => { const i = Data.lineItem(s, iid); return i ? `${q} × ${i.name}` : ''; };
 
 /* ---------- home -------------------------------------------------- */
+/* The day-before round. Everything happening tomorrow with the message
+   already written, because this is the bit that gets skipped when you
+   are busy and it is the bit customers notice. */
+function tomorrowCard() {
+  const list = Data.tomorrow(owner(), Data.getAlertSettings(owner())?.mineOnly);
+  if (!list.length) return '';
+  return `<section class="card"><div class="card-head"><h3>Tomorrow</h3>
+    <span class="eyebrow">${list.length} job${list.length === 1 ? '' : 's'} · send the reminders</span></div>
+  <div class="rows" style="margin-top:12px">${list.map(({ job: j, crews, unconfirmed, owing }) => `
+    <div class="row"><div class="main">
+      <b>${esc(j.cust.name)}</b> <span class="muted small">${j.id} · ${esc(j.cust.address)}</span><br>
+      <span class="small muted">${crews.length
+        ? crews.map(c => `${esc(c.service)}: ${esc(c.name)}${c.confirmed ? '' : ' <b style="color:var(--red)">not confirmed</b>'}`).join(' · ')
+        : 'No crews booked'}</span>
+      ${owing ? `<br><span class="small" style="color:var(--red)">${money(owing)} still owing</span>` : ''}
+    </div>
+      <button class="btn sm" data-act="remindCust" data-id="${j.id}">Message the customer</button>
+      ${crews.length ? `<button class="btn sm ghost" data-act="remindCrew" data-id="${j.id}">Message the crews</button>` : ''}
+      <button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button>
+    </div>`).join('')}</div>
+  ${list.some(x => x.unconfirmed) ? '<p class="note" style="margin-top:12px">A crew that has not confirmed by tonight is a job that may not happen. Ring them rather than texting.</p>' : ''}
+  </section>`;
+}
+
 function vHome() {
   const jobs = Data.listJobs();
   const live = jobs.filter(j => j.status === 'active');
@@ -371,6 +442,8 @@ function vHome() {
   return `<div class="view">
   <div><h2>Kia ora, ${esc(owner().split(' ')[0])}</h2>
     <p class="muted small" style="margin-top:4px">${fd(new Date())} · ${live.length} live job${live.length === 1 ? '' : 's'}${standby.length ? ` · <button class="linkbtn" data-act="showStandby">${standby.length} on standby</button>` : ''} · ${attention.length === 0 ? 'nothing needs you right now' : `${attention.length} thing${attention.length === 1 ? '' : 's'} needing you${urgent ? `, ${urgent} urgent` : ''}`}</p></div>
+
+  ${tomorrowCard()}
 
   <section class="card" ${urgent ? 'style="box-shadow:inset 0 0 0 2px var(--orange),var(--shadow-card)"' : ''}>
     <div class="card-head"><h3>Needs you</h3><span class="eyebrow">Worst first</span></div>
@@ -680,7 +753,14 @@ function signoffCard(j) {
   return `<section class="card"><div class="card-head"><h3>Completion check</h3><span class="eyebrow">Signed off by ${esc(owner())}</span></div>
   <p class="small muted" style="margin-bottom:12px">Review each contractor's photos in the job orders below, then confirm with the customer.</p>
   <div class="options">${checks.map((s, i) => `<label class="option"><input type="checkbox" id="so-${j.id}-${i}" data-act="signTick" data-id="${j.id}" value="${i}" ${ticks.includes(i) ? 'checked' : ''}><span>${s}</span></label>`).join('')}</div>
-  <div class="chips" style="margin-top:14px"><button class="btn" data-act="signoff" data-id="${j.id}" ${ready ? '' : 'disabled'}>Sign off job</button><span class="small muted">${ready ? 'Ready to sign off. The review request is set up next.' : `${checks.length - ticks.length} check${checks.length - ticks.length === 1 ? '' : 's'} left`}</span></div></section>`;
+  <div class="chips" style="margin-top:14px"><button class="btn" data-act="signoff" data-id="${j.id}" ${ready ? '' : 'disabled'}>Sign off job</button><span class="small muted">${ready ? 'Ready to sign off. The review request is set up next.' : `${checks.length - ticks.length} check${checks.length - ticks.length === 1 ? '' : 's'} left`}</span></div>
+  ${ui.signoffOwing === j.id ? `<div class="formbox">
+    <p class="small"><b>${money(Data.outstanding(j.id))} is still owing on this job.</b></p>
+    <p class="small muted">Signing off is the last time anyone looks at a job, so a balance left here is a balance that never gets chased. Record the payment first if it has landed. If you have agreed something with them, sign it off anyway — it goes in the job's history either way.</p>
+    <div class="chips"><button class="btn sm ghost" data-act="takePayment" data-id="${j.id}" data-k="balance">Record the payment</button>
+      <button class="btn sm" style="background:var(--red)" data-act="signoff" data-id="${j.id}" data-anyway="yes">Sign off anyway</button>
+      <button class="btn sm ghost" data-act="cancelSignoff">Leave it</button></div>
+  </div>` : ''}</section>`;
 }
 /* Notes you type. The activity log underneath only records what the
    panel did; this is for what actually happened — the phone call, the
@@ -720,6 +800,7 @@ function docsCard(j) {
         <br><span class="small muted">${fd(d.issuedOn)} · ${esc(d.issuedBy.split(' ')[0])}${d.dueDate ? ` · ${money(d.amountDue)} due ${fd(d.dueDate)}` : ''}${d.validUntil ? ` · valid to ${fd(d.validUntil)}` : ''}${d.voidReason ? ` · ${esc(d.voidReason)}` : ''}</span>
       </div>
       <button class="btn sm ghost" data-act="viewDoc" data-d="${d.id}">View</button>
+      <button class="btn sm ghost" data-act="pdfDoc" data-d="${d.id}">PDF</button>
       ${d.status !== 'voided' ? `<button class="linkbtn" data-act="voidDoc" data-d="${d.id}">Void</button>` : ''}
     </div>`).join('') : '<p class="muted small">Nothing issued yet.</p>'}
   </div>
@@ -1263,6 +1344,63 @@ function migrateCard() {
 /* What goes on every document, and nothing else. Changing anything
    here affects documents issued from now on — the ones already sent
    are frozen and stay as they were. */
+/* What the business made, and what is still owed. Deliberately two
+   tables rather than one: work done is not the same as cash in, and a
+   single number pretending otherwise would be wrong both ways. */
+function monthName(key) {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-NZ', { month: 'long', year: 'numeric' });
+}
+
+function vMoney() {
+  const e = Data.earnings(owner(), Data.getAlertSettings(owner())?.mineOnly);
+  const t = e.totals;
+  return `<div class="view">
+  <div class="card-head" style="margin:0"><div><h2>Money</h2>
+    <p class="muted small" style="margin-top:4px">Work done is by job date. Cash in is by the day it landed. They do not match, because a deposit arrives before the job and the balance after it.</p></div>
+    <div class="chips"><button class="btn sm ghost" data-act="exportJobs">Export jobs</button></div></div>
+
+  <div class="grid2">
+    <section class="card"><div class="card-head"><h3>All time</h3><span class="eyebrow">${t.jobs} job${t.jobs === 1 ? '' : 's'}</span></div>
+      <div class="rows" style="margin-top:10px">
+        <div class="row"><div class="main">Customers were charged</div><b>${money(t.sold)}</b></div>
+        <div class="row"><div class="main">Contractors cost</div><b>${money(t.cost)}</b></div>
+        <div class="row"><div class="main"><b>You kept</b></div><b style="font-size:1.15rem">${money(t.margin)}</b></div>
+      </div>
+      <p class="small muted" style="margin-top:10px">That is ${t.sold ? Math.round(e.marginRate * 100) : Math.round(Data.MARGIN * 100)}% of what customers paid. Before your own time, fuel, phone and anything you refund.</p>
+      ${t.lostJobs ? `<p class="small muted">${t.lostJobs} job${t.lostJobs === 1 ? '' : 's'} marked lost, worth ${money(t.lost)}.</p>` : ''}
+    </section>
+
+    <section class="card"><div class="card-head"><h3>Still owed</h3><span class="eyebrow">${e.owing.length} invoice${e.owing.length === 1 ? '' : 's'}</span></div>
+      ${e.owed ? `<div class="ser" style="font-size:1.9rem;font-weight:600;margin:6px 0 2px">${money(e.owed)}</div>
+      <div class="rows" style="margin-top:10px">${e.owing.map(x => {
+        const late = x.job.cust.moveDate && x.job.cust.moveDate < Data.isoDate(Data.today());
+        return `<div class="row"><div class="main"><b>${esc(x.job.cust.name)}</b> <span class="muted small">${x.job.id}</span><br>
+          <span class="small ${late ? '' : 'muted'}" ${late ? 'style="color:var(--red)"' : ''}>${money(x.owing)} · job ${fdOr(x.job.cust.moveDate)}</span></div>
+          <button class="btn sm ghost" data-act="open" data-id="${x.job.id}">Open</button></div>`; }).join('')}</div>`
+      : '<p class="muted" style="margin-top:10px">Nothing outstanding.</p>'}
+    </section>
+  </div>
+
+  <section class="card"><div class="card-head"><h3>Month by month</h3><span class="eyebrow">Work done · cash in</span></div>
+    ${e.months.length ? `<div class="tablewrap" style="margin-top:12px"><table>
+      <thead><tr><th>Month</th><th class="num">Jobs</th><th class="num">Charged</th><th class="num">Contractors</th><th class="num">You kept</th><th class="num">Cash in</th></tr></thead>
+      <tbody>${e.months.map(m => `<tr>
+        <td><b>${esc(monthName(m.key))}</b></td>
+        <td class="num">${m.jobs || '—'}</td>
+        <td class="num">${m.sold ? money(m.sold) : '—'}</td>
+        <td class="num">${m.cost ? money(m.cost) : '—'}</td>
+        <td class="num"><b>${m.margin ? money(m.margin) : '—'}</b></td>
+        <td class="num">${m.received ? money(m.received) : '—'}</td></tr>`).join('')}
+      </tbody></table></div>
+      <p class="small muted" style="margin-top:10px">Lost and cancelled jobs are left out of the first four columns. Cash in counts every payment recorded in that month, whichever job it belonged to.</p>`
+    : '<p class="muted" style="margin-top:10px">Nothing priced yet.</p>'}
+  </section>
+
+  <p class="small muted">Not registered for GST, so none of these figures carry any. Once you register, the charged column will include it and this page will need splitting.</p>
+</div>`;
+}
+
 function vSettings() {
   const b = Data.getBusiness();
   const docCount = Data.listDocuments().length;
@@ -1299,6 +1437,26 @@ function vSettings() {
 
     <div class="chips" style="margin-top:14px"><button class="btn" type="submit">Save</button></div>
   </form>
+
+  <section class="card">
+    <div class="card-head"><h3>Backup</h3><span class="eyebrow">Do this before November</span></div>
+    <p class="small" style="margin-top:10px">Everything in the panel lives with the Netlify site and nowhere else. One wrong setting, one deleted store, and there is no copy. This takes one.</p>
+    <p class="small muted">Unlike the spreadsheet exports, this is a complete file you could actually restore from — every job, customer, contractor, document, payment and setting. Keep it somewhere that is not Netlify.</p>
+    <div class="chips" style="margin-top:12px">
+      <button class="btn" data-act="downloadBackup">Download a backup</button>
+      <button class="btn ghost" data-act="showRestore">Restore from a backup</button>
+    </div>
+    ${ui.restoring ? `<form class="formbox" data-form="restore">
+      <p class="small"><b>Restoring replaces everything currently in the panel.</b></p>
+      <p class="small muted">Every job, customer, contractor and document is overwritten by what is in the file. There is no undo, so take a fresh backup first if there is anything in here worth keeping. Type <b>restore</b> below to confirm you mean it.</p>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="field"><label for="rs-file">The backup file</label><input class="input" id="rs-file" name="file" type="file" accept="application/json,.json" required></div>
+        <div class="field"><label for="rs-ok">Type restore</label><input class="input" id="rs-ok" name="confirm" placeholder="restore" required></div>
+      </div>
+      <div class="chips"><button class="btn sm" style="background:var(--red)" type="submit">Replace everything</button>
+        <button class="btn sm ghost" type="button" data-act="cancelRestore">Cancel</button></div>
+    </form>` : ''}
+  </section>
 
   <section class="card">
     <div class="card-head"><h3>Document numbering</h3><span class="eyebrow">${docCount} issued all up</span></div>
@@ -1364,7 +1522,7 @@ function render() {
   const app = document.getElementById('app');
   try {
     app.innerHTML =
-      ({ home: vHome, jobs: vJobs, calendar: vCalendar, walk: vWalk, today: vToday, customers: vCustomers, contractors: vContractors, settings: vSettings, alerts: vAlerts })[view]();
+      ({ home: vHome, jobs: vJobs, calendar: vCalendar, walk: vWalk, today: vToday, customers: vCustomers, contractors: vContractors, money: vMoney, settings: vSettings, alerts: vAlerts })[view]();
   } catch (err) {
     console.error(err);
     app.innerHTML = `<section class="card"><h2>That didn't draw</h2>
@@ -1443,6 +1601,10 @@ document.addEventListener('click', e => {
     case 'closeDoc': ui.viewDoc = null; render(); break;
     case 'printDoc': {
       const doc = Data.getDocument(ui.viewDoc);
+      if (doc) printDocument(doc);
+      break; }
+    case 'pdfDoc': {
+      const doc = Data.getDocument(d.d);
       if (doc) printDocument(doc);
       break; }
     case 'voidDoc': ui.voidFor = d.d; render(); focus('void-why'); break;
@@ -1568,8 +1730,36 @@ document.addEventListener('click', e => {
     case 'backup': { const to = document.getElementById('bk-' + d.po).value;
       const { po } = Data.replacePurchaseOrder(d.id, d.po, to);
       toast(`${po.no} sent to ${cName(to)}`); render(); break; }
-    case 'signoff': Data.signOffJob(d.id, owner()); ui.tpl[d.id] = 'review';
-      toast('Job signed off. Review request is ready below'); render(); break;
+    case 'signoff': {
+      const r = Data.signOffJob(d.id, owner(), d.anyway === 'yes');
+      if (r.blocked) { ui.signoffOwing = d.id; render(); break; }
+      ui.signoffOwing = null;
+      ui.tpl[d.id] = 'review';
+      toast(r.owing ? 'Signed off, with money still owing' : 'Job signed off. Review request is ready below');
+      render(); break; }
+    case 'cancelSignoff': ui.signoffOwing = null; render(); break;
+    case 'downloadBackup': {
+      const data = Data.backup();
+      const name = `flatout-backup-${Data.isoDate(Data.today())}.json`;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+      toast(`${data.counts.jobs} jobs, ${data.counts.customers} customers, ${data.counts.documents} documents`);
+      break; }
+    case 'showRestore': ui.restoring = true; render(); break;
+    case 'cancelRestore': ui.restoring = false; render(); break;
+    case 'remindCust': {
+      const j2 = Data.getJob(d.id);
+      copy(fill(Data.getTemplate('daybefore').body, jobCtx(j2)), 'Reminder copied — send it to ' + first(j2.cust.name));
+      break; }
+    case 'remindCrew': {
+      const j2 = Data.getJob(d.id);
+      const lines = Data.livePos(j2).map(po =>
+        `${cName(po.contractorId)} — ${S[po.key]} at ${j2.cust.address}, tomorrow ${fd(j2.cust.moveDate)}. Order ${po.no}. Reply to confirm.`);
+      copy(lines.join('\n\n'), 'Crew reminders copied');
+      break; }
     case 'editTpl': ui.editTpl = ui.editTpl === d.t ? null : d.t; render(); focus('tpl-b-' + d.t); break;
     case 'hideTpl': ui.editTpl = null; render(); break;
     case 'copyMsg': copy(fill(Data.getTemplate(ui.tpl[d.id] || suggested(j)).body, jobCtx(j))); break;
@@ -1729,6 +1919,23 @@ document.addEventListener('submit', e => {
     ui.payFor = null;
     toast(res.receipt ? `Recorded · ${res.receipt.no} issued` : 'Recorded');
     render();
+    return;
+  }
+  if (kind === 'restore') {
+    if ((form.get('confirm') || '').trim().toLowerCase() !== 'restore') {
+      toast('Type restore to confirm.'); return;
+    }
+    const file = f.querySelector('input[type=file]').files[0];
+    if (!file) { toast('Pick the backup file first.'); return; }
+    file.text()
+      .then(txt => Data.restore(JSON.parse(txt), owner()))
+      .then(res => {
+        if (res.error) { toast(res.error); return; }
+        ui.restoring = false;
+        toast(`Restored ${res.restored.jobs || 0} jobs and ${res.restored.documents || 0} documents`);
+        go('home');
+      })
+      .catch(() => toast("That file could not be read. Is it the backup .json?"));
     return;
   }
   if (kind === 'business') {
@@ -1921,7 +2128,13 @@ document.getElementById('app').innerHTML =
   '<div id="boot"><section class="card"><p class="muted">Loading…</p></section></div>';
 
 Data.init()
-  .then(() => { render(); startPolling(); })
+  .then(() => {
+    // No hash yet: write one WITHOUT a history entry, so the first Back
+    // press from Home leaves the panel cleanly rather than doing nothing.
+    if (!location.hash) history.replaceState(null, '', '#home');
+    applyHash();
+    startPolling();
+  })
   .catch(err => bootError(err.message || 'Something went wrong loading the panel.'));
 
 /* ---------- picking up the other one's changes ---------------------

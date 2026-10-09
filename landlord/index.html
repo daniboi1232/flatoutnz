@@ -295,7 +295,6 @@
         <ul class="site-footer__list">
           <li><a href="/#how-it-works">How It Works</a></li><li><a href="/#services">Services</a></li><li><a href="/#landlord">For Landlords</a></li><li><a href="/#contact">Contact</a></li>
           <li><a href="/terms">Terms</a></li>
-          <li><a href="https://books.zohosecure.com.au/portal/flatoutnz" target="_blank" rel="noopener">Customer portal</a></li>
           <li><a href="/panel">Employees</a></li>
           <li><a href="/quote">Get a Quote</a></li>
         </ul>
@@ -434,6 +433,19 @@
       termsVersion: TERMS_VERSION,
       consentedAt: new Date().toISOString()
     };
+
+    /* One submission a minute from a device — see the note on the
+       tenant form. Catches a bot past the honeypot, and the double-tap
+       on a slow connection. */
+    var RATE_KEY = "flatout_last_submit";
+    var since = 0;
+    try { since = Date.now() - Number(localStorage.getItem(RATE_KEY) || 0); } catch (err) { since = 1e9; }
+    if (since < 60000) {
+      statusBox.textContent = "That's already on its way to us \u2014 give it a moment. If you need to send another, wait a minute or call 027 408 6895.";
+      statusBox.classList.add("is-visible");
+      return;
+    }
+    try { localStorage.setItem(RATE_KEY, String(Date.now())); } catch (err) {}
 
     var elapsed = Date.now() - Number(form.started_at.value || Date.now());
     var ref = makeReference();

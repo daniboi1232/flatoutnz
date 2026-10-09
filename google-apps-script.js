@@ -30,7 +30,7 @@ var SHEET_NAME = 'Tenant responses';
 // Note the DOUBLE space in the landlord tab name — that's how the tab is
 // actually named in the sheet. Getting it wrong means getByName returns
 // null and the submission is rejected.
-var LANDLORD_SHEET_NAME = 'Landlord  property management';
+var LANDLORD_SHEET_NAME = 'Landlord  property management';   // note: two spaces, as the tab is actually named
 var BUSINESS_EMAIL = 'admin@flatoutnz.co.nz';
 var BUSINESS_PHONE = '027 408 6895';
 
@@ -77,7 +77,7 @@ function doPost(e) {
       return handleLandlord(data, services);
     }
 
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+    var sheet = findSheet(SHEET_NAME);
     if (!sheet) {
       throw new Error('Sheet tab "' + SHEET_NAME + '" was not found.');
     }
@@ -120,9 +120,26 @@ function doPost(e) {
   }
 }
 
+/* Find a tab by name, forgiving about spacing and case.
+   The landlord tab is actually called "Landlord  property management"
+   with two spaces in the middle, which is invisible in the Sheets UI.
+   Anyone tidying that name up would silently break every landlord
+   enquiry, so the lookup collapses runs of whitespace and ignores case
+   before giving up. */
+function findSheet(name) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var exact = ss.getSheetByName(name);
+  if (exact) return exact;
+  var want = String(name).replace(/\s+/g, ' ').trim().toLowerCase();
+  var all = ss.getSheets();
+  for (var i = 0; i < all.length; i++) {
+    if (all[i].getName().replace(/\s+/g, ' ').trim().toLowerCase() === want) return all[i];
+  }
+  return null;
+}
+
 function handleLandlord(data, services) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet()
-    .getSheetByName(LANDLORD_SHEET_NAME);
+  var sheet = findSheet(LANDLORD_SHEET_NAME);
   if (!sheet) {
     throw new Error('Sheet tab "' + LANDLORD_SHEET_NAME + '" was not found.');
   }
