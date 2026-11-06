@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en-NZ">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Get a move-out quote | FlatOut</title>
+  <meta name="description" content="Tell us where you're moving, when you're leaving and what you need. One form covers moving, cleaning, rubbish and storage for your whole flat." />
+  <link rel="canonical" href="https://flatoutnz.co.nz/quote" />
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#14283A" />
+
+  <link rel="preload" href="/fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/css/site.css" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="FlatOut" />
+  <meta property="og:title" content="Get a move-out quote | FlatOut" />
+  <meta property="og:description" content="Tell us where you're moving, when you're leaving and what you need. One form covers moving, cleaning, rubbish and storage for your whole flat." />
+  <meta property="og:url" content="https://flatoutnz.co.nz/quote" />
+  <meta property="og:image" content="https://flatoutnz.co.nz/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="container site-header__inner">
+    <a class="site-logo" href="/" aria-label="FlatOut home">
+      <img class="site-logo__mark" src="/images/logo-icon.png" width="36" height="36" alt="" />
+      <span class="site-logo__word">FlatOut</span>
+    </a>
+
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+    </nav>
+
+    <div class="site-header__actions">
+      <a class="site-header__phone" href="tel:+64274086895">027 408 6895</a>
+      <a class="btn btn-on-dark" href="/quote">Get a Quote</a>
+      <details class="nav-toggle">
+        <summary aria-label="Menu">
+          <span class="nav-toggle__icon"><span></span><span></span><span></span></span>
+        </summary>
+        <div class="nav-toggle__panel">
+          <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+          <a class="site-header__phone" href="tel:+64274086895">027 408 6895</a>
+        </div>
+      </details>
+    </div>
+  </div>
+</header>
+
+  <main id="main">
+
+<section class="section section--tight section--cream">
+  <div class="container form-intro">
+    <p class="eyebrow muted">Get your move-out quote</p>
+    <h1>Tell us what you need</h1>
+    <p class="muted">
+      One form covers your whole flat — moving, cleaning, rubbish and
+      storage. Takes about a minute. We'll come back to you the same day,
+      and no later than the end of the following day, to arrange a look
+      at the job.
+    </p>
+  </div>
+</section>
+
+<section class="section section--off-white">
+  <div class="container">
+
+    <form class="form-card card" id="quote-form" novalidate>
+
+      <!-- Honeypot — real visitors never see or fill this in -->
+      <div class="form-honeypot" aria-hidden="true">
+        <label for="website">Leave this field blank</label>
+        <input type="text" id="website" name="website" tabindex="-1" autocomplete="off" />
+      </div>
+      <input type="hidden" id="started_at" name="started_at" value="" />
+
+      <fieldset class="form-fieldset">
+        <legend>Your details</legend>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label" for="fullName">Full name</label>
+            <input class="form-input" type="text" id="fullName" name="fullName" autocomplete="name" required />
+            <p class="form-error-message" id="fullName-error">Enter your full name.</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="phone">Phone number</label>
+            <input class="form-input" type="tel" id="phone" name="phone" autocomplete="tel" inputmode="tel" required />
+            <p class="form-error-message" id="phone-error">Enter a New Zealand phone number we can reach you on.</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="email">Email address</label>
+            <input class="form-input" type="email" id="email" name="email" autocomplete="email" required />
+            <p class="form-error-message" id="email-error">Enter a valid email address.</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Are you a student?</label>
+            <div class="form-options" role="radiogroup" aria-required="true" id="isStudent-group">
+              <label class="form-option"><input type="radio" name="isStudent" value="Yes" required /><span>Yes</span></label>
+              <label class="form-option"><input type="radio" name="isStudent" value="No" /><span>No</span></label>
+            </div>
+            <p class="form-error-message" id="isStudent-error">Let us know if you're a student.</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-fieldset">
+        <legend>Your move</legend>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label" for="currentLocation">Current location</label>
+            <input class="form-input" type="text" id="currentLocation" name="currentLocation" placeholder="e.g. Ilam" autocomplete="address-level2" required />
+            <p class="form-error-message" id="currentLocation-error">Tell us your current suburb.</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="movingTo">Moving to <span class="form-optional">(optional)</span></label>
+            <input class="form-input" type="text" id="movingTo" name="movingTo" placeholder="e.g. Sockburn, or leave blank" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label" for="moveDate">When are you moving out?</label>
+            <input class="form-input" type="date" id="moveDate" name="moveDate" required />
+            <p class="form-error-message" id="moveDate-error">Pick a move-out date.</p>
+            <div class="form-urgent" id="moveDate-urgent">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              <p id="moveDate-urgent-text"></p>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bedrooms">Bedrooms in your current flat</label>
+            <select class="form-select" id="bedrooms" name="bedrooms" required>
+              <option value="" disabled selected>Choose one</option>
+              <option>1 bedroom</option>
+              <option>2 bedrooms</option>
+              <option>3 bedrooms</option>
+              <option>4 bedrooms</option>
+              <option>5+ bedrooms</option>
+            </select>
+            <p class="form-error-message" id="bedrooms-error">Choose a bedroom count.</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Is this move for:</label>
+            <div class="form-options" role="radiogroup" aria-required="true" id="moveFor-group">
+              <label class="form-option"><input type="radio" name="moveFor" value="Just me (individual)" required /><span>Just me (individual)</span></label>
+              <label class="form-option"><input type="radio" name="moveFor" value="My whole flat" /><span>My whole flat</span></label>
+              <label class="form-option"><input type="radio" name="moveFor" value="Both of the above" /><span>Both — my stuff, and I'm helping organise the flat</span></label>
+            </div>
+            <p class="form-error-message" id="moveFor-error">Let us know who this covers.</p>
+          </div>
+        </div>
+
+      </fieldset>
+
+      <fieldset class="form-fieldset">
+        <legend>What you need</legend>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Which services do you need?</label>
+            <div class="form-options" id="services-group">
+              <label class="form-option"><input type="checkbox" name="services" value="Moving (furniture & boxes transport)" /><span>Moving (furniture &amp; boxes transport)</span></label>
+              <label class="form-option"><input type="checkbox" name="services" value="Cleaning (end-of-lease deep clean)" /><span>Cleaning (end-of-lease deep clean)</span></label>
+              <label class="form-option"><input type="checkbox" name="services" value="Rubbish (junk removal & disposal)" /><span>Rubbish (junk removal &amp; disposal)</span></label>
+              <label class="form-option"><input type="checkbox" name="services" value="Storage (short or long-term storage)" /><span>Storage (short or long-term storage)</span></label>
+            </div>
+            <p class="form-error-message" id="services-error">Tick at least one service.</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="specialRequirements">Anything else we should know? <span class="form-optional">(optional)</span></label>
+            <textarea class="form-textarea" id="specialRequirements" name="specialRequirements" placeholder="Awkward access, specific dates, particular items, anything at all"></textarea>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-fieldset">
+        <legend>Last thing</legend>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label class="form-label" for="hearAbout">How did you hear about FlatOut? <span class="form-optional">(optional)</span></label>
+            <select class="form-select" id="hearAbout" name="hearAbout">
+              <option value="" selected>Prefer not to say</option>
+              <option>Social media</option>
+              <option>Word of mouth / a friend</option>
+              <option>Poster or flyer</option>
+              <option>Google search</option>
+              <option>UCSA</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Best way to contact you</label>
+            <div class="form-options" role="radiogroup" aria-required="true" id="contactMethod-group">
+              <label class="form-option"><input type="radio" name="contactMethod" value="Email" required /><span>Email</span></label>
+              <label class="form-option"><input type="radio" name="contactMethod" value="Phone or text" /><span>Phone or text</span></label>
+            </div>
+            <p class="form-error-message" id="contactMethod-error">Let us know how to reach you.</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="form-terms">
+        <p class="form-terms__title">Before you send this</p>
+        <ul class="form-terms__list">
+          <li>What you've told us above is right, as far as you know.</li>
+          <li>We'll arrange a time to come and look at the job before we quote it.</li>
+          <li>Nothing is charged until you've accepted a written quote from us. See our <a href="/terms">full terms</a>.</li>
+          <li>We'll pass your contact and job details to the contractors doing the work.</li>
+          <li>You're 18 or over.</li>
+        </ul>
+        <details class="form-terms__full">
+          <summary>Read the full terms</summary>
+          <div class="form-terms__body">
+            <p><strong>1. What this form is.</strong> Sending this form is a request for a quote. It is not a booking and it does not commit you to anything. It does not commit FlatOut NZ to taking the job either.</p>
+            <p><strong>2. Accurate information.</strong> You agree the details you've given are accurate to the best of your knowledge. If the job turns out to be materially different from what you've described, the price will change and we'll tell you before anything goes ahead.</p>
+            <p><strong>3. The visit.</strong> We scope jobs in person. We'll contact you to arrange a time to walk through the property. You can give us an on-the-spot estimate at that visit, but the binding price is the written quote that follows.</p>
+            <p><strong>4. Nothing is owed yet.</strong> The visit, the estimate and the quote are free. You are charged nothing unless and until you accept a written quote. Payment terms are set out in that quote and you agree to them at that point, not this one.</p>
+            <p><strong>5. Your information.</strong> We collect your name, contact details, address and what you've told us about the job, so we can quote and deliver the work. We share what's necessary with the contractors carrying out your job. We don't sell your information or use it for anything else. See our <a href="/privacy">privacy page</a> for how long we keep it and how to ask for a copy or have it deleted.</p>
+            <p><strong>6. Age.</strong> This service is for people aged 18 and over. If you're under 18, ask a parent or guardian to make the enquiry.</p>
+            <p><strong>7. Who you're dealing with.</strong> FlatOut NZ, Christchurch. Contact us on 027 408 6895 or admin@flatoutnz.co.nz.</p>
+            <p class="form-terms__version">Version 1.0 — 1 October 2026</p>
+          </div>
+        </details>
+      </div>
+
+      <div class="form-consent">
+        <input type="checkbox" id="consent" name="consent" value="Agreed to FlatOut NZ enquiry terms v1.0 (2026-10-01)" required />
+        <label for="consent">
+          I've read and agree to the above.
+        </label>
+      </div>
+      <p class="form-error-message" id="consent-error">We need you to agree before we can take this.</p>
+
+      <div class="form-submit-row">
+        <button class="btn btn-primary btn-block" type="submit" id="submit-btn">
+          <span id="submit-btn-label">Send my request</span>
+        </button>
+        <p class="form-submit-note muted">The visit and the quote are free. You're not committing to anything yet.</p>
+      </div>
+
+      <p class="form-status form-status--error" id="form-status" role="alert"></p>
+    </form>
+
+
+  </div>
+</section>
+
+  </main>
+
+<footer class="site-footer" id="contact">
+  <div class="container">
+    <div class="site-footer__grid">
+      <div>
+        <a class="site-logo" href="/" aria-label="FlatOut home">
+          <img class="site-logo__mark" src="/images/logo-icon.png" width="32" height="32" alt="" />
+          <span class="site-logo__word">FlatOut</span>
+        </a>
+        <p class="muted" style="margin-top: var(--space-sm); max-width: 26rem;">
+          FlatOut arranges move-out services for Christchurch students —
+          moving, end-of-tenancy cleaning, rubbish removal and storage.
+        </p>
+      </div>
+
+      <div>
+        <h2>Contact</h2>
+        <ul class="site-footer__list">
+          <li><a href="tel:+64274086895">027 408 6895</a></li>
+          <li><a href="mailto:admin@flatoutnz.co.nz">admin@flatoutnz.co.nz</a></li>
+          <li class="muted">Christchurch</li>
+        </ul>
+      </div>
+
+      <div>
+        <h2>Explore</h2>
+        <ul class="site-footer__list">
+          <li><a href="/#how-it-works">How It Works</a></li><li><a href="/#services">Services</a></li><li><a href="/#landlord">For Landlords</a></li><li><a href="/#contact">Contact</a></li>
+          <li><a href="/terms">Terms</a></li>
+          <li><a href="/panel">Employees</a></li>
+          <li><a href="/quote">Get a Quote</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="site-footer__bottom">
+      <span>&copy; 2026 FlatOut. All rights reserved.</span>
+      <a href="/privacy">Privacy</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // ---- CONFIG -------------------------------------------------------
+  // Paste your Google Apps Script Web App URL below (see the deployment
+  // guide). It ends in /exec.
+  var ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbwrQBIbt5sEn6dOuFY8pz31-HjN-jY4Oiz2DYKrpUo_bYasJJRLLObJHFxdtW4lFAqiSQ/exec";
+  // Bump this whenever the wording of the enquiry terms changes, so the
+  // sheet records which version each person actually agreed to.
+  var TERMS_VERSION = "1.0 (2026-10-01)";
+  var THANKS_URL = "/thanks";
+  // ---------------------------------------------------------------------
+
+  var form = document.getElementById("quote-form");
+  var statusBox = document.getElementById("form-status");
+  var submitBtn = document.getElementById("submit-btn");
+  var submitBtnLabel = document.getElementById("submit-btn-label");
+  document.getElementById("started_at").value = Date.now();
+
+  // No move-out dates in the past.
+  (function () {
+    var d = new Date();
+    var today = d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
+    var dateEl = document.getElementById("moveDate");
+    if (dateEl) dateEl.setAttribute("min", today);
+  })();
+
+  // --- Move-date urgency --------------------------------------------
+  // A date inside a week doesn't leave room for the normal scout-then-
+  // quote cycle, so say so rather than letting them wait on a form.
+  (function () {
+    var dateEl = document.getElementById("moveDate");
+    var box = document.getElementById("moveDate-urgent");
+    var text = document.getElementById("moveDate-urgent-text");
+    if (!dateEl || !box || !text) return;
+
+    function check() {
+      if (!dateEl.value) { box.classList.remove("is-visible"); return; }
+      var picked = new Date(dateEl.value + "T00:00:00");
+      if (isNaN(picked.getTime())) { box.classList.remove("is-visible"); return; }
+      var today = new Date();
+      today.setHours(0, 0, 0, 0);
+      var days = Math.round((picked - today) / 86400000);
+
+      if (days <= 2) {
+        text.innerHTML = "That's very soon. Send this through, then " +
+          "<a href=\"tel:+64274086895\">call or text 027 408 6895</a> so we " +
+          "can get straight onto it \u2014 don't wait on the form.";
+        box.classList.add("is-visible");
+      } else if (days <= 7) {
+        text.innerHTML = "That's inside a week. Still doable, but " +
+          "<a href=\"tel:+64274086895\">call or text 027 408 6895</a> after " +
+          "you send this and we'll bump you up the list.";
+        box.classList.add("is-visible");
+      } else {
+        box.classList.remove("is-visible");
+      }
+    }
+    dateEl.addEventListener("change", check);
+    dateEl.addEventListener("input", check);
+    check();
+  })();
+
+  // --- Draft saving -------------------------------------------------
+  // Students fill this in on a phone, mid-move, and get interrupted.
+  // Keep their answers locally so a reload doesn't lose the lot.
+  var DRAFT_KEY = "flatout_quote_draft";
+  var draftFields = ["fullName","phone","email","currentLocation","movingTo",
+    "moveDate","bedrooms","specialRequirements","hearAbout"];
+
+  function saveDraft() {
+    try {
+      var d = {};
+      draftFields.forEach(function (n) {
+        var el = form.querySelector('[name="' + n + '"]');
+        if (el && el.value) d[n] = el.value;
+      });
+      ["isStudent","moveFor","contactMethod"].forEach(function (n) {
+        var c = form.querySelector('[name="' + n + '"]:checked');
+        if (c) d[n] = c.value;
+      });
+      d.services = Array.prototype.slice
+        .call(form.querySelectorAll('[name="services"]:checked'))
+        .map(function (c) { return c.value; });
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    } catch (e) {}
+  }
+
+  function restoreDraft() {
+    try {
+      var raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      draftFields.forEach(function (n) {
+        var el = form.querySelector('[name="' + n + '"]');
+        if (el && d[n]) el.value = d[n];
+      });
+      ["isStudent","moveFor","contactMethod"].forEach(function (n) {
+        if (!d[n]) return;
+        var c = form.querySelector('[name="' + n + '"][value="' + d[n].replace(/"/g, '\\"') + '"]');
+        if (c) c.checked = true;
+      });
+      (d.services || []).forEach(function (v) {
+        var c = form.querySelector('[name="services"][value="' + v.replace(/"/g, '\\"') + '"]');
+        if (c) c.checked = true;
+      });
+    } catch (e) {}
+  }
+
+  function clearDraft() {
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+  }
+
+  restoreDraft();
+  form.addEventListener("input", saveDraft);
+  form.addEventListener("change", saveDraft);
+
+  var requiredFields = [
+    { name: "fullName", type: "text" },
+    { name: "phone", type: "phone" },
+    { name: "email", type: "email" },
+    { name: "isStudent", type: "radio" },
+    { name: "currentLocation", type: "text" },
+    { name: "moveDate", type: "text" },
+    { name: "bedrooms", type: "select" },
+    { name: "moveFor", type: "radio" },
+    { name: "services", type: "checkbox" },
+    { name: "contactMethod", type: "radio" },
+    { name: "consent", type: "checkbox-single" }
+  ];
+
+  function showError(name, isValid) {
+    var errorEl = document.getElementById(name + "-error");
+    var input = form.querySelector('[name="' + name + '"]');
+    if (errorEl) errorEl.classList.toggle("is-visible", !isValid);
+    if (input && input.type !== "checkbox" && input.type !== "radio") {
+      input.setAttribute("aria-invalid", isValid ? "false" : "true");
+    }
+  }
+
+  function validateField(field) {
+    var isValid = true;
+    if (field.type === "email") {
+      var el = form.querySelector('[name="' + field.name + '"]');
+      isValid = el.value.trim() !== "" && el.validity.valid;
+    } else if (field.type === "phone") {
+      var elp = form.querySelector('[name="' + field.name + '"]');
+      // NZ numbers: strip spaces, dashes, brackets and a +64 prefix, then
+      // expect 8-11 digits. Deliberately loose — better to let an odd
+      // number through than to reject someone's real one.
+      var digits = elp.value.replace(/[\s\-().]/g, "").replace(/^\+?64/, "0");
+      isValid = /^0[2-9]\d{7,9}$/.test(digits);
+    } else if (field.type === "text") {
+      var el2 = form.querySelector('[name="' + field.name + '"]');
+      isValid = el2.value.trim() !== "";
+    } else if (field.type === "select") {
+      var el3 = form.querySelector('[name="' + field.name + '"]');
+      isValid = el3.value !== "";
+    } else if (field.type === "radio") {
+      isValid = !!form.querySelector('[name="' + field.name + '"]:checked');
+    } else if (field.type === "checkbox") {
+      isValid = !!form.querySelector('[name="' + field.name + '"]:checked');
+    } else if (field.type === "checkbox-single") {
+      var cb = form.querySelector('[name="' + field.name + '"]');
+      isValid = cb.checked;
+    }
+    showError(field.name, isValid);
+    return isValid;
+  }
+
+  // Validate on blur for text/email/select fields
+  requiredFields.forEach(function (field) {
+    if (field.type === "text" || field.type === "email" || field.type === "phone" || field.type === "select") {
+      var el = form.querySelector('[name="' + field.name + '"]');
+      if (el) el.addEventListener("blur", function () { validateField(field); });
+    }
+  });
+
+  function validateAll() {
+    var allValid = true;
+    var firstInvalidName = null;
+    requiredFields.forEach(function (field) {
+      var isValid = validateField(field);
+      if (!isValid && !firstInvalidName) firstInvalidName = field.name;
+      allValid = allValid && isValid;
+    });
+    return { allValid: allValid, firstInvalidName: firstInvalidName };
+  }
+
+  function collectData() {
+    var data = {};
+    data.fullName = form.fullName.value.trim();
+    data.phone = form.phone.value.trim();
+    data.email = form.email.value.trim();
+    data.isStudent = (form.querySelector('[name="isStudent"]:checked') || {}).value || "";
+    data.moveDate = form.moveDate.value;
+    data.currentLocation = form.currentLocation.value.trim();
+    data.movingTo = form.movingTo.value.trim();
+    data.moveFor = (form.querySelector('[name="moveFor"]:checked') || {}).value || "";
+    data.services = Array.prototype.slice
+      .call(form.querySelectorAll('[name="services"]:checked'))
+      .map(function (cb) { return cb.value; });
+    data.bedrooms = form.bedrooms.value;
+    data.volume = ""; // asked at the scout visit instead
+    data.specialRequirements = form.specialRequirements.value.trim();
+    data.hearAbout = form.hearAbout.value;
+    data.contactMethod = (form.querySelector('[name="contactMethod"]:checked') || {}).value || "";
+    data.consent = form.consent.checked ? form.consent.value : "";
+    data.website = form.website.value; // honeypot
+    data.started_at = form.started_at.value;
+    // Consent evidence — what they agreed to, and when
+    data.termsVersion = TERMS_VERSION;
+    data.consentedAt = new Date().toISOString();
+    return data;
+  }
+
+  function makeReference() {
+    var now = new Date();
+    var stamp = now.getFullYear().toString().slice(2) +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      String(now.getDate()).padStart(2, "0");
+    var rand = Math.floor(1000 + Math.random() * 9000);
+    return "FO-" + stamp + "-" + rand;
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    statusBox.classList.remove("is-visible");
+
+    var result = validateAll();
+    if (!result.allValid) {
+      var el = form.querySelector('[name="' + result.firstInvalidName + '"]');
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      statusBox.textContent = "A few fields need your attention above.";
+      statusBox.classList.add("is-visible");
+      return;
+    }
+
+    var data = collectData();
+
+    /* One submission a minute from a device. The honeypot and the
+       too-fast check below catch a crude bot; this catches one that
+       gets past them and would otherwise fill the sheet with hundreds
+       of rows, and the double-tap on a slow connection. */
+    var RATE_KEY = "flatout_last_submit";
+    var since = 0;
+    try { since = Date.now() - Number(localStorage.getItem(RATE_KEY) || 0); } catch (err) { since = 1e9; }
+    if (since < 60000) {
+      statusBox.textContent = "That's already on its way to us \u2014 give it a moment. If you need to send another, wait a minute or text 027 408 6895.";
+      statusBox.classList.add("is-visible");
+      return;
+    }
+
+    // Spam checks — honeypot filled, or submitted implausibly fast
+    var elapsed = Date.now() - Number(data.started_at || Date.now());
+    var looksLikeSpam = data.website || elapsed < 2500;
+    try { localStorage.setItem(RATE_KEY, String(Date.now())); } catch (err) {}
+
+    var ref = makeReference();
+
+    if (looksLikeSpam) {
+      // Silently succeed without sending — doesn't tip the bot off
+      showSuccess(ref);
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtnLabel.innerHTML = '<span class="form-loading"><span class="form-spinner"></span> Sending…</span>';
+
+    data.reference = ref;
+
+    // A readable POST. "text/plain" keeps the browser from sending a
+    // preflight, which is what lets Apps Script answer with CORS headers
+    // we can actually read. The old code used mode:"no-cors", which made
+    // every request look like it succeeded — a failed submission showed
+    // the student a thank-you page and was lost with no trace.
+    function attempt(triesLeft) {
+      return fetch(ENDPOINT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(data)
+      })
+        .then(function (res) {
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.json();
+        })
+        .then(function (body) {
+          if (body && body.result === "success") return true;
+          throw new Error(body && body.message ? body.message : "rejected");
+        })
+        .catch(function (err) {
+          if (triesLeft > 0) {
+            // One retry, after a short pause — covers a dropped
+            // connection or a cold start on the script.
+            return new Promise(function (r) { setTimeout(r, 1200); })
+              .then(function () { return attempt(triesLeft - 1); });
+          }
+          throw err;
+        });
+    }
+
+    attempt(1)
+      .then(function () {
+        showSuccess(ref);
+      })
+      .catch(function () {
+        submitBtn.disabled = false;
+        submitBtnLabel.textContent = "Send my request";
+        statusBox.innerHTML = "That didn't send. Your answers are still here, so try again \u2014 or skip it and text us on <a href=\"tel:+64274086895\">027 408 6895</a> and we'll take it from there.";
+        statusBox.classList.add("is-visible");
+        statusBox.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+  });
+
+  function showSuccess(ref) {
+    clearDraft();
+    // Hand the reference to /thanks. sessionStorage is the primary route so
+    // the number isn't sitting in a shareable URL; the query string is a
+    // fallback for browsers that refuse storage (private windows).
+    try {
+      sessionStorage.setItem("flatout_ref", ref);
+    } catch (e) {}
+    window.location.href = THANKS_URL + "?ref=" + encodeURIComponent(ref);
+  }
+})();
+</script>
+
+
+  <!-- Mobile call bar. Phones only; hidden from 48rem up where the
+       header phone number is already visible. -->
+  <div class="call-bar" role="complementary" aria-label="Contact FlatOut">
+    <a class="call-bar__btn call-bar__btn--call" href="tel:+64274086895">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>
+      Call
+    </a>
+    <a class="call-bar__btn call-bar__btn--text" href="sms:+64274086895">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg>
+      Text
+    </a>
+    
+  </div>
+
+</body>
+</html>
