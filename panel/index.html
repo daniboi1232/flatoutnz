@@ -196,10 +196,14 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
 .ev.standby{background:var(--white);color:var(--blue);box-shadow:inset 0 0 0 1px var(--line);opacity:.75;font-style:italic}
 .hrule{height:1px;background:var(--line);margin:18px 0 14px}
 .docview{position:fixed;inset:0;background:rgba(20,40,58,.6);overflow-y:auto;z-index:50}
-.docview .bar{position:sticky;top:0;background:var(--navy-deep);color:#fff;display:flex;
-  justify-content:space-between;align-items:center;gap:12px;padding:12px 18px}
-.docview .bar b{font-size:.95rem}
-.docview .inner{background:#EEF0F1;min-height:100%;padding-bottom:40px}
+.docview .dvbar{position:sticky;top:0;background:var(--navy-deep);color:#fff;display:flex;
+  justify-content:space-between;align-items:center;gap:12px;padding:12px 18px;
+  z-index:5;isolation:isolate;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.docview .dvbar b{font-size:.95rem}
+.docview .dvbar .btn{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.35)}
+.docview .dvbar .btn:hover{background:rgba(255,255,255,.26);color:#fff}
+.docview .dvbar .btn.x{font-size:1.05rem;line-height:1;padding:8px 12px}
+.docview .inner{background:#EEF0F1;min-height:100%;padding-bottom:40px;position:relative;z-index:0}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;color:var(--blue);margin-top:12px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 
@@ -1547,15 +1551,28 @@ function docOverlay() {
   el.className = 'docview';
   el.id = 'docview';
   el.innerHTML = `<div class="inner">
-    <div class="bar">
+    <div class="dvbar">
       <b>${esc(Data.DOC_TYPES[doc.type].label)} ${esc(doc.no)}${doc.status === 'voided' ? ' · voided' : ''}</b>
       <span class="chips"><button class="btn sm" data-act="printDoc">Download PDF</button>
-      <button class="btn sm ghost" data-act="closeDoc">Close</button></span>
+      <button class="btn sm" data-act="closeDoc">Close</button>
+      <button class="btn sm x" data-act="closeDoc" title="Close (Esc)" aria-label="Close">&#10005;</button></span>
     </div>
-    <div>${doc.html}</div></div>`;
-  el.addEventListener('click', e => { if (e.target === el) { ui.viewDoc = null; render(); } });
+    <div class="docpage">${doc.html}</div></div>`;
+  el.addEventListener('click', e => {
+    if (e.target === el || e.target.classList.contains('inner') || e.target.classList.contains('docpage')) {
+      ui.viewDoc = null; render();
+    }
+  });
   document.body.appendChild(el);
 }
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (ui.viewDoc) { ui.viewDoc = null; render(); return; }
+  if (ui.voidFor || ui.payFor || ui.confirmDelete || ui.confirmDelC || ui.signoffOwing) {
+    ui.voidFor = ui.payFor = ui.confirmDelete = ui.confirmDelC = ui.signoffOwing = null;
+    render();
+  }
+});
 function refreshJobs() {
   const r = document.getElementById('jobrows');
   if (r) r.innerHTML = jobRows();
@@ -1591,7 +1608,11 @@ document.addEventListener('click', e => {
     case 'goHome': openJob = null; go('home'); break;
     /* ---- documents ---- */
     case 'issueDoc': {
-      const inst = Data.isInstalmentPaid(d.id, 'deposit') ? 'balance' : 'deposit';
+      // Stamp the invoice with the next instalment this job's own schedule
+      // still owes — small jobs have one ("full"), larger ones two.
+      const sched = (Data.paymentPlan(d.id) || {}).schedule || [];
+      const inst = (sched.find(s => !Data.isInstalmentPaid(d.id, s.key))
+        || sched[sched.length - 1] || { key: 'full' }).key;
       const res = Data.issueDocument(d.id, d.t, owner(), d.t === 'invoice' ? { instalment: inst } : {});
       if (res.error) { toast(res.error); break; }
       ui.viewDoc = res.document.id;
