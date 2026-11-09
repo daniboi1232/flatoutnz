@@ -4,3 +4,7 @@
 # The printed QR posters point at /quote, which is now a real page on
 # this site rather than a forward to an external form. If the form ever
 # moves again, add a rule here rather than reprinting anything.
+
+# The old Netlify address still served a full copy of the site, so Google
+# kept listing it with outdated wording. Send it to the real domain.
+https://flatoutnz.netlify.app/* https://flatoutnz.co.nz/:splat 301!
