@@ -16,6 +16,9 @@
   <link rel="preload" href="/fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/css/site.css" />
+  
+  <link rel="preload" href="fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin />
 
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="FlatOut" />
@@ -28,6 +31,23 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
+<!-- ===================================================================
+     SEASONAL BANNER
+     TO TURN OFF: add the word  hidden  to the <div> on the next line.
+     TO TURN ON:  remove it.
+     Change the dates in the text to match the season.
+     =================================================================== -->
+<div class="season-bar" id="season-bar">
+  <div class="container season-bar__inner">
+    <span class="season-bar__tag">Move-out season</span>
+    <span class="season-bar__text">
+      Booking now for late November. Give us two weeks and you'll get the
+      date you want.
+    </span>
+    <a class="season-bar__link" href="/quote">Get a quote&nbsp;&rarr;</a>
+  </div>
+</div>
+
 <header class="site-header">
   <div class="container site-header__inner">
     <a class="site-logo" href="/" aria-label="FlatOut home">
@@ -36,7 +56,7 @@
     </a>
 
     <nav class="site-nav" aria-label="Primary">
-      <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+      <a href="/#how-it-works">How It Works</a><a href="/services">Services</a><a href="/landlord">For Landlords</a><a href="/about">About</a><a href="/contact">Contact</a>
     </nav>
 
     <div class="site-header__actions">
@@ -47,7 +67,7 @@
           <span class="nav-toggle__icon"><span></span><span></span><span></span></span>
         </summary>
         <div class="nav-toggle__panel">
-          <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+          <a href="/#how-it-works">How It Works</a><a href="/services">Services</a><a href="/landlord">For Landlords</a><a href="/about">About</a><a href="/contact">Contact</a>
           <a class="site-header__phone" href="tel:+64274086895">027 408 6895</a>
         </div>
       </details>
@@ -70,7 +90,7 @@
 </section>
 
 <section class="section section--off-white">
-  <div class="container">
+  <div class="container form-layout">
 
     <form class="form-card card" id="landlord-form" novalidate>
 
@@ -246,6 +266,46 @@
       <p class="form-status form-status--error" id="form-status" role="alert"></p>
     </form>
 
+    <aside class="form-aside">
+      <div class="sidecard">
+        <p class="sidecard__title">What you get</p>
+        <ul class="aside-list">
+          <li><b>One contact.</b> You tell us what the property needs;
+            we line up the cleaners, the rubbish run and the rest.</li>
+          <li><b>One invoice.</b> Not three contractors chasing you
+            separately for three different amounts.</li>
+          <li><b>One written quote</b> before anything starts, so there
+            is no argument about the number afterwards.</li>
+          <li><b>Local businesses on signed agreements</b>, each carrying
+            their own insurance, certificate sighted before they take
+            a job.</li>
+        </ul>
+      </div>
+
+      <div class="sidecard">
+        <p class="sidecard__title">Worth telling us</p>
+        <ul class="aside-list">
+          <li><b>The relet date</b> — the day the next tenant walks in is
+            the deadline we work back from.</li>
+          <li><b>Access</b> — whether you hold keys, or we arrange it
+            with the outgoing tenant.</li>
+          <li><b>How many properties</b> you turn over in a year. If it's
+            a regular thing, we'd rather set it up properly once.</li>
+          <li><b>Anything contested</b> — if the bond is in dispute, say
+            so, and we'll document what we find.</li>
+        </ul>
+      </div>
+
+      <div class="sidecard sidecard--quiet">
+        <p class="sidecard__title">Managing a portfolio?</p>
+        <p class="aside-call">
+          Call <a href="tel:+64274086895">027 408 6895</a> and we'll talk
+          it through properly rather than going back and forth on a form.
+        </p>
+      </div>
+    </aside>
+
+
     <div class="form-card card form-success" id="form-success">
       <div class="form-success__icon">
         <svg width="24" height="24" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3.5 9.5 7 13l7.5-8" stroke="var(--teal)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -295,7 +355,7 @@
         <ul class="site-footer__list">
           <li><a href="/#how-it-works">How It Works</a></li><li><a href="/#services">Services</a></li><li><a href="/#landlord">For Landlords</a></li><li><a href="/#contact">Contact</a></li>
           <li><a href="/terms">Terms</a></li>
-          <li><a href="/panel">Employees</a></li>
+          <li><a href="#">Employees</a></li>
           <li><a href="/quote">Get a Quote</a></li>
         </ul>
       </div>
@@ -452,6 +512,16 @@
     if (data.website || elapsed < 2500) { showSuccess(ref); return; }
 
     data.reference = ref;
+
+    if (typeof PREVIEW !== "undefined" && PREVIEW) {
+      var st = document.getElementById("form-status");
+      st.textContent = "Look-and-feel preview \u2014 nothing was sent. "
+        + "Your reference would be " + ref + ".";
+      st.className = "form-status";
+      st.style.display = "block";
+      st.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     submitBtn.disabled = true;
     submitBtnLabel.innerHTML = '<span class="form-loading"><span class="form-spinner"></span> Sending…</span>';
 
@@ -513,5 +583,31 @@
     
   </div>
 
+
+<!-- Sticky action bar. Phones only; appears once the hero is scrolled past. -->
+<div class="mobile-cta" id="mobile-cta" aria-hidden="true">
+  <a class="btn btn-primary mobile-cta__quote" href="/quote">Get a quote</a>
+  <a class="mobile-cta__call" href="tel:+64274086895" aria-label="Call FlatOut">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/>
+    </svg>
+  </a>
+</div>
+<script>
+/* Show the bar once the first screenful is behind us, so it never covers
+   the hero's own call to action. */
+(function () {
+  var bar = document.getElementById('mobile-cta');
+  if (!bar) return;
+  var show = function () {
+    var past = window.scrollY > Math.min(window.innerHeight * 0.8, 520);
+    bar.classList.toggle('is-visible', past);
+    bar.setAttribute('aria-hidden', past ? 'false' : 'true');
+  };
+  window.addEventListener('scroll', show, { passive: true });
+  show();
+})();
+</script>
 </body>
 </html>

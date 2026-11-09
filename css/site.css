@@ -1197,3 +1197,638 @@ body { padding-bottom: 4.25rem; }
   margin: 0;
 }
 .form-urgent a { font-weight: 700; color: var(--navy-deep); }
+
+
+/* ======================================================================
+   AESTHETIC PREVIEW LAYER
+   Look only. No markup, no copy, no behaviour. Token overrides plus the
+   few rules that had a colour hard-coded against the old warm palette.
+   ====================================================================== */
+:root {
+  /* Cool slate canvas in place of the warm cream. */
+  --cream: #F8FAFC;
+  --off-white: #F1F5F9;
+
+  /* Brand orange is unchanged for marks and accents. The CTA fill is
+     darker: white text on #D97A35 measures 3.09:1, and WCAG AA wants
+     4.5:1 at this size. #B35A14 measures 4.78:1 and still reads orange. */
+  --orange: #D97A35;
+  --orange-cta: #B35A14;
+  --orange-cta-hover: #99490A;
+
+  /* Teal stays, carrying ticks and the focus ring, so "done" never
+     looks like "click me". */
+  --teal: #2F7F74;
+
+  /* Larger radii so cards read as floating rather than inset. */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+
+  --shadow-card:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 24px rgba(15, 23, 42, 0.07);
+}
+
+/* White cards sitting on the slate, not cream panels sunk into it. */
+.card, .form-card, .panel, .service-card, .price-card, .faq, .testimonial {
+  background: var(--white);
+  box-shadow: var(--shadow-card);
+}
+
+/* The CTA. Orange now means "this is the thing to click". */
+.btn-primary {
+  background: var(--orange-cta);
+  color: var(--white);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .08), 0 6px 16px rgba(179, 90, 20, .24);
+}
+.btn-primary:hover {
+  background: var(--orange-cta-hover);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .10), 0 8px 20px rgba(179, 90, 20, .30);
+}
+
+/* On the navy hero and footer, the CTA uses the brand orange with navy
+   text: 4.87:1, and it separates from the navy behind it by the same
+   margin. The darker CTA fill would sit at 3.15:1 against that navy and
+   read as a muddy block. Orange means "click me" on both backgrounds. */
+.btn-on-dark {
+  background: var(--orange);
+  color: var(--navy-deep);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .18), 0 6px 18px rgba(217, 122, 53, .26);
+}
+.btn-on-dark:hover {
+  background: #E8913F;
+  color: var(--navy-deep);
+}
+
+/* Structure stays navy, so the step numbers give up the orange. */
+.step__number { background: var(--navy-deep); }
+
+/* On a cool canvas the warm-grey field border reads muddy. */
+.form-input, .form-select, .form-textarea {
+  background: var(--white);
+  border-color: #D8E0E8;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: var(--teal);
+}
+
+
+/* ----------------------------------------------------------------------
+   How it works — floating steps on a curved path
+   The cards lift off the canvas and a dashed curve runs behind them,
+   so the three steps read as one journey rather than three boxes.
+   Desktop only: below the three-column breakpoint the row becomes a
+   stack, and a curve across a stack means nothing, so it becomes a
+   straight vertical line down the left instead.
+   -------------------------------------------------------------------- */
+.steps { position: relative; }
+
+.step {
+  position: relative;
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg) var(--space-md) var(--space-md);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+  z-index: 1;
+}
+
+/* The number sits on the card's top edge, straddling it, so the curve
+   appears to pass through the badges rather than behind the cards. */
+.step__number {
+  position: absolute;
+  top: calc(var(--space-lg) * -0.55);
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 0;
+  background: var(--navy-deep);
+  box-shadow: 0 0 0 6px var(--cream), 0 4px 12px rgba(15, 23, 42, .16);
+}
+
+.step h3 { margin-top: var(--space-2xs); }
+
+/* Stacked: the curve becomes a straight line down the middle. The row
+   gap has to open up for it — at the default gap the badge covers most
+   of the space between cards and the line has nowhere to show. */
+@media (max-width: 55.99rem) {
+  .steps {
+    gap: 4.5rem;
+    padding-top: var(--space-md);
+  }
+  .steps::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 1.5rem;
+    bottom: 1.5rem;
+    width: 3px;
+    transform: translateX(-50%);
+    background: repeating-linear-gradient(
+      to bottom, rgba(47,127,116,.5) 0 3px, transparent 3px 14px);
+    z-index: 0;
+  }
+}
+
+/* Three across: the curve, threaded between the badges. */
+@media (min-width: 56rem) {
+  .steps { padding-top: var(--space-lg); }
+  .steps::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 9rem;
+    background: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201200%20160%22%20preserveAspectRatio%3D%22none%22%20fill%3D%22none%22%3E%3Cpath%20d%3D%22M%20186%2044%20C%20290%200%2C%20496%200%2C%20600%2044%20C%20704%200%2C%20909%200%2C%201013%2044%22%20stroke%3D%22%232F7F74%22%20stroke-opacity%3D%220.5%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%20stroke-dasharray%3D%223%2011%22%2F%3E%3C%2Fsvg%3E") no-repeat center top / 100% 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+}
+
+/* prefers-reduced-motion isn't relevant here (nothing animates), but the
+   curve is decorative, so it carries no meaning a screen reader loses. */
+
+/* ----------------------------------------------------------------------
+   Filling the empty right half
+   Most sections put text in about 40% of a 1152px container and left the
+   rest blank, which read as an unfinished template. These give the narrow
+   sections a right-hand companion, and centre the ones that have nothing
+   to put there.
+   -------------------------------------------------------------------- */
+.split { display: grid; gap: var(--space-lg); }
+@media (min-width: 56rem) {
+  .split { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
+}
+.split__main > p { max-width: 36rem; }
+/* The old .small-block rule supplied this spacing; .split has to too. */
+.split__main > p + p { margin-top: var(--space-sm); }
+.split__main > .section-title { margin-bottom: var(--space-sm); }
+
+.sidecard {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  box-shadow: var(--shadow-card);
+}
+.sidecard__title {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.0625rem;
+  color: var(--navy-deep);
+  margin: 0 0 var(--space-sm);
+}
+.sidecard__list, .sidecard__drivers {
+  margin: 0; padding: 0; list-style: none;
+  display: grid; gap: var(--space-xs);
+}
+.sidecard__list li, .sidecard__drivers li {
+  position: relative;
+  padding-left: 1.75rem;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--navy-deep);
+}
+/* Teal ticks: the same "this is settled" signal used in the hero. */
+.sidecard__list li::before {
+  content: "";
+  position: absolute; left: 0; top: 0.3rem;
+  width: 1.05rem; height: 1.05rem;
+  background: no-repeat center / contain
+    url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" fill="none"%3E%3Cpath d="M3.5 9.5 7 13l7.5-8" stroke="%232F7F74" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/%3E%3C/svg%3E');
+}
+/* The price drivers are ordered, so they are numbered rather than ticked. */
+.sidecard__drivers { counter-reset: driver; }
+.sidecard__drivers li { counter-increment: driver; }
+.sidecard__drivers li::before {
+  content: counter(driver);
+  position: absolute; left: 0; top: 0.1rem;
+  width: 1.25rem; height: 1.25rem;
+  border-radius: 50%;
+  background: var(--navy-deep); color: var(--white);
+  font-size: 0.6875rem; font-weight: 700;
+  display: grid; place-items: center;
+}
+
+/* Bands with nothing to sit beside the text: centre it rather than
+   leaving it pinned to the left third of a coloured stripe. */
+.band-centre { text-align: center; }
+.band-centre .eyebrow { justify-content: center; }
+.band-centre__copy {
+  max-width: 34rem;
+  margin: var(--space-sm) auto var(--space-md);
+  color: rgba(255, 255, 255, 0.82);
+}
+.band-centre__copy.muted { color: var(--blue); }
+.band-centre__note {
+  margin-top: var(--space-sm);
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* Hero: the reassurance panel that fills the dead right-hand half. */
+@media (min-width: 56rem) {
+  .hero__inner {
+    /* The base rule caps this at 38rem, which is what kept the hero in
+       the left third. The panel needs the full container. */
+    max-width: none;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 21rem);
+    column-gap: var(--space-xl);
+    /* Each left-hand child is its own row. Without these the rows
+       stretch to match the panel and the hero grows a third taller. */
+    align-items: center;
+  }
+  .hero__panel { align-self: center; margin-top: 0; }
+}
+.hero__panel {
+  margin-top: var(--space-lg);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  backdrop-filter: blur(2px);
+}
+.hero__panel-title {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.0625rem;
+  color: var(--white);
+  margin: 0 0 var(--space-sm);
+}
+.hero__panel-list { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-xs); }
+.hero__panel-list li {
+  position: relative;
+  padding-left: 1.6rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+}
+.hero__panel-list li b { color: var(--white); font-weight: 600; }
+.hero__panel-list li::before {
+  content: "";
+  position: absolute; left: 0; top: 0.22rem;
+  width: 1rem; height: 1rem;
+  background: no-repeat center / contain
+    url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" fill="none"%3E%3Cpath d="M3.5 9.5 7 13l7.5-8" stroke="%233D8C82" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/%3E%3C/svg%3E');
+}
+
+/* One orange per screenful: the landlord band's button steps back. */
+.band-centre .btn-outline {
+  border-color: rgba(20, 40, 58, .28);
+  color: var(--navy-deep);
+  background: var(--white);
+}
+.band-centre .btn-outline:hover { border-color: var(--navy-deep); background: var(--white); }
+
+/* ----------------------------------------------------------------------
+   Quote page: form plus a sidebar that answers the questions we would
+   otherwise be ringing people about. The form was 640px in a 1152px
+   container with 512px of dead space beside it; this uses that space to
+   reduce follow-up rather than just to look fuller.
+   -------------------------------------------------------------------- */
+.form-layout { display: grid; gap: var(--space-lg); }
+@media (min-width: 62rem) {
+  .form-layout {
+    grid-template-columns: minmax(0, 40rem) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-xl);
+  }
+  /* The form is long; the guidance should stay with it on the way down. */
+  .form-aside { position: sticky; top: 5.5rem; }
+}
+.form-aside { display: grid; gap: var(--space-md); align-content: start; }
+
+.sidecard--quiet {
+  background: transparent;
+  box-shadow: none;
+  border: 1px solid rgba(20, 40, 58, .14);
+}
+
+.aside-list { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-sm); }
+.aside-list li {
+  position: relative;
+  padding-left: 1.1rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--blue);
+}
+.aside-list li b { color: var(--navy-deep); font-weight: 600; }
+.aside-list li::before {
+  content: "";
+  position: absolute; left: 0; top: 0.55rem;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--teal);
+}
+
+.aside-faq { margin: 0; }
+.aside-faq dt {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--navy-deep);
+  margin-top: var(--space-sm);
+}
+.aside-faq dt:first-child { margin-top: 0; }
+.aside-faq dd {
+  margin: 0.2rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--blue);
+}
+
+.aside-call { margin: 0; font-size: 0.875rem; line-height: 1.55; color: var(--blue); }
+.aside-call a { color: var(--navy-deep); font-weight: 600; }
+
+/* ----------------------------------------------------------------------
+   The root cause of "everything is pinned to the left"
+   Six classes override .container's centring with margin-inline: 0 while
+   also capping the width, so those blocks hug the VIEWPORT's left edge
+   rather than the container's. On a laptop that leaves half the screen
+   empty and the blocks out of line with the full-width sections above
+   and below them. Centring is restored; the reading-width cap moves to
+   the children, where it belongs.
+   -------------------------------------------------------------------- */
+.form-intro, .flatmates, .quote-cta, .small-block, .end-of-year {
+  max-width: var(--container);
+  margin-inline: auto;
+}
+/* Text still wraps at a comfortable measure — it just no longer drags
+   the whole block to the edge of the screen. */
+.form-intro > *, .small-block > * { max-width: 40rem; }
+.flatmates, .quote-cta, .end-of-year { text-align: center; }
+.flatmates > *, .quote-cta > *, .end-of-year > * {
+  max-width: 36rem;
+  margin-inline: auto;
+}
+
+/* ----------------------------------------------------------------------
+   Service cards
+   These are the first thing below the hero and carried no weight: an
+   outline icon, a heading, a paragraph, a link. Giving the icon a tinted
+   disc anchors the card, and a hover state makes it obvious the whole
+   thing leads somewhere.
+   -------------------------------------------------------------------- */
+.service-card {
+  display: flex;
+  flex-direction: column;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.service-card > svg {
+  box-sizing: content-box;
+  padding: 0.7rem;
+  border-radius: var(--radius-md);
+  background: rgba(47, 127, 116, 0.09);
+}
+/* The link sits on the card's bottom edge whatever the copy length, so
+   the four cards line up instead of stepping down the row. */
+.service-card p { flex: 1; }
+.service-card__link { margin-top: var(--space-sm); }
+
+@media (hover: hover) {
+  .service-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 2px 4px rgba(15, 23, 42, .05), 0 14px 32px rgba(15, 23, 42, .10);
+  }
+  .service-card:hover .service-card__link { text-decoration: underline; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .service-card { transition: none; }
+  .service-card:hover { transform: none; }
+}
+
+/* ----------------------------------------------------------------------
+   About page — wide alternating bubbles
+   The same card language as the services grid, but spanning most of the
+   page: photo on one side, words on the other, sides swapping between
+   rows so the eye zig-zags down instead of running straight.
+   -------------------------------------------------------------------- */
+.bio-stack { display: grid; gap: var(--space-lg); }
+
+.bio {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  display: grid;
+  gap: 0;
+}
+@media (min-width: 52rem) {
+  .bio { grid-template-columns: minmax(0, 20rem) minmax(0, 1fr); align-items: stretch; }
+  /* Second bubble mirrors the first. The column widths have to swap as
+     well as the order — moving the photo alone drops it into the wide
+     column and it balloons. */
+  .bio--flip { grid-template-columns: minmax(0, 1fr) minmax(0, 20rem); }
+  .bio--flip .bio__photo { order: 2; }
+}
+.bio__photo { background: var(--off-white); }
+.bio__photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 16rem;
+  object-fit: cover;
+}
+.bio__body { padding: var(--space-lg) var(--space-md); }
+@media (min-width: 52rem) {
+  .bio__body { padding: var(--space-lg); align-self: center; }
+}
+.bio__name {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(1.5rem, 3vw, 1.875rem);
+  color: var(--navy-deep);
+  margin: var(--space-3xs) 0 var(--space-2xs);
+}
+.bio__role { color: var(--blue); font-weight: 600; font-size: 0.9375rem; margin: 0 0 var(--space-sm); }
+.bio__facts {
+  margin: var(--space-md) 0 0; padding: 0; list-style: none;
+  display: grid; gap: var(--space-2xs);
+}
+.bio__facts li {
+  position: relative; padding-left: 1.5rem;
+  font-size: 0.9375rem; line-height: 1.55; color: var(--blue);
+}
+.bio__facts li::before {
+  content: ""; position: absolute; left: 0; top: 0.5rem;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--teal);
+}
+
+/* Copy that still needs writing. Loud on purpose: nothing marked like
+   this should ever reach the live site. */
+.placeholder {
+  background: repeating-linear-gradient(
+    135deg, rgba(217, 122, 53, .10) 0 10px, rgba(217, 122, 53, .18) 10px 20px);
+  border-left: 3px solid var(--orange);
+  padding: 0.55rem 0.7rem;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--navy-deep);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.bio__facts li.placeholder, .sidecard__list li.placeholder { padding-left: 0.7rem; }
+.bio__facts li.placeholder::before, .sidecard__list li.placeholder::before { content: none; }
+
+/* ----------------------------------------------------------------------
+   Contact page
+   -------------------------------------------------------------------- */
+.contact-grid { display: grid; gap: var(--space-md); }
+@media (min-width: 46rem) {
+  .contact-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.contact-card {
+  display: flex; flex-direction: column; gap: var(--space-2xs);
+  text-decoration: none;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.contact-card__label {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--teal);
+}
+.contact-card__value {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.25rem; color: var(--navy-deep); line-height: 1.3;
+}
+.contact-card__note { font-size: 0.875rem; line-height: 1.5; color: var(--blue); }
+@media (hover: hover) {
+  a.contact-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 2px 4px rgba(15,23,42,.05), 0 14px 32px rgba(15,23,42,.10);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .contact-card { transition: none; }
+  a.contact-card:hover { transform: none; }
+}
+
+/* Contractor list on the Services page. */
+.contractors__intro { max-width: 40rem; margin-bottom: var(--space-md); }
+.contractors__note { max-width: 40rem; margin-top: var(--space-md); font-size: 0.875rem; }
+.contractor-grid {
+  margin: 0; padding: 0; list-style: none;
+  display: grid; gap: var(--space-sm);
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+.contractor { display: flex; flex-direction: column; gap: 0.2rem; padding: var(--space-sm) var(--space-md); }
+.contractor__cat {
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--teal);
+}
+.contractor__name {
+  font-family: "Fraunces", Georgia, serif; font-size: 1.0625rem; color: var(--navy-deep);
+}
+
+/* ----------------------------------------------------------------------
+   Seasonal banner — switched on and off in the HTML, not here
+   -------------------------------------------------------------------- */
+.season-bar { background: var(--orange-cta); color: #fff; }
+.season-bar[hidden] { display: none; }
+.season-bar__inner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem;
+  padding-block: 0.6rem; font-size: 0.875rem; line-height: 1.4;
+}
+.season-bar__tag {
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; background: rgba(255,255,255,.2);
+  padding: 0.2rem 0.5rem; border-radius: 999px; white-space: nowrap;
+}
+.season-bar__text { flex: 1; min-width: 12rem; }
+.season-bar__link { color: #fff; font-weight: 700; text-decoration: underline; white-space: nowrap; }
+
+/* ----------------------------------------------------------------------
+   Sticky mobile action bar
+   Phones only. Hidden until the hero is behind us so it never competes
+   with the hero's own button.
+   -------------------------------------------------------------------- */
+.mobile-cta {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: none; gap: 0.6rem;
+  padding: 0.6rem 1rem calc(0.6rem + env(safe-area-inset-bottom));
+  background: rgba(248, 250, 252, .94);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(20, 40, 58, .12);
+  transform: translateY(110%);
+  transition: transform .22s ease;
+}
+.mobile-cta.is-visible { transform: translateY(0); }
+.mobile-cta__quote { flex: 1; text-align: center; }
+.mobile-cta__call {
+  display: grid; place-items: center;
+  width: 48px; min-height: 48px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid rgba(20, 40, 58, .22);
+  background: var(--white); color: var(--navy-deep);
+}
+/* Never on a page whose whole job is the form: the bar would sit over
+   the fields and the button it duplicates. */
+body:has(#quote-form) .mobile-cta { display: none !important; }
+
+@media (max-width: 47.99rem) {
+  .mobile-cta { display: flex; }
+  /* Room at the end of the page so the bar never covers the footer. */
+  body { padding-bottom: 4.5rem; }
+}
+@media (prefers-reduced-motion: reduce) { .mobile-cta { transition: none; } }
+
+/* ----------------------------------------------------------------------
+   Proof strip
+   -------------------------------------------------------------------- */
+.proof-strip { padding-block: var(--space-md); }
+.proof {
+  margin: 0; max-width: 46rem;
+  font-size: 1rem; line-height: 1.6; color: var(--navy-deep);
+}
+.proof a { color: var(--navy-deep); font-weight: 600; white-space: nowrap; }
+
+/* ----------------------------------------------------------------------
+   Thanks page
+   -------------------------------------------------------------------- */
+.thanks-head { max-width: 44rem; }
+.thanks-next { padding: var(--space-lg); }
+.thanks-steps { margin: 0; padding: 0; list-style: none; counter-reset: ts; display: grid; gap: var(--space-md); }
+.thanks-steps li {
+  counter-increment: ts; position: relative; padding-left: 2.6rem;
+  line-height: 1.6; color: var(--blue);
+}
+.thanks-steps li b { color: var(--navy-deep); font-weight: 600; }
+.thanks-steps li::before {
+  content: counter(ts);
+  position: absolute; left: 0; top: -0.1rem;
+  width: 1.85rem; height: 1.85rem; border-radius: 50%;
+  background: var(--navy-deep); color: #fff;
+  font-size: 0.8125rem; font-weight: 700;
+  display: grid; place-items: center;
+}
+.thanks-meanwhile {
+  margin: var(--space-lg) 0 0; padding-top: var(--space-md);
+  border-top: 1px solid rgba(20, 40, 58, .1);
+  font-size: 0.9375rem; line-height: 1.6; color: var(--blue);
+}
+.thanks-meanwhile a { color: var(--navy-deep); font-weight: 600; }
+
+.thanks-recap { margin: 0; }
+.thanks-recap dt {
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--teal); margin-top: var(--space-sm);
+}
+.thanks-recap dt:first-child { margin-top: 0; }
+.thanks-recap dd {
+  margin: 0.15rem 0 0; font-size: 0.9375rem; line-height: 1.5;
+  color: var(--navy-deep); overflow-wrap: anywhere; white-space: pre-wrap;
+}
+.thanks-recap__note {
+  margin: var(--space-md) 0 0; font-size: 0.8125rem; color: var(--blue);
+}
+
+/* ----------------------------------------------------------------------
+   Tap targets — form controls and buttons to 44px on touch screens
+   Apple and Google both want 44px. Applied on pointer:coarse only, so
+   desktop keeps its tighter proportions.
+   -------------------------------------------------------------------- */
+/* Width as well as pointer: a phone-sized screen gets the larger targets
+   whether or not the browser reports a coarse pointer. */
+@media (pointer: coarse), (max-width: 47.99rem) {
+  .btn, .form-input, .form-select, .form-textarea, .form-option,
+  summary.nav-toggle__summary, .faq-item summary {
+    min-height: 44px;
+  }
+  .form-input, .form-select { padding-block: 0.7rem; }
+  .form-option { display: flex; align-items: center; padding-block: 0.35rem; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; }
+}

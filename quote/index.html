@@ -16,6 +16,9 @@
   <link rel="preload" href="/fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/css/site.css" />
+  
+  <link rel="preload" href="fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin />
 
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="FlatOut" />
@@ -36,7 +39,7 @@
     </a>
 
     <nav class="site-nav" aria-label="Primary">
-      <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+      <a href="/#how-it-works">How It Works</a><a href="/services">Services</a><a href="/landlord">For Landlords</a><a href="/about">About</a><a href="/contact">Contact</a>
     </nav>
 
     <div class="site-header__actions">
@@ -47,7 +50,7 @@
           <span class="nav-toggle__icon"><span></span><span></span><span></span></span>
         </summary>
         <div class="nav-toggle__panel">
-          <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+          <a href="/#how-it-works">How It Works</a><a href="/services">Services</a><a href="/landlord">For Landlords</a><a href="/about">About</a><a href="/contact">Contact</a>
           <a class="site-header__phone" href="tel:+64274086895">027 408 6895</a>
         </div>
       </details>
@@ -71,7 +74,7 @@
 </section>
 
 <section class="section section--off-white">
-  <div class="container">
+  <div class="container form-layout">
 
     <form class="form-card card" id="quote-form" novalidate>
 
@@ -264,6 +267,60 @@
       <p class="form-status form-status--error" id="form-status" role="alert"></p>
     </form>
 
+    <aside class="form-aside">
+      <div class="sidecard">
+        <p class="sidecard__title">What to put in each bit</p>
+        <ul class="aside-list">
+          <li><b>Current address</b> — street number and street, not just
+            the suburb. We need it to work out the trip and send the
+            right people.</li>
+          <li><b>When you're moving out</b> — and, in the notes, the date
+            of your landlord's final inspection if you know it. That's
+            the deadline that actually matters, and it's usually a few
+            days after you move out.</li>
+          <li><b>Rubbish</b> — a rough size helps: a car boot, a trailer
+            load, a ute load. Mention a couch or a mattress; they change
+            the job.</li>
+          <li><b>Anything else</b> — stairs, no lift, nowhere for a truck
+            to park, power getting cut off. These are the things that
+            change a price on the day, so it's worth saying now.</li>
+        </ul>
+      </div>
+
+      <div class="sidecard">
+        <p class="sidecard__title">Questions we get asked</p>
+        <dl class="aside-faq">
+          <dt>Does any of this cost me anything?</dt>
+          <dd>No. The visit and the quote are free, and nothing is
+            charged until you've accepted a written quote.</dd>
+
+          <dt>How fast will you get back to me?</dt>
+          <dd>Same day, and no later than the end of the following day.</dd>
+
+          <dt>Can I change the date later?</dt>
+          <dd>Yes. Move-out dates shift all the time — tell us and we'll
+            move the booking.</dd>
+
+          <dt>Do I have to be there on the day?</dt>
+          <dd>Not necessarily. Tell us at the visit and we'll sort out
+            keys and access.</dd>
+
+          <dt>Can one form cover my whole flat?</dt>
+          <dd>Yes. One submission can cover everyone — we just need one
+            name for the quote.</dd>
+        </dl>
+      </div>
+
+      <div class="sidecard sidecard--quiet">
+        <p class="sidecard__title">Rather just talk?</p>
+        <p class="aside-call">
+          Call or text <a href="tel:+64274086895">027 408 6895</a>.
+          We'd rather answer a question now than have you guess at the form.
+        </p>
+      </div>
+    </aside>
+
+
 
   </div>
 </section>
@@ -298,7 +355,7 @@
         <ul class="site-footer__list">
           <li><a href="/#how-it-works">How It Works</a></li><li><a href="/#services">Services</a></li><li><a href="/#landlord">For Landlords</a></li><li><a href="/#contact">Contact</a></li>
           <li><a href="/terms">Terms</a></li>
-          <li><a href="/panel">Employees</a></li>
+          <li><a href="#">Employees</a></li>
           <li><a href="/quote">Get a Quote</a></li>
         </ul>
       </div>
@@ -582,6 +639,14 @@
     submitBtnLabel.innerHTML = '<span class="form-loading"><span class="form-spinner"></span> Sending…</span>';
 
     data.reference = ref;
+
+    /* Hand the submission to the thanks page so it can read back what
+       was asked for. Same origin, cleared as soon as it's shown, and
+       everything still works if storage is unavailable. */
+    try {
+      sessionStorage.setItem('flatout_last_submission', JSON.stringify(data));
+    } catch (e) {}
+
 
     // A readable POST. "text/plain" keeps the browser from sending a
     // preflight, which is what lets Apps Script answer with CORS headers

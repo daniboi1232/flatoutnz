@@ -16,6 +16,9 @@
   <link rel="preload" href="/fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/css/site.css" />
+  
+  <link rel="preload" href="fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin />
 
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="FlatOut" />
@@ -104,6 +107,23 @@
 <body class="">
   <a class="skip-link" href="#main">Skip to content</a>
   
+<!-- ===================================================================
+     SEASONAL BANNER
+     TO TURN OFF: add the word  hidden  to the <div> on the next line.
+     TO TURN ON:  remove it.
+     Change the dates in the text to match the season.
+     =================================================================== -->
+<div class="season-bar" id="season-bar">
+  <div class="container season-bar__inner">
+    <span class="season-bar__tag">Move-out season</span>
+    <span class="season-bar__text">
+      Booking now for late November. Give us two weeks and you'll get the
+      date you want.
+    </span>
+    <a class="season-bar__link" href="/quote">Get a quote&nbsp;&rarr;</a>
+  </div>
+</div>
+
 <header class="site-header">
   <div class="container site-header__inner">
     <a class="site-logo" href="/" aria-label="FlatOut home">
@@ -112,7 +132,7 @@
     </a>
 
     <nav class="site-nav" aria-label="Primary">
-      <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+      <a href="/#how-it-works">How It Works</a><a href="/services">Services</a><a href="/landlord">For Landlords</a><a href="/about">About</a><a href="/contact">Contact</a>
     </nav>
 
     <div class="site-header__actions">
@@ -123,7 +143,7 @@
           <span class="nav-toggle__icon"><span></span><span></span><span></span></span>
         </summary>
         <div class="nav-toggle__panel">
-          <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+          <a href="/#how-it-works">How It Works</a><a href="/services">Services</a><a href="/landlord">For Landlords</a><a href="/about">About</a><a href="/contact">Contact</a>
           <a class="site-header__phone" href="tel:+64274086895">027 408 6895</a>
         </div>
       </details>
@@ -134,9 +154,14 @@
     
 <section class="section section--navy hero">
   <div class="container hero__inner">
+    <div class="hero__main">
     <p class="eyebrow hero__kicker">FlatOut</p>
-    <h1 class="hero__headline">Moving out?<br>We'll sort it.</h1>
-    <p class="hero__sub">Everything you need to move out of your flat — organised in one place.</p>
+    <h1 class="hero__headline">Get your bond back.<br>Without losing a week to it.</h1>
+    <p class="hero__sub">
+      Cleaned to the standard your landlord inspects against, rubbish gone,
+      and the rest of it moved or stored — organised by us, in one go, while
+      you get on with exams.
+    </p>
     <div class="hero__actions">
       <a class="btn btn-on-dark hero__cta" href="/quote">Get My Move-Out Quote</a>
       <a class="hero__call" href="tel:+64274086895">
@@ -145,60 +170,39 @@
       </a>
     </div>
     <ul class="hero__checklist"><li><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3.5 9.5 7 13l7.5-8" stroke="var(--teal)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/></svg>Moving</li><li><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3.5 9.5 7 13l7.5-8" stroke="var(--teal)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/></svg>Cleaning</li><li><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3.5 9.5 7 13l7.5-8" stroke="var(--teal)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/></svg>Rubbish</li><li><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3.5 9.5 7 13l7.5-8" stroke="var(--teal)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/></svg>Storage</li></ul>
+    </div>
+    <aside class="hero__panel">
+      <p class="hero__panel-title">Before you pay anything</p>
+      <ul class="hero__panel-list">
+        <li><b>We come and look at the job.</b> Free, and no obligation.</li>
+        <li><b>You get one written quote.</b> One price for the whole flat.</li>
+        <li><b>Nothing is charged</b> until you've accepted it.</li>
+        <li><b>Most flats split it</b> four or five ways.</li>
+        <li><b>Local, insured contractors.</b> Your agreement is with us.</li>
+      </ul>
+    </aside>
   </div>
 </section>
 
 <section class="section section--off-white" id="services">
-  <div class="container">
+  <div class="container band-centre">
     <p class="eyebrow muted">What do you need?</p>
-    <h2 class="section-title">Move-out services in Christchurch</h2>
-    <ul class="service-grid">
-    <li class="card service-card">
-      <svg width="40" height="40" viewBox="0 0 48 48" fill="none" stroke="var(--teal)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-    <path d="M6 32V16h20v16" />
-    <path d="M26 22h9l6 6v4h-4" />
-    <circle cx="15" cy="35" r="3.5" />
-    <circle cx="33" cy="35" r="3.5" />
-    <path d="M6 26h14" />
-  </svg>
-      <h3>Moving</h3>
-      <p class="muted">Movers who handle student flats. A single room or a five-bedroom house in Ilam or Riccarton — we scope it, price it and get it shifted.</p>
-      <a class="service-card__link" href="/quote">Get a quote →</a>
-    </li>
-    <li class="card service-card">
-      <svg width="40" height="40" viewBox="0 0 48 48" fill="none" stroke="var(--teal)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-    <path d="M24 10 30 16" />
-    <path d="M14 40 27 27" />
-    <path d="M27 27c4-4 4-9 8-11l4 4c-2 4-7 4-11 8Z" />
-    <path d="M35 12l2-2M39 16l2-2M35 8v3" />
-  </svg>
-      <h3>Cleaning</h3>
-      <p class="muted">End of tenancy cleaning, sorted. Cleaners who know exactly what landlords and property managers inspect for at handover, so you get your bond back without doing it yourself at 11pm.</p>
-      <a class="service-card__link" href="/quote">Get a quote →</a>
-    </li>
-    <li class="card service-card">
-      <svg width="40" height="40" viewBox="0 0 48 48" fill="none" stroke="var(--teal)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-    <path d="M10 14h28" />
-    <path d="M17 14V9h14v5" />
-    <path d="M13 14l2 26h18l2-26" />
-    <path d="M20 20v14" />
-    <path d="M28 20v14" />
-  </svg>
-      <h3>Rubbish</h3>
-      <p class="muted">Rubbish removal and furniture disposal across Christchurch. The couch nobody wants, the broken desk, the pile in the garage that came with the flat — we'll get it taken away.</p>
-      <a class="service-card__link" href="/quote">Get a quote →</a>
-    </li>
-    <li class="card service-card">
-      <svg width="40" height="40" viewBox="0 0 48 48" fill="none" stroke="var(--teal)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-    <path d="M6 16 24 8l18 8-18 8Z" />
-    <path d="M6 16v18l18 8V24" />
-    <path d="M42 16v18l-18 8" />
-    <path d="M15 12l18 8" />
-  </svg>
-      <h3>Storage</h3>
-      <p class="muted">Student storage over summer. Rather than hauling everything home for three months, we'll sort storage so it's waiting for you in February.</p>
-      <a class="service-card__link" href="/quote">Get a quote →</a>
-    </li></ul>
+    <h2 class="section-title">Moving, cleaning, rubbish and storage</h2>
+    <p class="band-centre__copy muted">
+      Four services, one contact, one invoice. Take whichever you need —
+      most flats take two or three.
+    </p>
+    <a class="btn btn-outline" href="/services">See what each one covers</a>
+  </div>
+</section>
+
+<section class="section section--tight section--off-white proof-strip">
+  <div class="container">
+    <p class="proof">
+      We started FlatOut in September 2026, so we've done a handful of flats
+      rather than a hundred — and every one of them has gone right.
+      <a href="/about">That's us, and why we started it&nbsp;&rarr;</a>
+    </p>
   </div>
 </section>
 
@@ -225,23 +229,7 @@
   </div>
 </section>
 
-<section class="section section--off-white" id="who-we-use">
-  <div class="container small-block">
-    <p class="eyebrow muted">Who turns up</p>
-    <h2 class="section-title">The people doing the work</h2>
-    <p class="muted">
-      Every contractor we use is a local Christchurch business on a
-      signed agreement with us. We require them to carry their own
-      insurance and show us the certificate before they take a job.
-    </p>
-    <p class="muted">
-      Your agreement is with FlatOut, not with them. So if something
-      turns up broken or a job isn't up to scratch, you call us and we
-      deal with it. You're not stuck chasing a contractor you've never
-      met.
-    </p>
-  </div>
-</section>
+
 
 <section class="section section--cream">
   <div class="container flatmates">
@@ -254,71 +242,61 @@
 </section>
 
 <section class="section section--tight section--cream" id="pricing">
-  <div class="container small-block">
-    <p class="eyebrow muted">What it costs</p>
-    <h2 class="section-title">What it costs</h2>
-    <p class="muted">
-      One price for the whole job. We come and look at what needs doing,
-      give you an estimate on the spot, then send a written quote once
-      we've locked it in with the people doing the work. You pay us, we
-      pay them. The visit and the quote cost you nothing.
-    </p>
-    <p class="muted">
-      We don't put prices on the website, because a four-bedroom flat in
-      Riccarton with a garage full of junk and a tidy one-bedroom aren't
-      the same job. What moves the number: how many rooms, how much there
-      actually is, which services you need, and how much notice you give
-      us. Ask at the visit and we'll tell you straight.
-    </p>
+  <div class="container split">
+    <div class="split__main">
+      <p class="eyebrow muted">What it costs</p>
+      <h2 class="section-title">What it costs</h2>
+      <p class="muted">
+        One price for the whole job. We come and look at what needs doing,
+        give you an estimate on the spot, then send a written quote once
+        we've locked it in with the people doing the work. You pay us, we
+        pay them. The visit and the quote cost you nothing.
+      </p>
+      <p class="muted">
+        We don't put prices on the website, because a four-bedroom flat in
+        Riccarton with a garage full of junk and a tidy one-bedroom aren't
+        the same job. Ask at the visit and we'll tell you straight.
+      </p>
+    </div>
+    <aside class="sidecard">
+      <p class="sidecard__title">What moves the price</p>
+      <ol class="sidecard__drivers">
+        <li><b>How many rooms</b> you're clearing</li>
+        <li><b>How much there actually is</b> — the honest answer, not the hopeful one</li>
+        <li><b>Which services</b> you need</li>
+        <li><b>How much notice</b> you give us</li>
+      </ol>
+    </aside>
   </div>
 </section>
 
 
-<section class="section section--navy">
-  <div class="container end-of-year">
-    <p class="eyebrow">Leaving Christchurch for summer?</p>
-    <h2 class="section-title section-title--on-dark">Sort your end-of-year move early</h2>
-    <p class="end-of-year__copy">
-      Don't leave everything until the last week. Get your moving,
-      cleaning, rubbish and storage organised before the rush.
-    </p>
-    <a class="btn btn-on-dark" href="/quote">Get My Move-Out Quote</a>
-  </div>
-</section>
 
-<section class="section section--tight section--cream">
-  <div class="container small-block">
-    <p class="eyebrow muted">More options coming soon</p>
-    <h2 class="section-title">More services on the way</h2>
-    <p class="muted">
-      We're adding more move-out and move-in services to make FlatOut
-      your one-stop student move service.
-    </p>
-  </div>
-</section>
 
-<section class="section section--tight section--off-white" id="landlord">
-  <div class="container small-block">
+
+
+<section class="section section--tight section--off-white band-centre" id="landlord">
+  <div class="container">
     <p class="eyebrow muted">Are you a landlord?</p>
     <h2 class="section-title">For landlords and property managers</h2>
-    <p class="muted">
+    <p class="band-centre__copy muted">
       Give your departing tenants one simple place to organise their
       move-out services.
     </p>
-    <a class="btn btn-primary" href="/landlord">Landlord Enquiries</a>
+    <a class="btn btn-outline" href="/landlord">Landlord Enquiries</a>
   </div>
 </section>
 
-<section class="section section--cream" id="quote-form">
-  <div class="container quote-cta">
-    <p class="eyebrow muted">Get your move-out quote</p>
-    <h2>One form. Whole flat sorted.</h2>
-    <p class="muted">
-      Tell us who's moving, when you're leaving and what you need —
-      one submission can cover your whole flat. It only takes a minute.
+<section class="section section--navy band-centre" id="quote-form">
+  <div class="container">
+    <p class="eyebrow">Leaving Christchurch for summer?</p>
+    <h2 class="section-title section-title--on-dark">Sort your move before the rush</h2>
+    <p class="band-centre__copy">
+      Tell us who's moving, when you're leaving and what you need — one
+      submission covers your whole flat. Don't leave it until the last week.
     </p>
-    <a class="btn btn-primary" href="/quote">Get My Move-Out Quote</a>
-    <p class="quote-cta__note muted">Takes about a minute.</p>
+    <a class="btn btn-on-dark" href="/quote">Get My Move-Out Quote</a>
+    <p class="band-centre__note">Takes about a minute. The visit and the quote are free.</p>
   </div>
 </section>
 
@@ -326,6 +304,10 @@
   <div class="container">
     <h2>Questions</h2>
     <div class="faq-list">
+    <details class="card faq-item">
+      <summary>My flat wants to split the cost. Am I on the hook for all of it?</summary>
+      <p class="muted">The quote and the invoice go to one person, because we need one name to send things to. How the flat divides it up is entirely yours to sort — most just transfer their share to whoever's name is on it. The person on the invoice is the one we'd come back to if it went unpaid, so pick someone who's happy with that.</p>
+    </details>
     <details class="card faq-item">
       <summary>Does it cost me anything?</summary>
       <p class="muted">The visit and the quote are free. The work itself you pay for — one price covering everything, paid to us rather than to four separate businesses. Nothing is charged until you've accepted a quote.</p>
@@ -384,7 +366,7 @@
         <ul class="site-footer__list">
           <li><a href="/#how-it-works">How It Works</a></li><li><a href="/#services">Services</a></li><li><a href="/#landlord">For Landlords</a></li><li><a href="/#contact">Contact</a></li>
           <li><a href="/terms">Terms</a></li>
-          <li><a href="/panel">Employees</a></li>
+          <li><a href="#">Employees</a></li>
           <li><a href="/quote">Get a Quote</a></li>
         </ul>
       </div>
@@ -411,5 +393,31 @@
     <a class="call-bar__btn call-bar__btn--quote" href="/quote">Get a quote</a>
   </div>
 
+
+<!-- Sticky action bar. Phones only; appears once the hero is scrolled past. -->
+<div class="mobile-cta" id="mobile-cta" aria-hidden="true">
+  <a class="btn btn-primary mobile-cta__quote" href="/quote">Get a quote</a>
+  <a class="mobile-cta__call" href="tel:+64274086895" aria-label="Call FlatOut">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/>
+    </svg>
+  </a>
+</div>
+<script>
+/* Show the bar once the first screenful is behind us, so it never covers
+   the hero's own call to action. */
+(function () {
+  var bar = document.getElementById('mobile-cta');
+  if (!bar) return;
+  var show = function () {
+    var past = window.scrollY > Math.min(window.innerHeight * 0.8, 520);
+    bar.classList.toggle('is-visible', past);
+    bar.setAttribute('aria-hidden', past ? 'false' : 'true');
+  };
+  window.addEventListener('scroll', show, { passive: true });
+  show();
+})();
+</script>
 </body>
 </html>

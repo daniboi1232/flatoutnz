@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Request received | FlatOut</title>
   <meta name="description" content="Your move-out request is in. Here's what happens next, what it costs and when." />
-  <meta name="robots" content="noindex, nofollow" />
   <link rel="canonical" href="https://flatoutnz.co.nz/thanks" />
 
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
@@ -17,9 +16,30 @@
   <link rel="preload" href="/fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/css/site.css" />
+  <meta name="robots" content="noindex, nofollow" />
+  
+  <link rel="preload" href="fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/karla-variable.woff2" as="font" type="font/woff2" crossorigin />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
+
+<!-- ===================================================================
+     SEASONAL BANNER
+     TO TURN OFF: add the word  hidden  to the <div> on the next line.
+     TO TURN ON:  remove it.
+     Change the dates in the text to match the season.
+     =================================================================== -->
+<div class="season-bar" id="season-bar">
+  <div class="container season-bar__inner">
+    <span class="season-bar__tag">Move-out season</span>
+    <span class="season-bar__text">
+      Booking now for late November. Give us two weeks and you'll get the
+      date you want.
+    </span>
+    <a class="season-bar__link" href="/quote">Get a quote&nbsp;&rarr;</a>
+  </div>
+</div>
 
 <header class="site-header">
   <div class="container site-header__inner">
@@ -29,7 +49,7 @@
     </a>
 
     <nav class="site-nav" aria-label="Primary">
-      <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+      <a href="/#how-it-works">How It Works</a><a href="/services">Services</a><a href="/landlord">For Landlords</a><a href="/about">About</a><a href="/contact">Contact</a>
     </nav>
 
     <div class="site-header__actions">
@@ -40,7 +60,7 @@
           <span class="nav-toggle__icon"><span></span><span></span><span></span></span>
         </summary>
         <div class="nav-toggle__panel">
-          <a href="/#how-it-works">How It Works</a><a href="/#services">Services</a><a href="/#landlord">For Landlords</a><a href="/#contact">Contact</a>
+          <a href="/#how-it-works">How It Works</a><a href="/services">Services</a><a href="/landlord">For Landlords</a><a href="/about">About</a><a href="/contact">Contact</a>
           <a class="site-header__phone" href="tel:+64274086895">027 408 6895</a>
         </div>
       </details>
@@ -50,142 +70,123 @@
 
   <main id="main">
 
-<section class="section section--navy">
-  <div class="container thanks-hero">
-    <div class="thanks-hero__icon">
-      <svg width="26" height="26" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3.5 9.5 7 13l7.5-8" stroke="var(--teal)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </div>
-    <h1>That's in. Thanks.</h1>
-    <p class="thanks-hero__sub">
-      We'll be in touch the same day, and no later than the end of the
-      following day, to arrange a time to look at the job.
-    </p>
-    <div class="thanks-ref" id="thanks-ref-wrap" hidden>
-      <span class="thanks-ref__label">Your reference</span>
-      <span class="thanks-ref__number" id="thanks-ref">&mdash;</span>
-    </div>
-    <p class="thanks-hero__note">
-      Quote it if you call or text us &mdash; it saves you explaining the
-      whole thing again.
-    </p>
+<section class="section section--tight section--cream">
+  <div class="container thanks-head">
+    <p class="eyebrow muted">Request received</p>
+    <h1>Thanks — we've got it.</h1>
+    <p class="hero__sub" id="thanks-ref"></p>
   </div>
 </section>
 
 <section class="section section--off-white">
-  <div class="container">
-    <p class="eyebrow muted">What happens next</p>
-    <ol class="steps thanks-steps">
-      <li class="step">
-        <span class="step__number">1</span>
-        <h3>We call you</h3>
-        <p class="muted">Usually the same day. We'll sort a time to come and walk through the job with you &mdash; it takes about fifteen minutes.</p>
-      </li>
-      <li class="step">
-        <span class="step__number">2</span>
-        <h3>We look at the job</h3>
-        <p class="muted">One of us comes to the flat and sees what's actually there. You'll get an estimate on the spot so you know roughly where you stand.</p>
-      </li>
-      <li class="step">
-        <span class="step__number">3</span>
-        <h3>You get a written quote</h3>
-        <p class="muted">Once we've locked in the people doing the work, we send you one price covering everything. Nothing is charged until you accept it.</p>
-      </li>
-      <li class="step">
-        <span class="step__number">4</span>
-        <h3>We run the job</h3>
-        <p class="muted">We book the contractors, arrange access and keep it on track. You don't have to chase anyone.</p>
-      </li>
-    </ol>
-  </div>
-</section>
+  <div class="container form-layout">
 
-<section class="section section--cream">
-  <div class="container small-block">
-    <p class="eyebrow muted">What it costs, and when</p>
-    <p class="muted">
-      The visit, the estimate and the quote are free. You're charged
-      nothing until you've accepted a written quote from us.
-    </p>
-    <div class="thanks-terms">
-      <div class="thanks-term">
-        <p class="thanks-term__head">Jobs up to $500</p>
-        <p class="muted">Paid in full two days before the job starts.</p>
-      </div>
-      <div class="thanks-term">
-        <p class="thanks-term__head">Jobs over $500</p>
-        <p class="muted">Half up front, three business days before the job starts &mdash; or at booking if you're booking inside that window. The rest is due fourteen days later.</p>
-      </div>
-      <div class="thanks-term">
-        <p class="thanks-term__head">One price, one invoice</p>
-        <p class="muted">Whether it's a clean, or a clean plus a truck plus a skip, you get a single price from us. You don't pay the contractors separately.</p>
-      </div>
-      <div class="thanks-term">
-        <p class="thanks-term__head">Tracking it all</p>
-        <p class="muted">Once you've accepted a quote we'll send you an invite to our customer portal, where your quote, invoice and payment history live in one place.</p>
-      </div>
-      <div class="thanks-term">
-        <p class="thanks-term__head">If it's not paid on time</p>
-        <p class="muted">The job doesn't go ahead. Overdue balances pick up a $30 admin fee and 2% a month.</p>
-      </div>
+    <div class="card thanks-next">
+      <p class="sidecard__title">What happens next</p>
+      <ol class="thanks-steps">
+        <li><b>We'll be in touch today.</b> Same day if you sent this before
+          8pm, and no later than the end of tomorrow.</li>
+        <li><b>We come and look at the job.</b> Takes about fifteen minutes,
+          costs nothing, and you're not committing to anything.</li>
+        <li><b>You get one written quote.</b> One price for the whole flat.
+          Nothing is charged until you accept it.</li>
+      </ol>
+      <p class="thanks-meanwhile">
+        Nothing to do in the meantime. If something changes — your date moves,
+        your flatmates want something added — just
+        <a href="tel:+64274086895">call or text 027 408 6895</a>.
+      </p>
     </div>
-    <p class="muted thanks-terms__note">
-      These are the terms you'll be agreeing to when you accept the quote.
-      We'd rather you saw them now than at the bottom of an invoice.
-    </p>
+
+    <aside class="form-aside">
+      <div class="sidecard" id="thanks-summary" hidden>
+        <p class="sidecard__title">What you asked for</p>
+        <dl class="thanks-recap" id="thanks-recap"></dl>
+        <p class="thanks-recap__note">
+          Something wrong here? Text us and we'll fix it before the visit.
+        </p>
+      </div>
+      <div class="sidecard sidecard--quiet">
+        <p class="sidecard__title">While you wait</p>
+        <ul class="aside-list">
+          <li><b>Have a look at the oven.</b> It's the single biggest swing in
+            a clean, and knowing now saves a surprise later.</li>
+          <li><b>Ask your landlord for the inspection date</b> if you don't
+            have it. That's the deadline the whole job works back from.</li>
+          <li><b>Talk to your flat</b> about what's going in storage and what's
+            going in the skip.</li>
+        </ul>
+      </div>
+    </aside>
+
   </div>
 </section>
 
-<section class="section section--off-white">
-  <div class="container">
-    <h2>While you wait</h2>
-    <div class="faq-list">
-      <details class="card faq-item">
-        <summary>Do I need to be there for the visit?</summary>
-        <p class="muted">Yes, or someone from the flat does. We need to see the rooms, the access and what's going. Fifteen minutes is usually plenty.</p>
-      </details>
-      <details class="card faq-item">
-        <summary>What if the job's bigger than what I put in the form?</summary>
-        <p class="muted">That's exactly what the visit is for, and it's why we don't quote off a form. The price reflects what we actually see. If it's more than you expected you can walk away &mdash; you haven't committed to anything.</p>
-      </details>
-      <details class="card faq-item">
-        <summary>Can I change what I need?</summary>
-        <p class="muted">Yep, right up until you accept the quote. Tell us at the visit, or call us. Adding a skip or dropping the storage is no problem.</p>
-      </details>
-      <details class="card faq-item">
-        <summary>Do I have to be there on the day?</summary>
-        <p class="muted">Usually not. Most students have already left. We arrange access and whoever needs to be on site, and we'll sort the details with you before the day.</p>
-      </details>
-      <details class="card faq-item">
-        <summary>Who actually turns up?</summary>
-        <p class="muted">Local Christchurch contractors we've signed and checked. Your agreement is with us though &mdash; if anything goes wrong, you call us, not them.</p>
-      </details>
-      <details class="card faq-item">
-        <summary>Can my flatmates be on it too?</summary>
-        <p class="muted">That's the normal way it works. One person organises, we quote the whole flat, and how you split it between you is up to you.</p>
-      </details>
-      <details class="card faq-item">
-        <summary>I need to change or cancel my request.</summary>
-        <p class="muted">Call or text 027 408 6895 with your reference number, or email admin@flatoutnz.co.nz. No cost to cancel before you've accepted a quote.</p>
-      </details>
-    </div>
-  </div>
-</section>
+<script>
+/* The quote form stashes a plain-English summary on its way here. If it's
+   missing — someone bookmarked this page, or storage is blocked — the page
+   just shows the confirmation without it. */
+(function () {
+  var box = document.getElementById('thanks-summary');
+  var list = document.getElementById('thanks-recap');
+  var refLine = document.getElementById('thanks-ref');
+  var raw = null;
+  try { raw = sessionStorage.getItem('flatout_last_submission'); } catch (e) {}
 
-<section class="section section--tight section--navy">
-  <div class="container thanks-contact">
-    <p class="eyebrow">Need us sooner?</p>
-    <p class="thanks-contact__copy">
-      November gets busy. If your handover date is close, say so &mdash;
-      call or text and we'll move you up.
-    </p>
-    <div class="thanks-contact__links">
-      <a class="btn btn-on-dark" href="tel:+64274086895">027 408 6895</a>
-      <a class="thanks-contact__email" href="mailto:admin@flatoutnz.co.nz">admin@flatoutnz.co.nz</a>
-    </div>
-  </div>
-</section>
+  /* The form also passes ?ref= in the URL, so the reference still shows
+     even when the stored summary is gone (refresh, another device). */
+  var urlRef = (new URLSearchParams(location.search).get('ref') || '')
+    .replace(/[^A-Za-z0-9-]/g, '').slice(0, 24);
 
-  </main>
+  if (!raw) {
+    refLine.textContent = urlRef
+      ? "Your reference is " + urlRef + ". One of us will be in touch today."
+      : "One of us will be in touch today.";
+    return;
+  }
+  var d;
+  try { d = JSON.parse(raw); } catch (e) { d = null; }
+  var ref = (d && d.reference) || urlRef;
+  refLine.textContent = ref
+    ? "Your reference is " + ref + ". One of us will be in touch today."
+    : "One of us will be in touch today.";
+  if (!d) return;
+
+  /* The form stores dates as 2026-11-28; nobody reads a date like that. */
+  function nzDate(iso) {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || '';
+    var b = iso.split('-');
+    var dt = new Date(+b[0], +b[1] - 1, +b[2]);
+    if (isNaN(dt.getTime())) return iso;
+    return dt.toLocaleDateString('en-NZ',
+      { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+
+  var rows = [
+    ['Address', d.currentLocation],
+    ['Moving out', nzDate(d.moveDate)],
+    ['Flat size', d.bedrooms],
+    ['This move is for', d.moveFor],
+    ['Services', Array.isArray(d.services) ? d.services.join(', ') : d.services],
+    ['Moving to', d.movingTo],
+    ['Best way to reach you', d.contactMethod],
+    ['Your notes', d.specialRequirements]
+  ];
+  var html = '';
+  rows.forEach(function (r) {
+    if (!r[1]) return;
+    var t = document.createElement('div');
+    t.textContent = r[1];
+    html += '<dt>' + r[0] + '</dt><dd>' + t.innerHTML + '</dd>';
+  });
+  if (!html) return;
+  list.innerHTML = html;
+  box.hidden = false;
+  try { sessionStorage.removeItem('flatout_last_submission'); } catch (e) {}
+})();
+</script>
+
+</main>
 
 <footer class="site-footer" id="contact">
   <div class="container">
@@ -215,7 +216,7 @@
         <ul class="site-footer__list">
           <li><a href="/#how-it-works">How It Works</a></li><li><a href="/#services">Services</a></li><li><a href="/#landlord">For Landlords</a></li><li><a href="/#contact">Contact</a></li>
           <li><a href="/terms">Terms</a></li>
-          <li><a href="/panel">Employees</a></li>
+          <li><a href="#">Employees</a></li>
           <li><a href="/quote">Get a Quote</a></li>
         </ul>
       </div>
@@ -252,20 +253,18 @@
 
 <script>
 (function () {
-  // The reference comes from sessionStorage (set by the form). The query
-  // string is only a fallback for browsers that refuse storage. If there's
-  // no reference at all, someone landed here directly — hide the block
-  // rather than show a placeholder.
+  // The reference comes from sessionStorage (set by the form), with the
+  // query string as a fallback for browsers that refuse storage.
   var ref = null;
   try { ref = sessionStorage.getItem("flatout_ref"); } catch (e) {}
   if (!ref) {
     var m = window.location.search.match(/[?&]ref=([^&]+)/);
     if (m) { try { ref = decodeURIComponent(m[1]); } catch (e) { ref = m[1]; } }
   }
-  if (ref && /^FO-[0-9-]{1,20}$/.test(ref)) {
-    document.getElementById("thanks-ref").textContent = ref;
-    document.getElementById("thanks-ref-wrap").hidden = false;
-  }
+  // The reference is written into the page by the script in <main>,
+  // which runs first and reads the same sources. This block only needs
+  // it for the conversion event.
+
   // Fire the conversion once tracking is enabled above. Guarded so the
   // page works fine with no tag installed.
   if (typeof window.gtag === "function") {
@@ -297,5 +296,31 @@
     <a class="call-bar__btn call-bar__btn--quote" href="/quote">Get a quote</a>
   </div>
 
+
+<!-- Sticky action bar. Phones only; appears once the hero is scrolled past. -->
+<div class="mobile-cta" id="mobile-cta" aria-hidden="true">
+  <a class="btn btn-primary mobile-cta__quote" href="/quote">Get a quote</a>
+  <a class="mobile-cta__call" href="tel:+64274086895" aria-label="Call FlatOut">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/>
+    </svg>
+  </a>
+</div>
+<script>
+/* Show the bar once the first screenful is behind us, so it never covers
+   the hero's own call to action. */
+(function () {
+  var bar = document.getElementById('mobile-cta');
+  if (!bar) return;
+  var show = function () {
+    var past = window.scrollY > Math.min(window.innerHeight * 0.8, 520);
+    bar.classList.toggle('is-visible', past);
+    bar.setAttribute('aria-hidden', past ? 'false' : 'true');
+  };
+  window.addEventListener('scroll', show, { passive: true });
+  show();
+})();
+</script>
 </body>
 </html>
