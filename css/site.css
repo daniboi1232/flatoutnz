@@ -1832,3 +1832,7 @@ body:has(#quote-form) .mobile-cta { display: none !important; }
   .form-option { display: flex; align-items: center; padding-block: 0.35rem; }
   .btn { display: inline-flex; align-items: center; justify-content: center; }
 }
+
+/* Smaller lead-in line inside the homepage H1, so the heading carries
+   "Christchurch flat" for search without changing the headline's look. */
+.hero__eyebrow-h1 { display: inline-block; font-size: 0.45em; font-weight: 500; letter-spacing: 0.01em; opacity: 0.85; margin-bottom: 0.35em; }
