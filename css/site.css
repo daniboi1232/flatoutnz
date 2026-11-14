@@ -1836,3 +1836,8 @@ body:has(#quote-form) .mobile-cta { display: none !important; }
 /* Smaller lead-in line inside the homepage H1, so the heading carries
    "Christchurch flat" for search without changing the headline's look. */
 .hero__eyebrow-h1 { display: inline-block; font-size: 0.45em; font-weight: 500; letter-spacing: 0.01em; opacity: 0.85; margin-bottom: 0.35em; }
+
+/* Inner-page intros (Services, About, Contact, Landlord, Quote) reuse
+   .hero__sub, which is white for the dark homepage hero. On their light
+   sections that made the intro sentence white-on-white and unreadable. */
+.form-intro .hero__sub { color: var(--blue); }
