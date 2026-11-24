@@ -5,8 +5,8 @@
  *
  * What's new in this version:
  *  - Sends the customer a confirmation email with their reference
- *  - Optional alert email to you on every submission (off by default —
- *    see NOTIFY_OWNER below; worth turning on, reasons in the comment)
+ *  - Alert email to you on every submission, tenant and landlord both
+ *    (NOTIFY_OWNER, now on — turned on 24 November 2026)
  *  - Returns a proper JSON result the website can actually read, so a
  *    failed submission shows an error instead of a false thank-you
  *
@@ -37,12 +37,14 @@ var BUSINESS_PHONE = '027 408 6895';
 // Send the customer a confirmation email with their reference number.
 var EMAIL_CUSTOMER = true;
 
-// Email you every time a request lands. Off because you didn't ask for
-// it — but consider turning it on before November. It's the only thing
-// that tells you a submission arrived without you watching the sheet,
-// and it doubles as your check that the form is still working: no
-// emails for two days in peak week means something is broken.
-var NOTIFY_OWNER = false;
+// Email you every time a request lands — tenant quotes AND landlord
+// enquiries both honour this one flag. It's the only thing that tells
+// you a submission arrived without you watching the sheet, and it
+// doubles as your check that the form is still working: no emails for
+// two days in peak week means something is broken.
+// Tenant subject line:   "FlatOut request: <name> (<ref>)"
+// Landlord subject line: "FlatOut LANDLORD enquiry: <name> (<ref>)"
+var NOTIFY_OWNER = true;
 var OWNER_EMAIL = 'admin@flatoutnz.co.nz';
 
 // Gmail caps consumer accounts at 100 recipients a day and Workspace at
