@@ -22,7 +22,13 @@ const Docs = (() => {
     estimate: { label: 'Estimate', prefix: 'EST', heading: 'ESTIMATE' },
     quote:    { label: 'Quote',    prefix: 'QTE', heading: 'QUOTE' },
     invoice:  { label: 'Invoice',  prefix: 'INV', heading: 'INVOICE' },
-    receipt:  { label: 'Receipt',  prefix: 'REC', heading: 'RECEIPT' }
+    receipt:  { label: 'Receipt',  prefix: 'REC', heading: 'RECEIPT' },
+    /* A refund needs its own document, not a note on the invoice. If
+       FlatOut is GST registered this is the supply correction
+       information Inland Revenue requires when a supply is reduced or
+       cancelled — the customer needs it to adjust their own return,
+       and FlatOut needs it to justify claiming the GST back. */
+    credit:   { label: 'Credit note', prefix: 'CRN', heading: 'CREDIT NOTE' }
   };
 
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
@@ -401,7 +407,46 @@ const Docs = (() => {
       foot(ctx), ctx.voided);
   }
 
-  const RENDER = { estimate, quote, invoice, receipt };
+  /* A refund, in a form the customer can file and an accountant can
+     read. Deliberately states what was refunded and WHY in plain
+     words: a credit note that only carries a number invites the call
+     asking what it was for. */
+  function credit(ctx) {
+    const gstLine = ctx.business.gstRegistered && ctx.reducesSupply;
+    return wrap(ctx, head(ctx) + title('CREDIT NOTE') +
+      parties(ctx, 'CREDITED TO', [
+        ['Credit note no.', ctx.no],
+        ...(ctx.invoiceNo ? [['Against invoice', ctx.invoiceNo]] : []),
+        ['Job no.', ctx.job.id], ['Issued', longDate(ctx.issued)]
+      ], ctx.voided ? ['void', 'VOIDED'] : ['paid', 'REFUNDED']) +
+      `<div class="fo-note teal">
+        <div class="ser" style="font-size:20px;font-weight:600">$${plain(ctx.refunded)} refunded to you.</div>
+        <div style="font-size:13px;line-height:1.6;margin-top:6px;color:#2E3E4B">${esc(ctx.why)}</div>
+      </div>` +
+      `<div class="fo-tbl"><table>
+        <thead><tr><th>REFUND</th><th style="width:150px">DATE</th><th class="num" style="width:130px">AMOUNT</th></tr></thead>
+        <tbody><tr>
+          <td><b>${esc(ctx.reasonLabel)}</b><br><span style="color:#3B4A58;font-size:12.5px">Returned by ${esc(ctx.method)}</span></td>
+          <td>${esc(shortDate(ctx.refundedOn))}</td>
+          <td class="num"><b>${plain(ctx.refunded)}</b></td>
+        </tr></tbody></table></div>` +
+      totals(ctx,
+        [['Original job price', '$' + plain(ctx.total)],
+         ['Paid by you', '$' + plain(ctx.paidGross)],
+         ['Refunded', '−$' + plain(ctx.refunded)]],
+        ctx.stillOwing > 0 ? 'Still owing' : 'Net paid',
+        money(ctx.stillOwing > 0 ? ctx.stillOwing : ctx.netPaid),
+        ctx.stillOwing > 0
+          ? 'That balance is still due.'
+          : 'Nothing further owing, and nothing further to pay you.') +
+      (gstLine
+        ? `<div class="fo-small"><b>GST.</b> This credit note is supply correction information. The GST included in the refunded amount has been adjusted in FlatOut NZ's return${ctx.business.gstNumber ? ` (GST ${esc(ctx.business.gstNumber)})` : ''}. If you are registered for GST, adjust yours in the period you receive this.</div>`
+        : '') +
+      `<div class="fo-small"><b>Keep this with your invoice.</b> It is the record of what was refunded and why.</div>` +
+      foot(ctx), ctx.voided);
+  }
+
+  const RENDER = { estimate, quote, invoice, receipt, credit };
 
   return {
     TYPES,

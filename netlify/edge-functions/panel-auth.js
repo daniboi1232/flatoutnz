@@ -1,74 +1,100 @@
 /* =====================================================================
-   Password gate for /panel/
+   The gate on /panel/
    =====================================================================
    Runs at Netlify's edge, BEFORE any file is served. Anything under
-   /panel/ — the page, data.js, and later the photos and API calls —
-   is unreachable without the password. A browser login box appears;
-   there is no page to style and nothing to maintain.
+   /panel/ — the page, data.js, the API, the photos — is unreachable
+   without a valid session.
 
-   This is deliberately not a JavaScript "password screen" on the page
-   itself. Those only hide the interface: anyone can open the page
-   source or request /panel/data.js directly and read everything. This
-   blocks the request.
+   This replaces the shared Basic auth password. The difference that
+   matters: a password says "somebody who knows the password", and a
+   session says WHO. Job history, the money screens and the staff
+   restrictions all depend on knowing which of them it is, and a
+   shared password cannot answer that.
+
+   What happens here is only verification. Issuing a session is the
+   login Function's job, because that needs the blob store and this
+   wants to stay fast — it runs on every request for every asset.
 
    SETUP (once, in the Netlify dashboard):
      Site configuration > Environment variables > Add a variable
-       PANEL_USER   e.g. flatout
-       PANEL_PASS   a long random password
-     Then redeploy, because edge functions read these at request time
-     from the deployed environment.
-
-   The password is never in the repo. If you ever need to change it,
-   change the variable and redeploy — no code change.
-
-   TO REMOVE THE PANEL ENTIRELY:
-     delete /panel/, delete this file, and delete those two variables.
+       PANEL_SECRET   a long random string, 32+ characters
+     Then redeploy. Changing it signs everybody out, which is also how
+     you sign everybody out.
    ===================================================================== */
 
-export default async (request, context) => {
-  const user = Deno.env.get('PANEL_USER');
-  const pass = Deno.env.get('PANEL_PASS');
+import { readSession, readCookie, SESSION_COOKIE } from '../shared/session.js';
 
-  // If the variables aren't set, refuse rather than letting the panel
-  // through unprotected. A misconfigured deploy must fail closed.
-  if (!user || !pass) {
+export default async (request, context) => {
+  const secret = Deno.env.get('PANEL_SECRET');
+
+  // A misconfigured deploy must fail closed, never open.
+  if (!secret || secret.length < 24) {
     return new Response(
-      'The panel is not configured yet. Set PANEL_USER and PANEL_PASS in Netlify, then redeploy.',
-      { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } }
+      'The panel is not configured yet. Set PANEL_SECRET in Netlify (32+ random characters), then redeploy.',
+      { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } }
     );
   }
 
-  const expected = 'Basic ' + btoa(`${user}:${pass}`);
-  const supplied = request.headers.get('authorization') || '';
+  const token = readCookie(request.headers.get('cookie'), SESSION_COOKIE);
+  const session = await readSession(token, secret);
 
-  // Constant-time-ish compare. Over HTTPS with a long random password a
-  // plain === would be fine, but this costs nothing.
-  const ok = supplied.length === expected.length && timingSafeEqual(supplied, expected);
+  if (!session) {
+    const url = new URL(request.url);
 
-  if (!ok) {
-    return new Response('Authentication required.', {
-      status: 401,
-      headers: {
-        'WWW-Authenticate': 'Basic realm="FlatOut employees panel", charset="UTF-8"',
-        'content-type': 'text/plain; charset=utf-8',
-        // Never let a proxy or browser cache a protected response.
-        'cache-control': 'no-store'
-      }
+    /* An API call gets a status, not a redirect. The panel can then
+       say "you have been signed out" instead of quietly parsing a
+       login page as if it were data. */
+    if (url.pathname.startsWith('/panel/api/')) {
+      return new Response(JSON.stringify({ error: 'signed-out' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+      });
+    }
+
+    /* Everything else goes to the code screen, remembering where they
+       were headed so a link into a job still lands on that job. */
+    const next = url.pathname + url.search;
+    return Response.redirect(
+      new URL('/staff/?next=' + encodeURIComponent(next), url.origin), 302);
+  }
+
+  const response = await context.next();
+
+  /* Hand the page its own identity rather than making it ask. The
+     cookie is HttpOnly and deliberately unreadable from JavaScript, so
+     this is how the panel knows who is signed in — injected into the
+     HTML at the edge, one round trip saved and no flash of the wrong
+     name while a /me call is in flight.
+
+     Injected, not trusted: the panel reads it for display and for
+     which tabs to draw, while every restriction that matters is
+     enforced here and in the API, where the client cannot reach. */
+  const type = response.headers.get('content-type') || '';
+  if (type.includes('text/html')) {
+    const html = await response.text();
+    const payload = JSON.stringify({
+      uid: session.uid, name: session.name, role: session.role, exp: session.exp
+    }).replace(/</g, '\\u003c');       // never let it close the script tag
+    const patched = html.replace('<!--SESSION-->',
+      `<script>window.__SESSION=${payload};</script>`);
+    return new Response(patched, {
+      status: response.status,
+      headers: withGuards(response.headers)
     });
   }
 
-  // Password accepted — serve the real file, and keep it out of caches
-  // and out of search engines.
-  const response = await context.next();
-  response.headers.set('cache-control', 'no-store');
-  response.headers.set('x-robots-tag', 'noindex, nofollow');
-  return response;
+  return new Response(response.body, {
+    status: response.status,
+    headers: withGuards(response.headers)
+  });
 };
 
-function timingSafeEqual(a, b) {
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+function withGuards(headers) {
+  const h = new Headers(headers);
+  h.set('cache-control', 'no-store');      // never cache a protected response
+  h.set('x-robots-tag', 'noindex, nofollow');
+  h.delete('content-length');              // the body may have changed length
+  return h;
 }
 
 /* Covers /panel and everything under it, INCLUDING the data API at
@@ -76,7 +102,9 @@ function timingSafeEqual(a, b) {
    than at /api/ — one rule protects the page, its script and its data,
    with nothing to remember to add later. The API path is also listed
    explicitly, so the protection does not rest on how a glob is
-   interpreted. */
+   interpreted.
+
+   /api/panel-login is deliberately NOT here: it is how you get in. */
 export const config = {
   path: ['/panel', '/panel/', '/panel/*', '/panel/api/*']
 };

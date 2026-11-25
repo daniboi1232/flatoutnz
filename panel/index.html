@@ -5,6 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FlatOut Employees Panel</title>
 <meta name="robots" content="noindex">
+<!--SESSION-->
+
+<!-- Add to home screen. The manifest and icons live at the site root
+     rather than under /panel/, because everything under /panel/ sits
+     behind the password gate and a manifest fetch does not reliably
+     carry those credentials — the install would fail with no clue why.
+
+     iOS ignores the manifest entirely and reads the apple-* tags, so
+     both sets are needed to cover an iPhone and an Android. -->
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FlatOut">
+<!-- Translucent, because the app shell already pads for the notch with
+     env(safe-area-inset-top). -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#14283A">
 <link rel="icon" href="/favicon-32.png" sizes="32x32">
 <link rel="icon" href="/favicon-16.png" sizes="16x16">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -229,6 +247,43 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
   .ev{font-size:0;padding:0;height:6px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.commbar{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.commbar__head{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.commbar__now{font-size:1.05rem;color:var(--navy-deep)}
+.commbar .chips{gap:6px}
+.commbar .btn.sm[disabled]{opacity:.5;cursor:not-allowed}
+.commbar__custom{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+.commbar__pct{width:90px;padding:6px 10px}
+.commbar__pct[disabled]{opacity:.5}
+
+/* One-off lines. The dashed edge marks a line that was typed rather
+   than taken off a rate card, so it reads differently at a glance. */
+.item.oo{border-style:dashed}
+.oo-amt{display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-weight:600;white-space:nowrap}
+.oo-amt .linkbtn{font-weight:400;font-size:.8125rem}
+.oo-grid{display:grid;gap:12px;margin-top:14px;grid-template-columns:1fr}
+@media(min-width:40rem){
+  .oo-grid{grid-template-columns:2fr 1fr 1fr}
+  .oo-grid .field:nth-child(4){grid-column:1}
+  .oo-grid .field:nth-child(5){grid-column:2/4}
+  .oo-grid .field:nth-child(6){grid-column:1/4}
+}
+#oo-err{color:var(--bad,#B3261E)}
+
+/* A code shown once. Big, monospaced and spaced out, because it is
+   about to be read aloud or typed into a phone. */
+.codeshow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:var(--cream);border-radius:var(--r-md);padding:8px 14px}
+.codeshow b{font-family:var(--display);font-size:1.4rem;letter-spacing:.18em}
+.who{display:flex;align-items:center;gap:8px;font-size:.875rem;color:var(--blue)}
+.who b{color:var(--navy-deep)}
+
+/* The visit card sits at the top of the walk-through and is about the
+   trip itself, not the pricing — the teal edge keeps the two apart. */
+.visitcard{box-shadow:inset 3px 0 0 var(--teal),var(--shadow-card)}
+.visitcard .hrule{margin:16px 0 12px}
+.visitcard .chip[aria-pressed="true"],.visitcard .btn.ghost[aria-pressed="true"]{
+  background:var(--navy-deep);border-color:var(--navy-deep);color:var(--cream)}
 </style>
 
 </head>
@@ -242,9 +297,11 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
       <span>Website</span>
     </a>
-    <label class="who"><span>Signed in as</span>
-      <select id="owner" class="select inline"><option value="Daniel Bell">Daniel Bell</option><option value="Rocky Lin">Rocky Lin</option></select>
-    </label>
+    <span class="who"><span>Signed in as</span>
+      <b id="whoami">—</b>
+      <span class="pill p-grey" id="whorole" hidden></span>
+      <button class="linkbtn" data-act="signout">Sign out</button>
+    </span>
     <nav class="tabs" id="tabs">
       <button data-view="home" aria-current="page">Home</button>
       <button data-view="jobs">Jobs</button>
@@ -254,6 +311,7 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
       <button data-view="customers">Customers</button>
       <button data-view="contractors">Contractors</button>
       <button data-view="money">Money</button>
+      <button data-view="audit">History</button>
       <button data-view="settings">Settings</button>
     </nav>
   </div>
@@ -262,6 +320,7 @@ tr.total td{font-weight:700;border-top:2px solid var(--navy-deep)}
 <main id="app"></main>
 <div class="toast" id="toast" hidden></div>
 
+<script src="/panel/session.js"></script>
 <script src="/panel/docs.js"></script>
 <script src="/panel/data.js"></script>
 <script>
@@ -285,18 +344,33 @@ const fdOr = (d, fallback = 'date to come') => (d ? fd(d) : fallback);
 const ft = t => { const [h, m] = t.split(':').map(Number); return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''}${h < 12 ? 'am' : 'pm'}`; };
 const first = n => n.replace(/^Sample:\s*/, '').split(' ')[0];
 const iso = Data.isoDate;
-const S = Data.SERVICES, KEYS = Data.SERVICE_KEYS, OWNERS = Data.OWNERS, STAGES = Data.STAGES;
+/* S is labels only, KEYS is what you can tick on a job. The extras key
+   is in the first and deliberately not the second: it holds one-off
+   lines and is not a service anyone can be booked for. */
+const S = Object.assign({}, Data.SERVICES, { [Data.EXTRAS_KEY]: 'Additional items' });
+const KEYS = Data.SERVICE_KEYS, OWNERS = Data.OWNERS, STAGES = Data.STAGES;
+const XKEY = Data.EXTRAS_KEY;
 
 /* ---------- view state (not data) -------------------------------- */
 let view = 'home', openJob = null, draft = null;
 const ui = { jf: { q: '', stage: 'all', who: 'all', suburb: 'all', status: 'active' }, addC: false, editC: null,
   statusFor: null, retrieveFor: null, repriceFor: null, editJob: null, stepBackFor: null, poFixFor: null,
-  voidFor: null, payFor: null, viewDoc: null, signoffOwing: null, restoring: false, confirmDelete: null, confirmDelC: null, calWeek: false,
+  voidFor: null, payFor: null, refundFor: null, viewDoc: null, signoffOwing: null, restoring: false, confirmDelete: null, confirmDelC: null, calWeek: false,
   paste: { kind: 'tenant', parsed: null, dup: null, match: null, useMatch: true },
   addItemFor: null, bookFor: null, tpl: {}, editTpl: null, signoff: {},
   cust: { q: '', open: null, edit: null, add: false, mergeFrom: null, migrate: null },
+  visitAsk: null, gstPeriod: 0, addUser: false, shownCode: null,
+  audit: { q: '', who: 'all', from: '', to: '' }, plYear: 0, addExp: false, expCat: 'advertising', expDate: null,
+  addTrip: false, addHours: false, addAsset: false,
   cal: { y: 2026, m: 10 }, day: '2026-11-14' };
-const owner = () => document.getElementById('owner').value;
+/* Who is signed in. The edge function injects this from the verified
+   session cookie; there is no switcher, because the code you typed
+   decides who you are for the whole session.
+
+   The fallback only ever applies in the preview build, which has no
+   edge function in front of it. */
+const SESSION = window.__SESSION || { name: 'Daniel Bell', role: 'partner', preview: true };
+const owner = () => SESSION.name;
 
 function toast(m) {
   const t = document.getElementById('toast');
@@ -317,7 +391,7 @@ Data.onAlert(a => { if (a.to.includes(owner())) toast('Phone alert: ' + a.text);
    way a tap, a Back press and a pasted link all take the same path.
 
    Side benefit: screens are linkable, so a job can be sent to Rocky. */
-const VIEWS = ['home', 'jobs', 'calendar', 'walk', 'today', 'customers', 'contractors', 'money', 'settings', 'alerts'];
+const VIEWS = ['home', 'jobs', 'calendar', 'walk', 'today', 'customers', 'contractors', 'money', 'audit', 'settings', 'alerts'];
 
 function currentHash() {
   if (view === 'jobs' && openJob) return '#jobs/' + openJob;
@@ -327,6 +401,7 @@ function currentHash() {
 
 function go(v, id) {
   clearBanner();
+  ui.shownCode = null;
   view = v;
   if (id !== undefined) openJob = id;
   const want = currentHash();
@@ -345,6 +420,26 @@ function applyHash() {
   openJob = view === 'jobs' && id && Data.getJob(id) ? id : null;
   if (view === 'customers') ui.cust.open = id && Data.getCustomer(id) ? id : null;
   paint();
+}
+
+/* Rebuild the user switcher and hide what this role cannot open. */
+function applyRole() {
+  const nameEl = document.getElementById('whoami');
+  const roleEl = document.getElementById('whorole');
+  if (nameEl) nameEl.textContent = owner();
+  if (roleEl) {
+    const staff = Data.roleOf(owner()) === 'staff';
+    roleEl.hidden = !staff;
+    roleEl.textContent = 'Staff';
+  }
+
+  document.querySelectorAll('#tabs button').forEach(b => {
+    const v = b.dataset.view;
+    const blocked = (v === 'money' && !Data.can(owner(), 'money'))
+                 || (v === 'audit' && !Data.can(owner(), 'audit'))
+                 || (v === 'settings' && !Data.can(owner(), 'settings'));
+    b.hidden = blocked;
+  });
 }
 
 function paint() {
@@ -398,7 +493,7 @@ function jobCtx(j) {
   const t = Data.paymentTerms(j), c = j.cust;
   return { 'first name': first(c.name), sender: owner().split(' ')[0], address: c.address,
     visit: c.visit ? `${fd(c.visit.date)} at ${ft(c.visit.time)}` : '(no visit booked)',
-    price: money(Data.customerPrice(Data.jobCost(j))), payment: t.kind.toLowerCase(),
+    price: money(Data.customerPrice(Data.jobCost(j), j)), payment: t.kind.toLowerCase(),
     amount: money(t.amount), 'due date': fdOr(t.due, 'once we have your date'),
     'job date': fdOr(c.moveDate, 'your move-out day'),
     services: Object.keys(j.sections).map(k => S[k].toLowerCase()).join(', ') };
@@ -466,7 +561,7 @@ function vHome() {
 
     <section class="card"><div class="card-head"><h3>Pipeline</h3><button class="btn sm ghost" data-act="nav" data-v="jobs">All jobs</button></div>
       <div class="stat-row">${[[0, 0, 'New'], [1, 1, 'Scoped'], [2, 4, 'Quoting'], [5, 6, 'Booked'], [7, 7, 'Done']].map(([a, b, l]) => `<div class="stat"><b>${live.filter(j => j.stage >= a && j.stage <= b).length}</b><span class="small muted">${l}</span></div>`).join('')}</div>
-      <div class="rows" style="margin-top:14px">${live.slice(0, 6).map(j => `<div class="row"><div class="main"><b>${esc(j.cust.name)}</b> <span class="muted small">${j.id}</span><br><span class="small muted">${j.cust.moveDate ? fd(j.cust.moveDate) : 'no date'} · ${money(Data.customerPrice(Data.jobCost(j)))} · ${esc(j.owner.split(' ')[0])}</span></div>${stagePill(j.stage, j)}<button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button></div>`).join('') || '<p class="muted">No jobs yet.</p>'}</div></section>
+      <div class="rows" style="margin-top:14px">${live.slice(0, 6).map(j => `<div class="row"><div class="main"><b>${esc(j.cust.name)}</b> <span class="muted small">${j.id}</span><br><span class="small muted">${j.cust.moveDate ? fd(j.cust.moveDate) : 'no date'} · ${money(Data.customerPrice(Data.jobCost(j), j))} · ${esc(j.owner.split(' ')[0])}</span></div>${stagePill(j.stage, j)}<button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button></div>`).join('') || '<p class="muted">No jobs yet.</p>'}</div></section>
 
     <section class="card"><div class="card-head"><h3>Payments</h3><span class="eyebrow">You record these from Zoho</span></div>
       <div class="rows">${pay.map(({ job: j, terms: t, paid, overdue }) => `<div class="row"><div class="main"><b>${esc(j.cust.name)}</b> <span class="muted small">${j.id}</span><br><span class="small muted">${paid ? (t.balance ? `Balance ${money(t.balance)} due ${fdOr(t.balanceDue)}` : 'Paid in full') : `${t.kind} ${money(t.amount)} due ${fdOr(t.due)}`}</span></div>${paid ? (t.balance ? '<span class="pill p-warn">Balance owing</span>' : '<span class="pill p-ok">Paid</span>') : overdue ? '<span class="pill p-bad">Overdue</span>' : '<span class="pill p-grey">Not yet due</span>'}</div>`).join('') || '<p class="muted">Nothing owing.</p>'}</div>
@@ -489,7 +584,7 @@ function jobRows() {
   const list = filteredJobs();
   return list.length ? list.map(j => `<tr><td>${j.id}</td><td><b>${esc(j.cust.name)}</b><br><span class="small muted">${esc(j.cust.address)}</span></td><td>${fdOr(j.cust.moveDate)}</td>
     <td><select class="select inline" id="own-${j.id}" data-act="setOwner" data-id="${j.id}" aria-label="Job owner for ${j.id}">${OWNERS.map(o => `<option value="${o}" ${o === j.owner ? 'selected' : ''}>${o.split(' ')[0]}</option>`).join('')}</select></td>
-    <td>${stagePill(j.stage, j)}</td><td class="num">${money(Data.customerPrice(Data.jobCost(j)))}</td><td><button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button></td></tr>`).join('')
+    <td>${stagePill(j.stage, j)}</td><td class="num">${money(Data.customerPrice(Data.jobCost(j), j))}</td><td><button class="btn sm ghost" data-act="open" data-id="${j.id}">Open</button></td></tr>`).join('')
     : '<tr><td colspan="7" class="muted">No jobs match. Clear a filter or search for something else.</td></tr>';
 }
 function vJobs() {
@@ -532,7 +627,7 @@ function vAlerts() {
 function nextAction(j) {
   const t = Data.paymentTerms(j);
   const priced = Object.values(j.sections).some(sec => Object.keys(sec.lines).length);
-  const total = money(Data.customerPrice(Data.jobCost(j)));
+  const total = money(Data.customerPrice(Data.jobCost(j), j));
 
   switch (j.stage) {
     case 0:
@@ -585,8 +680,35 @@ function nextAction(j) {
       return { waiting: 'Signed off and complete.', todo: '', label: null };
   }
 }
+/* Commission for this job. Locked once a quote is out, because the
+   customer already has the number this would change. */
+function commissionRow(j) {
+  const rate = Data.jobCommission(j);
+  const locked = !!(j.pricedAt && j.stage >= 2);
+  const pct = n => (Math.round(n * 1000) / 10);
+  const isCustom = !Data.COMMISSION_CHOICES.some(c => Math.abs(c - rate) < 1e-9);
+  const btn = (label, val, on) =>
+    `<button class="btn sm ${on ? '' : 'ghost'}" data-act="setComm" data-r="${val}" data-id="${j.id}"${locked ? ' disabled' : ''}>${label}</button>`;
+  return `<div class="commbar">
+    <div class="commbar__head">
+      <span class="small muted">Commission on this job</span>
+      <b class="commbar__now">${pct(rate)}%</b>
+      ${locked ? '<span class="small muted">· locked, quote is out</span>' : ''}
+    </div>
+    <div class="chips">
+      ${Data.COMMISSION_CHOICES.map(c => btn(pct(c) + '%', c * 100, Math.abs(c - rate) < 1e-9)).join('')}
+    </div>
+    <div class="commbar__custom">
+      <label class="small muted" for="cc-${j.id}">Or type one</label>
+      <input class="input commbar__pct" id="cc-${j.id}" type="number" min="0" max="100" step="0.5"
+             value="${isCustom ? pct(rate) : ''}" placeholder="%" ${locked ? 'disabled' : ''} />
+      <button class="btn sm" data-act="setComm" data-r="custom" data-id="${j.id}"${locked ? ' disabled' : ''}>Set</button>
+    </div>
+    ${locked ? '<p class="small muted" style="margin-top:8px">Re-price the job if this needs to move.</p>' : ''}
+  </div>`;
+}
 function vJob(j) {
-  const cost = Data.jobCost(j), total = Data.customerPrice(cost), t = Data.paymentTerms(j);
+  const cost = Data.jobCost(j), total = Data.customerPrice(cost, j), t = Data.paymentTerms(j);
   const na = nextAction(j);
   const priced = Object.values(j.sections).some(sec => Object.keys(sec.lines).length);
   const live = Data.livePos(j);
@@ -618,19 +740,21 @@ function vJob(j) {
   ${customerCard(j)}
   ${ui.editJob === j.id ? jobDetailsForm(j) : ''}
   <div class="grid2">
+    ${!Data.can(owner(), 'costs') ? '' : `
     <section class="card"><div class="card-head"><h3>Owner breakdown</h3><span class="eyebrow">${j.pricedAt ? 'Prices locked ' + fd(j.pricedAt) : 'Not shown to customer'}</span></div>
       <div class="tablewrap"><table><thead><tr><th>Section</th><th>Contractor</th><th class="num">Cost</th></tr></thead><tbody>
       ${Object.entries(j.sections).map(([k, s]) => `<tr><td><b>${S[k]}</b><br><span class="small muted">${Object.entries(s.lines).map(([iid, q]) => lineText(s, iid, q)).filter(Boolean).join(', ')}</span></td><td>${esc(cName(s.contractorId))}</td><td class="num">${money(Data.sectionCost(s))}</td></tr>`).join('')}
       <tr><td colspan="2">Contractor cost</td><td class="num">${money(cost)}</td></tr>
-      <tr><td colspan="2">Margin (15%)</td><td class="num">${money(total - cost)}</td></tr>
-      <tr class="total"><td colspan="2">Customer price</td><td class="num">${money(total)}</td></tr></tbody></table></div>
+      <tr><td colspan="2">Commission (${Math.round(Data.jobCommission(j) * 1000) / 10}%)</td><td class="num">${money(total - cost)}</td></tr>
+      <tr class="total"><td colspan="2">Customer price</td><td class="num">${money(total)}</td></tr></tbody></table>
+      ${commissionRow(j)}</div>
       <p class="small muted" style="margin-top:10px">${t.note}.</p>
       ${j.pricedAt ? `<p class="small muted">These figures were fixed when the estimate went out, so changing a contractor's rate card now won't move them.${j.stage < 4 ? ' <button class="linkbtn" data-act="reprice" data-id="' + j.id + '">Re-price at today\u2019s rates</button>' : ''}</p>` : ''}
       ${ui.repriceFor === j.id ? `<div class="formbox">
         <p class="small"><b>Re-price ${esc(j.cust.name)} at today's rates?</b></p>
         <p class="small muted">Only do this if a contractor's price has genuinely changed since you quoted. The customer has already been told ${money(total)}, so if this moves you need to tell them.</p>
         <div class="chips"><button class="btn sm" data-act="reallyReprice" data-id="${j.id}">Re-price it</button><button class="btn sm ghost" data-act="cancelReprice">Leave it</button></div>
-      </div>` : ''}</section>
+      </div>` : ''}</section>`}
     ${priced ? estimateCard(j) : `<section class="card"><div class="card-head"><h3>Customer estimate</h3><span class="eyebrow">Nothing priced yet</span></div>
       <p class="muted small">Once you have walked through the property and added items, the estimate the customer sees appears here.</p></section>`}
   </div>
@@ -843,9 +967,15 @@ function docsCard(j) {
         ${done ? '<span class="pill p-ok">Paid</span>' : `<button class="btn sm ghost" data-act="takePayment" data-id="${j.id}" data-k="${sx.key}" ${bankReady ? '' : 'disabled title="Add the bank account under Settings"'}>Mark received</button>`}
       </div>`;
     }).join('')}
-    ${(j.payments || []).map(p => `<div class="row"><div class="main"><span class="small muted">${money(p.amount)} on ${fd(p.on)} · ${esc(p.method)} · recorded by ${esc(p.by.split(' ')[0])}</span></div>
+    ${(j.payments || []).map(p => p.refund
+      ? `<div class="row"><div class="main"><span class="small" style="color:var(--red)">−${money(Math.abs(p.amount))} refunded on ${fd(p.on)}</span>
+          <span class="pill p-bad">${esc((Data.REFUND_REASONS[p.reason] || {}).label || 'Refund')}</span><br>
+          <span class="small muted">${esc(p.method)} · by ${esc(String(p.by).split(' ')[0])}${p.note ? ' · ' + esc(p.note) : ''}</span></div></div>`
+      : `<div class="row"><div class="main"><span class="small muted">${money(p.amount)} on ${fd(p.on)} · ${esc(p.method)} · recorded by ${esc(String(p.by).split(' ')[0])}</span></div>
       <button class="linkbtn danger" data-act="unpay" data-id="${j.id}" data-p="${p.id}">Remove</button></div>`).join('')}
   </div>
+
+  ${refundSection(j)}
 
   ${ui.payFor && ui.payFor.id === j.id ? (() => {
     const sx = plan.schedule.find(x => x.key === ui.payFor.key) || plan.schedule[0];
@@ -944,7 +1074,7 @@ function customerCard(j) {
     <div><span class="eyebrow">Prefers</span><b>${wants.charAt(0).toUpperCase() + wants.slice(1)}${missing ? ' <span style="color:var(--red)">· nothing on file</span>' : ''}</b></div>
   </div>
   ${rec && rec.notes ? `<p class="small" style="margin-top:12px">${esc(rec.notes)}</p>` : ''}
-  ${hist.previous.length ? `<div class="rows" style="margin-top:14px">${hist.previous.map(o => `<div class="row"><div class="main"><b>${o.id}</b> <span class="small muted">${esc(o.cust.address)}${o.cust.moveDate ? ' · ' + fd(o.cust.moveDate) : ''}${Data.jobCost(o) ? ' · ' + money(Data.customerPrice(Data.jobCost(o))) : ''}</span></div>${stagePill(o.stage, o)}<button class="btn sm ghost" data-act="open" data-id="${o.id}">Open</button></div>`).join('')}</div>
+  ${hist.previous.length ? `<div class="rows" style="margin-top:14px">${hist.previous.map(o => `<div class="row"><div class="main"><b>${o.id}</b> <span class="small muted">${esc(o.cust.address)}${o.cust.moveDate ? ' · ' + fd(o.cust.moveDate) : ''}${Data.jobCost(o) ? ' · ' + money(Data.customerPrice(Data.jobCost(o), o)) : ''}</span></div>${stagePill(o.stage, o)}<button class="btn sm ghost" data-act="open" data-id="${o.id}">Open</button></div>`).join('')}</div>
     <p class="small muted" style="margin-top:10px">They have used us before${hist.previous.some(o => Data.jobCost(o)) ? '. Worth a look at what they paid last time before you price this one' : ''}.</p>` : ''}
   ${alsoHere.length ? `<p class="note" style="margin-top:12px"><b>Another job at this address:</b> ${alsoHere.map(o => `${o.id} — ${esc(o.cust.name)}`).join(', ')}. Probably a flatmate booking separately.</p>` : ''}
   <div class="chips" style="margin-top:14px">
@@ -971,7 +1101,7 @@ function messagesCard(j) {
   <div class="chips" style="margin-top:12px"><button class="btn sm" data-act="copyMsg" data-id="${j.id}">Copy message</button><button class="btn sm ghost" data-act="sentMsg" data-id="${j.id}">Mark as sent</button></div></section>`;
 }
 function estimateCard(j) {
-  const total = Data.customerPrice(Data.jobCost(j)), t = Data.paymentTerms(j);
+  const total = Data.customerPrice(Data.jobCost(j), j), t = Data.paymentTerms(j);
   const title = Data.TITLES[j.preparedBy] ? ', ' + Data.TITLES[j.preparedBy] : '';
   return `<section class="estimate" aria-label="Customer estimate preview"><div class="est-head"><div class="logo"><img src="/images/logo-icon.png" alt=""><div><b>FlatOut</b><span>Moving out? We'll sort it.</span></div></div><div class="small" style="text-align:right"><b>Estimate · ${j.id}</b><br><span class="muted">${fd(Data.today())}</span></div></div>
   <div class="est-body"><div class="eyebrow">What the customer sees</div>
@@ -1050,9 +1180,197 @@ function vCalendar() {
 }
 
 /* ---------- walk-through ------------------------------------------ */
+/* Commission while pricing. This writes to the draft, so a job that has
+   not been saved yet still carries the rate through to saving. */
+function walkCommission() {
+  if (!Data.can(owner(), 'commission')) return '';
+  const rate = Data.jobCommission(draft);
+  const locked = (function () {
+    if (!draft.jobId) return false;
+    const j = Data.getJob(draft.jobId);
+    return !!(j && j.pricedAt && j.stage >= 2);
+  })();
+  const pct = n => (Math.round(n * 1000) / 10);
+  const isCustom = !Data.COMMISSION_CHOICES.some(c => Math.abs(c - rate) < 1e-9);
+  const btn = (label, val, on) =>
+    `<button class="btn sm ${on ? '' : 'ghost'}" data-act="walkComm" data-r="${val}"${locked ? ' disabled' : ''}>${label}</button>`;
+  return `<div class="commbar">
+    <div class="commbar__head">
+      <span class="small muted">Commission on this job</span>
+      <b class="commbar__now">${pct(rate)}%</b>
+      ${locked ? '<span class="small muted">· locked, quote is out</span>' : ''}
+    </div>
+    <div class="chips">
+      ${Data.COMMISSION_CHOICES.map(c => btn(pct(c) + '%', c * 100, Math.abs(c - rate) < 1e-9)).join('')}
+    </div>
+    <div class="commbar__custom">
+      <label class="small muted" for="cc-walk">Or type one</label>
+      <input class="input commbar__pct" id="cc-walk" type="number" min="0" max="100" step="0.5"
+             value="${isCustom ? pct(rate) : ''}" placeholder="%" ${locked ? 'disabled' : ''} />
+      <button class="btn sm" data-act="walkComm" data-r="custom"${locked ? ' disabled' : ''}>Set</button>
+    </div>
+  </div>`;
+}
+/* How the visit is actually going. This writes straight to the job
+   rather than the draft, because the two outcomes that matter most —
+   you couldn't get in, or you have to come back — happen when there is
+   no scope to save and you want to get in the car. */
+function walkVisit() {
+  const j = draft.jobId ? Data.getJob(draft.jobId) : null;
+  if (!j) return '';
+  const v = Data.jobVisit(j);
+  const who = Data.visitPeople(j);
+  /* Named on the tickbox so it reads as a fact about this job rather
+     than a form field: "Harcourts met me there", not "requester". */
+  who.requester = (j.custId && (Data.getCustomer(j.custId) || {}).name) || j.cust.name;
+  const t = v.arrivedAt
+    ? new Date(v.arrivedAt).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
+    : null;
+  const opt = (sel, list) => list.map(x =>
+    `<option ${x === sel ? 'selected' : ''}>${esc(x)}</option>`).join('');
+
+  return `<section class="card visitcard">
+    <div class="sec-head"><h3>The visit</h3>
+      ${t ? `<span class="pill p-ok">On site since ${t}</span>`
+          : `<button class="btn sm" data-act="arrived">I'm here</button>`}</div>
+
+    ${v.outcome && v.outcome !== 'done' ? `<div class="note" style="margin-top:12px">
+      <b>${esc(Data.VISIT_OUTCOMES[v.outcome])}.</b>
+      ${v.outcome === 'noaccess' ? esc(v.reason)
+        : v.outstanding.map(o => esc(o)).join(' · ')}
+      <div class="chips" style="margin-top:10px">
+        <button class="btn sm ghost" data-act="visitClear">Clear it — I'm in now</button>
+      </div></div>` : ''}
+
+    <label class="option" style="margin-top:14px" for="v-req">
+      <input type="checkbox" id="v-req" data-act="visitRequester" ${v.requesterOnSite ? 'checked' : ''}>
+      <span><b>${esc(who.requester)} met me there</b><br>
+        <span class="small muted">The person who asked for the job. Tick this and their details fill themselves in.</span></span>
+    </label>
+
+    <div class="form-grid" style="margin-top:12px">
+      ${v.requesterOnSite ? '' : `<div class="field"><label for="v-present">Who showed you round</label>
+        <input class="input" id="v-present" data-act="visitSave" value="${esc(v.present)}"
+               placeholder="e.g. Mia, plus two flatmates"></div>`}
+      <div class="field"><label for="v-date">Move-out date</label>
+        <input class="input" id="v-date" type="date" data-act="moveDate" value="${esc(j.cust.moveDate || '')}"></div>
+    </div>
+    <p class="small muted">If they tell you the date has shifted, change it here — it doesn't touch the price.</p>
+
+    <div class="hrule"></div>
+    <div class="eyebrow" style="margin-bottom:8px">Who's authorising the work</div>
+    ${v.requesterOnSite ? `
+      <div class="brief">
+        <b>${esc(who.authoriser.name || who.requester)}</b>
+        <span class="small muted">${who.authoriser.phone ? esc(who.authoriser.phone) + ' · ' : ''}from their customer record${
+          who.authoriser.role ? ` · ${esc(who.authoriser.role)}` : ''}</span>
+      </div>
+      <div class="field" style="margin-top:12px"><label for="v-arole">Their role</label>
+        <input class="input" id="v-arole" data-act="visitSave" value="${esc(who.authoriser.role)}"
+               placeholder="Property manager, landlord, tenant…">
+        <p class="small muted">Saved onto their record, so you won't be asked again on their next job.</p></div>
+      <p class="small muted" style="margin-top:10px">Someone else authorising this one? Untick above and type them in.</p>
+    ` : `
+    <p class="small muted" style="margin-bottom:10px">Often not the person showing you round. This is the name on the job if there's ever a dispute about what was agreed.</p>
+    <div class="form-grid">
+      <div class="field"><label for="v-aname">Name</label>
+        <input class="input" id="v-aname" data-act="visitSave" value="${esc(v.authoriser.name)}"></div>
+      <div class="field"><label for="v-arole">Their role</label>
+        <input class="input" id="v-arole" data-act="visitSave" value="${esc(v.authoriser.role)}"
+               placeholder="Tenant, property manager…"></div>
+      <div class="field"><label for="v-aphone">Phone</label>
+        <input class="input" id="v-aphone" type="tel" data-act="visitSave" value="${esc(v.authoriser.phone)}"></div>
+    </div>`}
+
+    <div class="hrule"></div>
+    <div class="eyebrow" style="margin-bottom:8px">Keys and access on the day</div>
+    <div class="form-grid">
+      <div class="field"><label for="v-kholder">Who'll have the keys</label>
+        <select class="select" id="v-kholder" data-act="visitSave">
+          <option value="">Not asked yet</option>${opt(v.keys.holder, Data.KEY_HOLDERS)}</select></div>
+      <div class="field"><label for="v-kcode">Lockbox or alarm code</label>
+        <input class="input" id="v-kcode" data-act="visitSave" value="${esc(v.keys.code)}"
+               placeholder="Leave blank if none"></div>
+    </div>
+    <div class="field" style="margin-top:12px"><label for="v-knotes">Anything else about getting in</label>
+      <input class="input" id="v-knotes" data-act="visitSave" value="${esc(v.keys.notes)}"
+             placeholder="e.g. side gate bolted, use the back door"></div>
+
+    <div class="hrule"></div>
+    <div class="eyebrow" style="margin-bottom:10px">If the visit didn't go to plan</div>
+    <div class="chips">
+      <button class="btn sm ghost" data-act="visitNoAccess" aria-pressed="${ui.visitAsk === 'noaccess'}">Couldn't get in</button>
+      <button class="btn sm ghost" data-act="visitRevisit" aria-pressed="${ui.visitAsk === 'revisit'}">I need to come back</button>
+    </div>
+    ${ui.visitAsk ? `<div class="formbox">
+      <div class="field"><label for="v-why">${ui.visitAsk === 'noaccess'
+        ? 'What stopped you getting in?' : 'What still needs doing next time?'}</label>
+        <textarea class="textarea" id="v-why" rows="3" placeholder="${ui.visitAsk === 'noaccess'
+          ? 'e.g. nobody home, flatmate had the only key'
+          : 'One per line — e.g. measure the garage, price the carpet repair'}"></textarea>
+        <p class="small muted">${ui.visitAsk === 'noaccess'
+          ? "Future-you won't remember, and it's what you'll say when you ring them."
+          : 'One per line. These show on Home until the job is scoped.'}</p></div>
+      <div class="chips">
+        <button class="btn sm" data-act="visitConfirm">${ui.visitAsk === 'noaccess'
+          ? 'Record it and leave' : 'Save what’s outstanding'}</button>
+        <button class="btn sm ghost" data-act="visitCancelAsk">Cancel</button></div>
+    </div>` : `<p class="small muted" style="margin-top:10px">Either one keeps the job and the date exactly as they are, and puts it on your Home screen until it's sorted.</p>`}
+  </section>`;
+}
+
+/* Add a one-off to the job being priced. Anything not on a rate card:
+   a skip, a locksmith, a carpet repair, a price agreed on the phone.
+   The figure typed is what the customer pays — no commission on top —
+   so the hint says so rather than leaving it to be discovered. */
+function walkOneOff() {
+  const locked = (function () {
+    if (!draft.jobId) return false;
+    const j = Data.getJob(draft.jobId);
+    return !!(j && j.pricedAt && j.stage >= 2);
+  })();
+  const count = Object.values(draft.sections)
+    .reduce((n, s) => n + Data.oneOffLines(s).length, 0);
+  return `<section class="card oo-add">
+    <div class="sec-head"><h3>One-off services</h3>
+      <span class="small muted">${count ? count + (count === 1 ? ' on this job' : ' on this job') : 'None yet'}</span></div>
+    <p class="small muted">Something that isn't on anyone's rate card — a skip, a locksmith,
+      a price you agreed on the phone. By default the price you type is what the customer
+      pays, with no commission on top; set one on the line if you want it.</p>
+    ${locked ? `<p class="note" style="margin-top:12px">The quote is out, so prices are locked.
+      Re-price the job if a one-off needs to go on it.</p>` : `
+    <div class="oo-grid">
+      <div class="field"><label for="oo-name">What is it</label>
+        <input class="input" id="oo-name" placeholder="e.g. Skip bin hire" maxlength="80"></div>
+      <div class="field"><label for="oo-amt">Price (NZD)</label>
+        <input class="input" id="oo-amt" type="number" min="1" step="1" placeholder="0"></div>
+      <div class="field"><label for="oo-qty">Qty</label>
+        <input class="input" id="oo-qty" type="number" min="1" max="999" step="1" value="1"></div>
+      <div class="field"><label for="oo-unit">Unit</label>
+        <input class="input" id="oo-unit" placeholder="each" maxlength="24"></div>
+      <div class="field"><label for="oo-where">Who does it</label>
+        <select class="select" id="oo-where">
+          <option value="">No contractor — no job order</option>
+          ${KEYS.filter(k => draft.sections[k]).map(k =>
+            `<option value="${k}">${S[k]} — on their job order</option>`).join('')}
+        </select></div>
+      <div class="field"><label for="oo-comm">Commission on this line</label>
+        <select class="select" id="oo-comm">
+          <option value="">None — they pay what I typed</option>
+          <option value="${Data.jobCommission(draft)}">Same as the job (${Math.round(Data.jobCommission(draft) * 1000) / 10}%)</option>
+          ${Data.COMMISSION_CHOICES.filter(c => c > 0).map(c =>
+            `<option value="${c}">${Math.round(c * 1000) / 10}% on top</option>`).join('')}
+        </select></div>
+    </div>
+    <p class="small muted" id="oo-hint" style="margin-top:10px">With a commission set, the price you type is the <b>cost</b> and the percentage goes on top — same as a rate-card line.</p>
+    <div class="chips" style="margin-top:12px"><button class="btn sm" data-act="addOO">Add to the quote</button></div>
+    <p class="small muted" id="oo-err" style="display:none"></p>`}
+  </section>`;
+}
+
 function vWalk() {
   if (!draft) return vNewJob();
-  const c = draft.cust, cost = Data.jobCost(draft), total = Data.customerPrice(cost);
+  const c = draft.cust, cost = Data.jobCost(draft), total = Data.customerPrice(cost, draft);
   const editing = !!draft.jobId;
   const priced = Object.values(draft.sections).some(sec => Object.keys(sec.lines).length);
   return `<div class="view">
@@ -1066,9 +1384,15 @@ function vWalk() {
     <div><span class="eyebrow">Move-out</span><b>${c.moveDate ? fd(c.moveDate) : 'Not set'}${c.people ? ' · ' + c.people + ' people' : ''}</b></div></div>
     ${c.special ? `<div class="brief" style="margin-top:14px"><p class="small"><b>What they told us:</b> ${esc(c.special)}</p></div>` : ''}
   </section>
+  ${walkVisit()}
   <div><div class="eyebrow" style="margin-bottom:8px">Services on this job</div><div class="chips">${KEYS.map(k => `<button class="chip" aria-pressed="${!!draft.sections[k]}" data-act="toggleSec" data-k="${k}">${S[k]}</button>`).join('')}</div></div>
   ${KEYS.filter(k => draft.sections[k]).map(k => walkSection(k, draft.sections[k])).join('')}
-  <div class="pricebar"><div><small>Cost</small><strong>${money(cost)}</strong></div><div><small>Margin</small><strong>${money(total - cost)}</strong></div><div class="cust"><small>Customer</small><strong>${money(total)}</strong></div>
+  ${draft.sections[XKEY] ? walkSection(XKEY, draft.sections[XKEY]) : ''}
+  ${walkOneOff()}
+  ${walkCommission()}
+  <div class="pricebar">${Data.can(owner(), 'costs')
+    ? `<div><small>Cost</small><strong>${money(cost)}</strong></div><div><small>Commission ${Math.round(Data.jobCommission(draft) * 1000) / 10}%</small><strong>${money(total - cost)}</strong></div>`
+    : ''}<div class="cust"><small>Customer</small><strong>${money(total)}</strong></div>
     <button class="btn" data-act="saveDraft">${editing ? 'Save changes' : priced ? 'Save estimate' : 'Save job'}</button></div>
   ${!priced ? '<p class="small muted">Nothing priced yet. You can still save it — the job sits as New until you come back and price it.</p>' : ''}
   </div>`;
@@ -1096,7 +1420,9 @@ function vNewJob() {
         ${p ? '<button class="btn sm ghost" type="button" data-act="clearPaste">Clear</button>' : ''}</div>
     </form>
     ${p && p.warnings && p.warnings.length ? `<div class="note" style="margin-top:12px">${p.warnings.map(w => esc(w)).join('<br>')}</div>` : ''}
-    ${p && (!p.warnings || !p.warnings.length) ? `<p class="small" style="margin-top:12px;color:var(--ok-ink)"><b>Row read.</b> Check the details below, then save.</p>` : ''}
+    ${p && !p.fromCust && (!p.warnings || !p.warnings.length) ? `<p class="small" style="margin-top:12px;color:var(--ok-ink)"><b>Row read.</b> Check the details below, then save.</p>` : ''}
+    ${p && p.fromCust ? `<p class="small" style="margin-top:12px;color:var(--ok-ink)"><b>Started from ${esc(p.name)}'s record.</b>
+      Their contact details are filled in below and the job is already linked to them. Add the address, the date and what they need.</p>` : ''}
     ${dup ? `<div class="note" style="margin-top:12px"><b>This looks like one you already have.</b> ${esc(dup.cust.name)} (${dup.id}) has the same ${esc(ui.paste.dupOn || 'details')}. Open it rather than making a second one, unless this really is a new job.
       <div class="chips" style="margin-top:10px"><button class="btn sm ghost" data-act="open" data-id="${dup.id}">Open ${dup.id}</button></div></div>` : ''}
   </section>
@@ -1152,16 +1478,58 @@ function matchCard() {
   </section>`;
 }
 
+/* The one-off lines sitting in a section, as removable rows. They are
+   not on a rate card so they have no +/− quantity control: the price
+   and quantity were typed, and changing them means removing the line
+   and adding it again. */
+function ooRows(k, s) {
+  const ids = Data.oneOffLines(s);
+  if (!ids.length) return '';
+  return ids.map(iid => {
+    const f = s.frozen[iid], q = s.lines[iid];
+    const c = Data.oneOffComm(f), cost = f.rate * q;
+    const shown = c === null ? cost : Math.round(cost * (1 + c));
+    const pct = n => (Math.round(n * 1000) / 10) + '%';
+    /* Only spell out the unit price when there is more than one of
+       them — otherwise it just repeats the cost back at you. */
+    const per = q > 1 ? `${money(f.rate)} per ${esc(f.unit)} · ×${q} · ` : '';
+    return `<div class="item on oo"><div class="main"><b>${esc(f.name)}</b>
+      <span class="pill p-grey">One-off</span><br>
+      <span class="small muted">${per}${c === null
+        ? `${money(cost)} fixed, no commission`
+        : `${money(cost)} cost + ${pct(c)} commission`}</span></div>
+      <div class="oo-amt">${money(shown)}<button class="linkbtn" data-act="rmOO" data-i="${iid}" aria-label="Remove ${esc(f.name)}">Remove</button></div></div>`;
+  }).join('');
+}
+
 function walkSection(k, s) {
+  /* The extras section has no contractor by design, so it renders as a
+     plain list of one-off lines with no job-order picker and no rate
+     card. If its last line is removed the section goes with it. */
+  if (k === XKEY) {
+    /* Nobody is paid for these, so the useful total here is what the
+       customer pays, not what they cost us — unlike a contractor
+       section, where the figure is the job order. */
+    const toCustomer = Data.oneOffLines(s).reduce((t, iid) => {
+      const f = s.frozen[iid], cost = s.lines[iid] * f.rate, c = Data.oneOffComm(f);
+      return t + (c === null ? cost : Math.round(cost * (1 + c)));
+    }, 0);
+    return `<section class="card"><div class="sec-head"><h3>${S[k]}</h3>
+      <span class="small muted">${money(toCustomer)} to the customer</span></div>
+      <p class="small muted">Not going to a contractor — no job order is raised for these.</p>
+      ${ooRows(k, s)}</section>`;
+  }
+  const showCost = Data.can(owner(), 'costs');
   const opts = Data.contractorsCovering(k);
   const c = Data.getContractor(s.contractorId);
   if (!c) return `<section class="card"><h3>${S[k]}</h3><p class="note" style="margin-top:12px">No contractor covers ${S[k].toLowerCase()} yet. Add one under Contractors.</p></section>`;
   const items = c.items.filter(i => i.section === k);
   return `<section class="card"><div class="sec-head"><h3>${S[k]}</h3>
     <div class="field"><label for="pick-${k}">Send job order to</label><select class="select" id="pick-${k}" data-act="pickC" data-k="${k}">${opts.map(o => `<option value="${o.id}" ${o.id === s.contractorId ? 'selected' : ''}>${esc(o.name)} · ${Data.getScorecard(o.id).rating[1]}</option>`).join('')}</select></div>
-    <span class="small muted">${money(Data.sectionCost(s))}</span></div>
+    <span class="small muted">${showCost ? money(Data.sectionCost(s)) : ''}</span></div>
     ${items.map(i => { const q = s.lines[i.id] || 0;
       return `<div class="item ${q ? 'on' : ''}"><div class="main"><b>${esc(i.name)}</b><br><span class="small muted">${money(i.rate)} per ${esc(i.unit)}${i.type === 'hourly' ? ' · hourly' : ''}</span></div><div class="qty"><button aria-label="Less ${esc(i.name)}" data-act="qty" data-k="${k}" data-i="${i.id}" data-d="-1">−</button><output>${q}</output><button aria-label="More ${esc(i.name)}" data-act="qty" data-k="${k}" data-i="${i.id}" data-d="1">+</button></div></div>`; }).join('') || '<p class="muted small" style="margin-top:12px">This contractor has no items for this service yet. Add their rate card under Contractors.</p>'}
+    ${ooRows(k, s)}
     <div class="field" style="margin-top:16px"><span class="flabel">On-site requirements</span><div class="options">${Data.ACCESS_ITEMS.map((a, ai) => `<label class="option"><input type="checkbox" id="acc-${k}-${ai}" data-act="access" data-k="${k}" value="${a}" ${s.access.includes(a) ? 'checked' : ''}><span>${a}</span></label>`).join('')}</div></div>
     <div class="field" style="margin-top:14px"><label for="notes-${k}">Notes for ${esc(c.name)}</label><textarea class="textarea" id="notes-${k}" data-act="notes" data-k="${k}" placeholder="Anything the contractor should know">${esc(s.notes)}</textarea></div>
     <div class="field" style="margin-top:14px"><label for="ph-${k}">Photos</label><input type="file" id="ph-${k}" accept="image/*" multiple data-act="photos" data-k="${k}">${s.photos.length ? `<div class="photos">${s.photos.map(u => `<img src="${Data.photoUrl(u)}" alt="Site photo">`).join('')}</div>` : ''}</div>
@@ -1175,7 +1543,7 @@ function insPill(c) {
   return `${fd(c.insurance)} ${days < 0 ? '<span class="pill p-bad">Expired</span>' : days <= 60 ? '<span class="pill p-warn">Renew soon</span>' : ''}`;
 }
 function cForm(c) {
-  const v = c || { name: '', contact: '', phone: '', email: '', terms: '14 days', insurance: '', services: [] };
+  const v = c || { name: '', contact: '', phone: '', email: '', terms: '14 days', insurance: '', services: [], gstRegistered: false, gstNumber: '' };
   const id = c ? c.id : 'new';
   return `<form class="formbox" data-form="${c ? 'editC' : 'addC'}" data-c="${id}">
     <div class="form-grid">
@@ -1187,11 +1555,17 @@ function cForm(c) {
       <div class="field"><label for="f-ins-${id}">Insurance expiry</label><input class="input" id="f-ins-${id}" name="insurance" type="date" value="${esc(v.insurance)}"></div>
     </div>
     <div class="field"><span class="flabel">Services they cover</span><div class="options">${KEYS.map(k => `<label class="option"><input type="checkbox" name="services" value="${k}" id="f-${k}-${id}" ${v.services.includes(k) ? 'checked' : ''}><span>${S[k]}</span></label>`).join('')}</div></div>
+    ${Data.getBusiness().gstRegistered ? `<div class="field"><span class="flabel">GST</span>
+      <label class="option" for="f-gst-${id}"><input type="checkbox" name="gstRegistered" id="f-gst-${id}" ${v.gstRegistered ? 'checked' : ''}>
+        <span>They're registered for GST<br><span class="small muted">Their invoices carry GST, so you claim it back. Leave this off and the panel treats their whole fee as a cost you can't reclaim.</span></span></label></div>
+    <div class="field"><label for="f-gstno-${id}">Their GST number</label><input class="input" id="f-gstno-${id}" name="gstNumber" placeholder="Optional" value="${esc(v.gstNumber || '')}"></div>` : ''}
     <div class="chips"><button class="btn" type="submit">${c ? 'Save changes' : 'Save contractor'}</button><button class="btn ghost" type="button" data-act="${c ? 'hideEditC' : 'hideAddC'}">Cancel</button></div></form>`;
 }
 const readC = form => ({ name: form.get('name').trim(), contact: form.get('contact').trim(),
   phone: form.get('phone').trim(), email: form.get('email').trim(), terms: form.get('terms'),
-  insurance: form.get('insurance'), services: form.getAll('services') });
+  insurance: form.get('insurance'), services: form.getAll('services'),
+  gstRegistered: form.get('gstRegistered') === 'on',
+  gstNumber: (form.get('gstNumber') || '').trim() });
 
 /* ---------- customers ---------------------------------------------
    One row per person. Their contact details live here and nowhere
@@ -1221,6 +1595,7 @@ function custRow(c) {
     </dl>
     ${c.notes ? `<p class="small" style="margin-bottom:12px">${esc(c.notes)}</p>` : ''}
     <div class="chips" style="margin-bottom:12px">
+      <button class="btn sm" data-act="jobFromCust" data-c="${c.id}">Start a job for ${esc(c.name.split(' ')[0])}</button>
       <button class="btn sm ghost" data-act="editCust" data-c="${c.id}">Edit details</button>
       <button class="linkbtn" data-act="mergeCust" data-c="${c.id}">Same person as another record</button>
     </div>
@@ -1356,22 +1731,420 @@ function monthName(key) {
   return new Date(y, m - 1, 1).toLocaleDateString('en-NZ', { month: 'long', year: 'numeric' });
 }
 
+/* Can I pay the contractors before the customers pay me? That is the
+   question this answers, so the worst case is given equal billing with
+   the comfortable number rather than hidden behind it. */
+function cashCard() {
+  const c = Data.cashPosition();
+  const tight = c.worstCase < 0;
+  return `<section class="card"><div class="card-head"><h3>Cash position</h3>
+    <span class="eyebrow">Right now</span></div>
+  <div class="stat-row" style="margin-top:12px">
+    <div class="stat"><b>${money(c.banked)}</b><span class="small muted">Banked</span></div>
+    <div class="stat"><b>${money(c.owedToYou)}</b><span class="small muted">Owed to you</span></div>
+    <div class="stat"><b>${money(c.owedByYou)}</b><span class="small muted">You owe contractors</span></div>
+    <div class="stat" style="background:${tight ? 'var(--red-wash)' : 'var(--teal-wash)'}">
+      <b>${money(c.worstCase)}</b><span class="small muted">If nobody pays you</span></div>
+  </div>
+  <p class="small muted" style="margin-top:12px">${tight
+    ? `<b style="color:var(--red)">You owe contractors more than you're holding.</b> Under the principal model they get paid whether or not the customer does, so that gap is real money you'd have to find. ${c.dueThisWeek ? `${money(c.dueThisWeek)} of it falls due within a week.` : ''}`
+    : `Covered even if every customer paid late. ${c.dueThisWeek ? `${money(c.dueThisWeek)} due to contractors within a week.` : 'Nothing due to contractors this week.'}`}</p>
+  </section>`;
+}
+
+/* Who owes you, by how overdue. The buckets are the point — a flat
+   list of names hides which one is actually a problem. */
+function debtorsCard() {
+  const a = Data.agedDebtors();
+  if (!a.total) return `<section class="card"><div class="card-head"><h3>Who owes you</h3></div>
+    <p class="muted" style="margin-top:10px">Nothing outstanding on an invoice.</p></section>`;
+  const band = [
+    ['current', 'Not due yet', 'p-grey'], ['d30', '1–30 days over', 'p-warn'],
+    ['d60', '31–60 days over', 'p-warn'], ['d90', '60+ days over', 'p-bad']
+  ];
+  return `<section class="card"><div class="card-head"><h3>Who owes you</h3>
+    <span class="eyebrow">${money(a.total)} out${a.overdue ? ` · ${money(a.overdue)} overdue` : ''}</span></div>
+  <div class="stat-row" style="margin-top:12px">
+    ${band.map(([k, label]) => `<div class="stat"${k === 'd90' && a.totals.d90 ? ' style="background:var(--red-wash)"' : ''}>
+      <b>${money(a.totals[k])}</b><span class="small muted">${label}</span></div>`).join('')}
+  </div>
+  ${band.filter(([k]) => a.buckets[k].length).map(([k, label, pill]) => `
+    <div class="hrule"></div>
+    <div class="eyebrow" style="margin-bottom:8px">${label}</div>
+    <div class="rows">${a.buckets[k].map(r => `<div class="row">
+      <div class="main"><b>${esc(r.job.cust.name)}</b> <span class="muted small">${r.job.id}</span><br>
+        <span class="small muted">${money(r.owing)} · due ${fdOr(r.due)}${r.days > 0 ? ` · ${r.days} day${r.days === 1 ? '' : 's'} over` : ''}</span></div>
+      <span class="pill ${pill}">${r.days > 0 ? r.days + 'd' : 'Current'}</span>
+      <button class="btn sm ghost" data-act="open" data-id="${r.job.id}">Open</button></div>`).join('')}</div>`).join('')}
+  ${a.totals.d90 ? `<p class="note" style="margin-top:14px">Anything past 60 days is where your terms bite: a $30 admin fee plus 2% a month, and debt collection if it stays unpaid. Decide which of these you are actually going to chase.</p>` : ''}
+  </section>`;
+}
+
+/* What you owe contractors. Separate from the customer side on
+   purpose: under the principal model these are owed regardless. */
+function payablesCard() {
+  const p = Data.payables();
+  if (!p.rows.length) return '';
+  return `<section class="card"><div class="card-head"><h3>What you owe contractors</h3>
+    <span class="eyebrow">${money(p.total)}${p.overdue ? ` · ${money(p.overdue)} overdue` : ''}</span></div>
+  <p class="small muted" style="margin-top:4px">From accepted job orders, on each contractor's own terms. Owed whether or not the customer has paid you.</p>
+  <div class="tablewrap" style="margin-top:12px"><table>
+    <thead><tr><th>Contractor</th><th>For</th><th>Due</th><th class="num">Amount</th></tr></thead>
+    <tbody>${p.rows.map(r => `<tr>
+      <td><b>${esc(r.contractor)}</b><br><span class="small muted">${esc(r.po)}</span></td>
+      <td>${esc(r.service)} — ${esc(r.customer)}<br><span class="small muted">${esc(r.jobId)}</span></td>
+      <td>${fdOr(r.due)}${r.overdue ? ' <span class="pill p-bad">Overdue</span>' : ''}</td>
+      <td class="num">${money(r.amount)}</td></tr>`).join('')}
+      <tr class="total"><td colspan="3">Total owed</td><td class="num">${money(p.total)}</td></tr>
+    </tbody></table></div>
+  ${p.thisWeek ? `<p class="small muted" style="margin-top:10px"><b>${money(p.thisWeek)}</b> falls due within the next seven days.</p>` : ''}
+  </section>`;
+}
+
+/* Everything the business spends that is not a contractor. The form
+   leads with the category, because the category sets the business
+   share and the deductible rate — getting that right at entry is what
+   makes the P&L above worth anything. */
+function expensesCard() {
+  const years = taxYears(3);
+  const y = years[ui.plYear] || years[0];
+  const list = Data.listExpenses(y.from, y.to);
+  const cats = Data.EXPENSE_CATEGORIES;
+  const sel = ui.expCat || 'advertising';
+  const cat = cats[sel];
+  const pct = n => Math.round(n * 100) + '%';
+
+  return `<section class="card"><div class="card-head"><h3>Expenses</h3>
+    <span class="eyebrow">${list.length} in ${esc(y.label.toLowerCase())}</span></div>
+
+  ${ui.addExp ? `<div class="formbox">
+    <div class="form-grid">
+      <div class="field"><label for="x-cat">Category</label>
+        <select class="select" id="x-cat" data-act="expCat">
+          ${Data.EXPENSE_KEYS.map(k => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(cats[k].label)}</option>`).join('')}
+        </select></div>
+      <div class="field"><label for="x-date">Date</label>
+        <input class="input" id="x-date" type="date" value="${esc(ui.expDate || Data.isoDate(new Date()))}"></div>
+      <div class="field"><label for="x-amt">Amount paid (NZD)</label>
+        <input class="input" id="x-amt" type="number" min="0" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div class="form-grid">
+      <div class="field"><label for="x-what">What was it for</label>
+        <input class="input" id="x-what" maxlength="120" placeholder="e.g. Facebook ads, November"></div>
+      <div class="field"><label for="x-supplier">Who from</label>
+        <input class="input" id="x-supplier" maxlength="80" placeholder="Optional"></div>
+      <div class="field"><label for="x-share">Business share</label>
+        <input class="input" id="x-share" type="number" min="0" max="100" step="5" value="${Math.round(cat.share * 100)}">
+      </div>
+    </div>
+    ${cat.note ? `<p class="small muted">${esc(cat.note)}</p>` : ''}
+    ${cat.rate < 1 ? `<p class="note">Only ${pct(cat.rate)} of this category is deductible, so the panel will halve it for you. Enter what you actually paid.</p>` : ''}
+    ${Data.getBusiness().gstRegistered ? `<label class="option" for="x-gst">
+      <input type="checkbox" id="x-gst" ${cat.gst ? 'checked' : ''}>
+      <span>The invoice had GST on it<br><span class="small muted">Untick for anything billed overseas, and for bank fees and interest, which are GST-exempt.</span></span></label>` : ''}
+    <div class="chips"><button class="btn sm" data-act="saveExp">Save expense</button>
+      <button class="btn sm ghost" data-act="hideExp">Cancel</button></div>
+  </div>` : `<div class="chips" style="margin-top:12px"><button class="btn sm" data-act="showExp">Add an expense</button></div>`}
+
+  ${list.length ? `<div class="tablewrap" style="margin-top:14px"><table>
+    <thead><tr><th>Date</th><th>What</th><th>Category</th><th class="num">Paid</th><th class="num">Claimed</th><th></th></tr></thead>
+    <tbody>${list.map(x => {
+      const v = Data.expenseValue(x);
+      return `<tr>
+        <td>${fdOr(x.date)}</td>
+        <td><b>${esc(x.what)}</b>${x.supplier ? `<br><span class="small muted">${esc(x.supplier)}</span>` : ''}</td>
+        <td class="small">${esc(cats[x.category] ? cats[x.category].label : x.category)}${
+          x.share < 1 ? ` <span class="pill p-grey">${Math.round(x.share * 100)}% business</span>` : ''}${
+          v.halved ? ' <span class="pill p-grey">50%</span>' : ''}</td>
+        <td class="num">${money(v.gross)}</td>
+        <td class="num">${money(v.deductible)}</td>
+        <td><button class="linkbtn danger" data-act="delExp" data-x="${x.id}">Remove</button></td></tr>`;
+    }).join('')}</tbody></table></div>`
+    : '<p class="muted" style="margin-top:14px">Nothing recorded. Until there is, the profit figure above is revenue minus contractors — which is not what you made.</p>'}
+  </section>`;
+}
+
+/* Site visits are the mileage nobody claims, because a logbook
+   written in April is not a logbook. One tap per trip. */
+function vehicleCard(y) {
+  const v = Data.vehicleClaim(y.from, y.to);
+  return `<section class="card"><div class="card-head"><h3>Vehicle log</h3>
+    <span class="eyebrow">${v.km.toLocaleString('en-NZ')} km · ${money(v.claim)} claimable</span></div>
+
+  ${ui.addTrip ? `<div class="formbox">
+    <div class="form-grid">
+      <div class="field"><label for="v-date">Date</label>
+        <input class="input" id="v-date" type="date" value="${esc(Data.isoDate(new Date()))}"></div>
+      <div class="field"><label for="v-km">Kilometres</label>
+        <input class="input" id="v-km" type="number" min="0" step="0.1" placeholder="0"></div>
+      <div class="field"><label for="v-fuel">Fuel</label>
+        <select class="select" id="v-fuel"><option value="petrol">Petrol</option><option value="diesel">Diesel</option></select></div>
+    </div>
+    <div class="field"><label for="v-purpose">Where and why</label>
+      <input class="input" id="v-purpose" maxlength="120" placeholder="e.g. Site visit, 24 Ilam Road"></div>
+    <div class="chips"><button class="btn sm" data-act="saveTrip">Save trip</button>
+      <button class="btn sm ghost" data-act="hideTrip">Cancel</button></div>
+  </div>` : `<div class="chips" style="margin-top:12px"><button class="btn sm" data-act="showTrip">Log a trip</button></div>`}
+
+  ${v.rows.length ? `<div class="tablewrap" style="margin-top:14px"><table>
+    <thead><tr><th>Date</th><th>Where</th><th class="num">km</th><th class="num">Claim</th><th></th></tr></thead>
+    <tbody>${v.rows.slice(0, 12).map(t => `<tr>
+      <td>${fdOr(t.date)}</td><td>${esc(t.purpose)}</td>
+      <td class="num">${t.km}</td><td class="num">${money(t.amount)}</td>
+      <td><button class="linkbtn danger" data-act="delTrip" data-x="${t.id}">Remove</button></td></tr>`).join('')}
+      <tr class="total"><td colspan="2">${v.rows.length > 12 ? `Total, all ${v.rows.length} trips` : 'Total'}</td>
+        <td class="num">${v.km.toLocaleString('en-NZ')}</td><td class="num">${money(v.claim)}</td><td></td></tr>
+    </tbody></table></div>` : '<p class="muted" style="margin-top:14px">No trips logged. Every site visit you drive to is deductible and currently is not being claimed.</p>'}
+
+  <p class="small muted" style="margin-top:12px">Petrol $1.20/km for the first 14,000 km, then 37c. Diesel $1.30, then 38c.
+    ${v.crossed ? `<b>You have passed 14,000 km, so ${Math.round(v.tier2Km).toLocaleString('en-NZ')} km is at the lower rate.</b> ` : ''}That 14,000 strictly counts the car's total travel including private, which the panel can't see — so check the tier with your accountant if you're near it. The alternative is actual costs × business share, which goes in Expenses instead. You can't claim both.</p>
+  </section>`;
+}
+
+/* The Money screen has always said profit is "before your own time".
+   This puts a number on it. */
+function hoursCard(y, pl) {
+  const list = Data.listHours(y.from, y.to);
+  const total = list.reduce((t, h) => t + h.hours, 0);
+  const byOwner = {};
+  list.forEach(h => { byOwner[h.owner] = (byOwner[h.owner] || 0) + h.hours; });
+  const rate = total ? pl.net / total : 0;
+
+  return `<section class="card"><div class="card-head"><h3>Your own hours</h3>
+    <span class="eyebrow">${total.toFixed(1)} h${total ? ` · ${money(rate)}/h` : ''}</span></div>
+
+  ${ui.addHours ? `<div class="formbox">
+    <div class="form-grid">
+      <div class="field"><label for="h-date">Date</label>
+        <input class="input" id="h-date" type="date" value="${esc(Data.isoDate(new Date()))}"></div>
+      <div class="field"><label for="h-hours">Hours</label>
+        <input class="input" id="h-hours" type="number" min="0" max="24" step="0.25" placeholder="0"></div>
+      <div class="field"><label for="h-owner">Who</label>
+        <select class="select" id="h-owner">${OWNERS.map(o => `<option ${o === owner() ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label for="h-what">What on</label>
+      <input class="input" id="h-what" maxlength="120" placeholder="e.g. Walk-through and quote, Ilam Road"></div>
+    <div class="chips"><button class="btn sm" data-act="saveHours">Save</button>
+      <button class="btn sm ghost" data-act="hideHours">Cancel</button></div>
+  </div>` : `<div class="chips" style="margin-top:12px"><button class="btn sm" data-act="showHours">Log hours</button></div>`}
+
+  ${total ? `<div class="stat-row" style="margin-top:14px">
+    ${Object.entries(byOwner).map(([o, h]) => `<div class="stat"><b>${h.toFixed(1)} h</b><span class="small muted">${esc(o.split(' ')[0])}</span></div>`).join('')}
+    <div class="stat" style="background:${rate < 23.50 ? 'var(--orange-wash)' : 'var(--teal-wash)'}">
+      <b>${money(rate)}</b><span class="small muted">Per hour, after everything</span></div>
+  </div>
+  <p class="small muted" style="margin-top:12px">${rate < 0
+      ? 'The business is running at a loss, so your time is currently costing you money rather than paying you. Worth knowing early.'
+      : rate < 23.50
+        ? `That is below the adult minimum wage. Not a disaster while you are building something, but it is the number to watch — if it does not move as volume grows, the pricing or the commission is wrong, not the effort.`
+        : 'Net profit divided by the hours you have logged. The honest hourly rate for your own time.'}</p>`
+    : '<p class="muted" style="margin-top:14px">Nothing logged. Without it the profit figure above looks like free money, when it is really payment for your time.</p>'}
+  </section>`;
+}
+
+/* Over $1,000 gets depreciated; under goes straight to Expenses. */
+function assetsCard(y) {
+  const d = Data.depreciation(y.from, y.to);
+  const all = Data.listAssets();
+  return `<section class="card"><div class="card-head"><h3>Assets</h3>
+    <span class="eyebrow">${d.total ? money(d.total) + ' depreciation this year' : 'Nothing over $1,000'}</span></div>
+
+  ${ui.addAsset ? `<div class="formbox">
+    <div class="form-grid">
+      <div class="field"><label for="a-date">Bought on</label>
+        <input class="input" id="a-date" type="date" value="${esc(Data.isoDate(new Date()))}"></div>
+      <div class="field"><label for="a-cost">Cost</label>
+        <input class="input" id="a-cost" type="number" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label for="a-rate">Depreciation rate</label>
+        <input class="input" id="a-rate" type="number" min="0" max="100" step="1" value="20"></div>
+    </div>
+    <div class="field"><label for="a-what">What it is</label>
+      <input class="input" id="a-what" maxlength="120" placeholder="e.g. Trailer"></div>
+    <p class="small muted">Under $1,000 belongs in Expenses as "Equipment under $1,000" — written off this year instead. Your accountant sets the real rate per asset type; 20% declining balance is a common default.</p>
+    <div class="chips"><button class="btn sm" data-act="saveAsset">Save asset</button>
+      <button class="btn sm ghost" data-act="hideAsset">Cancel</button></div>
+  </div>` : `<div class="chips" style="margin-top:12px"><button class="btn sm" data-act="showAsset">Add an asset</button></div>`}
+
+  ${all.length ? `<div class="tablewrap" style="margin-top:14px"><table>
+    <thead><tr><th>Asset</th><th>Bought</th><th class="num">Cost</th><th class="num">This year</th><th class="num">Book value</th><th></th></tr></thead>
+    <tbody>${all.map(a => {
+      const row = d.rows.find(r => r.id === a.id);
+      return `<tr><td><b>${esc(a.what)}</b>${a.cost < 1000 ? ' <span class="pill p-grey">Under $1,000</span>' : ''}</td>
+        <td>${fdOr(a.date)}</td><td class="num">${money(a.cost)}</td>
+        <td class="num">${row ? money(row.thisYear) : '—'}</td>
+        <td class="num">${row ? money(row.closing) : 'Written off'}</td>
+        <td><button class="linkbtn danger" data-act="delAsset" data-x="${a.id}">Remove</button></td></tr>`;
+    }).join('')}</tbody></table></div>` : '<p class="muted" style="margin-top:14px">Nothing recorded.</p>'}
+  </section>`;
+}
+
+/* Each contractor's year in one line. What you'd want in front of you
+   before renegotiating a rate card. */
+function contractorYearCard(y) {
+  const rows = Data.contractorYear(y.from, y.to);
+  if (!rows.length) return '';
+  const total = rows.reduce((t, r) => t + r.paid, 0);
+  const gstOn = Data.getBusiness().gstRegistered;
+  return `<section class="card"><div class="card-head"><h3>Contractors this year</h3>
+    <span class="eyebrow">${money(total)} across ${rows.length}</span></div>
+  <div class="tablewrap" style="margin-top:12px"><table>
+    <thead><tr><th>Contractor</th><th>Covers</th><th class="num">Jobs</th><th class="num">Paid</th>${gstOn ? '<th>GST</th>' : ''}</tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td><b>${esc(r.name)}</b></td>
+      <td class="small">${esc(r.services)}</td>
+      <td class="num">${r.jobs}</td>
+      <td class="num">${money(r.paid)}</td>
+      ${gstOn ? `<td class="small">${r.gstRegistered
+        ? (r.gstNumber ? esc(r.gstNumber) : '<span class="pill p-ok">Registered</span>')
+        : '<span class="pill p-warn">Not registered</span>'}</td>` : ''}</tr>`).join('')}
+      <tr class="total"><td colspan="3">Total</td><td class="num">${money(total)}</td>${gstOn ? '<td></td>' : ''}</tr>
+    </tbody></table></div>
+  ${gstOn && rows.some(r => !r.gstRegistered) ? `<p class="small muted" style="margin-top:10px">A contractor marked "not registered" charges no GST, so none of what you paid them is reclaimable. If that is wrong, fix it on their record — it changes your GST return.</p>` : ''}
+  </section>`;
+}
+
+/* The financial year, 1 April to 31 March, which is the only period
+   an NZ accountant will ask for. */
+function taxYears(count = 3) {
+  const now = new Date(), out = [];
+  let endY = now.getFullYear() + (now.getMonth() >= 3 ? 1 : 0);
+  for (let i = 0; i < count; i++) {
+    out.push({ from: `${endY - 1}-04-01`, to: `${endY}-03-31`,
+      label: `Year to 31 Mar ${endY}`, open: endY === now.getFullYear() + (now.getMonth() >= 3 ? 1 : 0) });
+    endY--;
+  }
+  return out;
+}
+
+/* Profit and loss, the partner split, and the tax each of you should
+   be setting aside. Together because they are one chain: what the
+   business made, halved, taxed. */
+function plCard() {
+  const years = taxYears(3);
+  const y = years[ui.plYear] || years[0];
+  const pl = Data.profitAndLoss(y.from, y.to);
+  const shares = Data.partnerShares(pl.net);
+  const pct = n => (Math.round(n * 1000) / 10) + '%';
+
+  return `<section class="card"><div class="card-head"><h3>Profit and loss</h3>
+    <select class="select inline" data-act="plYear" aria-label="Financial year">
+      ${years.map((x, i) => `<option value="${i}" ${i === (ui.plYear || 0) ? 'selected' : ''}>${esc(x.label)}${x.open ? ' (so far)' : ''}</option>`).join('')}
+    </select></div>
+
+  <div class="tablewrap" style="margin-top:12px"><table>
+    <tbody>
+      <tr><td><b>Income</b> <span class="small muted">${pl.jobCount} job${pl.jobCount === 1 ? '' : 's'}${Data.getBusiness().gstRegistered ? ', GST excluded' : ''}</span></td>
+          <td class="num"><b>${money(pl.income)}</b></td></tr>
+      <tr><td>Contractor payments</td><td class="num">−${money(pl.contractors)}</td></tr>
+      ${pl.expenses.map(e => `<tr><td>${esc(e.label)} <span class="small muted">${e.count}</span></td>
+        <td class="num">−${money(e.deductible)}</td></tr>`).join('')}
+      ${!pl.expenses.length ? `<tr><td colspan="2" class="muted">No expenses recorded yet — so this is revenue minus contractors, not profit.</td></tr>` : ''}
+      <tr class="total"><td><b>Net profit</b></td><td class="num"><b>${money(pl.net)}</b></td></tr>
+    </tbody></table></div>
+
+  <div class="hrule"></div>
+  <div class="eyebrow" style="margin-bottom:10px">Each partner's half</div>
+  <p class="small muted" style="margin-bottom:12px">A partnership pays no tax itself. It files a return, and you each declare your share on your own personal return — so these are the numbers you and Rocky each need, not the one above.</p>
+  <div class="grid2">
+    ${shares.map(s => {
+      const t = Data.taxOn(s.share);
+      const loss = s.share < 0;
+      return `<div class="brief">
+        <b>${esc(s.owner)}</b>
+        <div style="font-family:var(--display);font-size:1.5rem">${money(s.share)}</div>
+        <span class="small muted">${loss
+          ? 'A loss, so no tax on it. Your share can usually be set against your other income — worth telling the accountant rather than leaving it in the file.'
+          : `Set aside about <b>${money(t.tax)}</b> for tax — ${pct(t.effective)} of it`}</span>
+        ${t.provisional ? `<span class="pill p-warn" style="margin-top:6px">Provisional tax likely</span>` : ''}
+      </div>`; }).join('')}
+  </div>
+  <p class="small muted" style="margin-top:12px">Tax is on this income alone, at the individual rates. If either of you earns anything else, that stacks on top and the real rate is higher — so treat these as a floor. ACC levies are on top again.${shares.some(s => Data.taxOn(s.share).provisional)
+    ? ' <b>Over $5,000 of residual tax puts you into provisional tax next year</b>, which means three instalments instead of one bill. Worth raising with the accountant now rather than in April.' : ''}</p>
+  </section>`;
+}
+
+/* Where the GST return comes from. Deliberately shows its working:
+   the figure that matters is the net, but the thing that goes wrong is
+   a contractor whose GST status nobody set, so that gets its own line
+   rather than being quietly folded into the cost. */
+function gstCard() {
+  const periods = Data.gstPeriods(6);
+  const p = periods[ui.gstPeriod] || periods[0];
+  const g = Data.gstPosition(p.from, p.to);
+  const owing = g.net >= 0;
+
+  return `<section class="card"><div class="card-head"><h3>GST position</h3>
+    <select class="select inline" data-act="gstPeriod" aria-label="GST period">
+      ${periods.map((x, i) => `<option value="${i}" ${i === (ui.gstPeriod || 0) ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}
+    </select></div>
+
+  <div class="stat-row" style="margin-top:12px">
+    <div class="stat"><b>${money(g.supplies)}</b><span class="small muted">Charged out</span></div>
+    <div class="stat"><b>${money(g.outputGst)}</b><span class="small muted">GST collected</span></div>
+    <div class="stat"><b>${money(g.inputGst)}</b><span class="small muted">GST to claim back</span></div>
+    <div class="stat" style="background:${owing ? 'var(--orange-wash)' : 'var(--teal-wash)'}">
+      <b>${money(Math.abs(g.net))}</b><span class="small muted">${owing ? 'To pay IRD' : 'Refund due'}</span></div>
+  </div>
+
+  ${g.unknown || g.noGstCost ? `<div class="note" style="margin-top:14px">
+    ${g.noGstCost ? `<b>${money(g.noGstCost)}</b> of contractor cost carries no claimable GST, because those contractors aren't marked as registered. If any of them actually are, set it on their record and this period's claim goes up by about ${money(Data.gstWithin(g.noGstCost))}.` : ''}
+    ${g.unknown ? `<br><b>${money(g.unknown)}</b> sits on one-off lines with no contractor behind them, so nothing is claimable there.` : ''}
+  </div>` : ''}
+
+  ${g.rows.length ? `<div class="tablewrap" style="margin-top:14px"><table>
+    <thead><tr><th>Job</th><th>Date</th><th class="num">Charged</th><th class="num">GST out</th><th class="num">GST in</th></tr></thead>
+    <tbody>${g.rows.map(r => `<tr>
+      <td><b>${esc(r.name)}</b> <span class="muted small">${r.id}</span></td>
+      <td>${fdOr(r.date)}</td>
+      <td class="num">${money(r.gross)}</td>
+      <td class="num">${money(r.outputGst)}</td>
+      <td class="num">${r.inputGst ? money(r.inputGst) : '—'}</td></tr>`).join('')}
+      <tr class="total"><td colspan="2">Period total</td>
+        <td class="num">${money(g.supplies)}</td>
+        <td class="num">${money(g.outputGst)}</td>
+        <td class="num">${money(g.inputGst)}</td></tr>
+    </tbody></table></div>`
+    : '<p class="muted" style="margin-top:14px">No jobs in this period.</p>'}
+
+  <p class="small muted" style="margin-top:12px"><b>A working figure, not a return.</b>
+    It counts a job in the period its job date falls in, which is the payments basis
+    only if you also got paid in that period. Your accountant decides whether you file
+    on an invoice or a payments basis, and that changes which jobs land where. Filing
+    still happens in myIR or your accounting software — the panel can't file.</p>
+  </section>`;
+}
+
 function vMoney() {
   const e = Data.earnings(owner(), Data.getAlertSettings(owner())?.mineOnly);
   const t = e.totals;
+  const gstOn = Data.getBusiness().gstRegistered;
+  /* All-time contractor cost from contractors who can actually issue a
+     GST invoice — the only part of the cost base that carries claimable
+     input GST. */
+  const claimableCost = !gstOn ? 0 : Data.listJobs()
+    .filter(j => j.status === 'active')
+    .reduce((t2, j) => t2 + Object.values(j.sections).reduce((s2, sec) => {
+      const c = sec.contractorId ? Data.getContractor(sec.contractorId) : null;
+      return s2 + (c && c.gstRegistered ? Data.sectionCost(sec) : 0);
+    }, 0), 0);
   return `<div class="view">
   <div class="card-head" style="margin:0"><div><h2>Money</h2>
     <p class="muted small" style="margin-top:4px">Work done is by job date. Cash in is by the day it landed. They do not match, because a deposit arrives before the job and the balance after it.</p></div>
-    <div class="chips"><button class="btn sm ghost" data-act="exportJobs">Export jobs</button></div></div>
+    <div class="chips">
+      <button class="btn sm" data-act="exportYear">Year-end pack</button>
+      <button class="btn sm ghost" data-act="exportJobs">Export jobs</button></div></div>
 
   <div class="grid2">
     <section class="card"><div class="card-head"><h3>All time</h3><span class="eyebrow">${t.jobs} job${t.jobs === 1 ? '' : 's'}</span></div>
       <div class="rows" style="margin-top:10px">
         <div class="row"><div class="main">Customers were charged</div><b>${money(t.sold)}</b></div>
+        ${gstOn ? `<div class="row"><div class="main">GST inside that <span class="small muted">— never yours</span></div><b>−${money(Data.gstWithin(t.sold))}</b></div>` : ''}
         <div class="row"><div class="main">Contractors cost</div><b>${money(t.cost)}</b></div>
-        <div class="row"><div class="main"><b>You kept</b></div><b style="font-size:1.15rem">${money(t.margin)}</b></div>
+        <div class="row"><div class="main"><b>You kept</b></div><b style="font-size:1.15rem">${money(gstOn ? t.margin - Data.gstWithin(t.sold) + Data.gstWithin(claimableCost) : t.margin)}</b></div>
       </div>
-      <p class="small muted" style="margin-top:10px">That is ${t.sold ? Math.round(e.marginRate * 100) : Math.round(Data.MARGIN * 100)}% of what customers paid. Before your own time, fuel, phone and anything you refund.</p>
+      <p class="small muted" style="margin-top:10px">${gstOn
+        ? `After GST out and GST reclaimed on registered contractors. ${t.sold ? Math.round(((t.margin - Data.gstWithin(t.sold) + Data.gstWithin(claimableCost)) / t.sold) * 100) : 0}% of what customers paid, before your own time, fuel, phone and anything you refund.`
+        : `That is ${t.sold ? Math.round(e.marginRate * 100) : Math.round(Data.MARGIN * 100)}% of what customers paid. Before your own time, fuel, phone and anything you refund.`}</p>
       ${t.lostJobs ? `<p class="small muted">${t.lostJobs} job${t.lostJobs === 1 ? '' : 's'} marked lost, worth ${money(t.lost)}.</p>` : ''}
     </section>
 
@@ -1385,6 +2158,17 @@ function vMoney() {
       : '<p class="muted" style="margin-top:10px">Nothing outstanding.</p>'}
     </section>
   </div>
+
+  ${cashCard()}
+  ${plCard()}
+  ${debtorsCard()}
+  ${payablesCard()}
+  ${expensesCard()}
+  ${vehicleCard(taxYears(3)[ui.plYear || 0])}
+  ${hoursCard(taxYears(3)[ui.plYear || 0], Data.profitAndLoss(taxYears(3)[ui.plYear || 0].from, taxYears(3)[ui.plYear || 0].to))}
+  ${assetsCard(taxYears(3)[ui.plYear || 0])}
+  ${contractorYearCard(taxYears(3)[ui.plYear || 0])}
+  ${gstOn ? gstCard() : ''}
 
   <section class="card"><div class="card-head"><h3>Month by month</h3><span class="eyebrow">Work done · cash in</span></div>
     ${e.months.length ? `<div class="tablewrap" style="margin-top:12px"><table>
@@ -1405,11 +2189,163 @@ function vMoney() {
 </div>`;
 }
 
+/* Money going back out. Sits under the payment schedule because that
+   is where you are standing when it happens, and because the figure
+   you can refund is bounded by what actually came in. */
+function refundSection(j) {
+  const paidGross = (j.payments || []).reduce((t, p) => t + Math.max(0, Number(p.amount) || 0), 0);
+  const sum = Data.refundSummary(j.id);
+  const left = paidGross - sum.total;
+  const guide = Data.cancellationGuide(j.id);
+  const open = ui.refundFor === j.id;
+
+  if (!paidGross && !sum.total) return '';
+
+  return `<div class="hrule"></div>
+  <div class="card-head" style="margin-top:4px"><h3 style="font-size:1rem">Refunds</h3>
+    <span class="eyebrow">${sum.total ? money(sum.total) + ' refunded' : money(left) + ' refundable'}</span></div>
+
+  ${sum.total ? `<p class="small muted">${money(sum.total)} has gone back${
+    sum.credited < sum.total ? `, ${money(sum.credited)} of it reducing what the job was worth` : ''}.
+    ${left > 0 ? `${money(left)} is still refundable.` : 'Everything paid has been returned.'}</p>` : ''}
+
+  ${open ? `<form class="formbox" data-form="refund" data-id="${j.id}">
+    <p class="small"><b>Refund ${esc(j.cust.name)}</b></p>
+    ${guide && guide.policy !== 'no-date' ? `<p class="note">
+      ${guide.policy === 'outside-48'
+        ? `The job is ${guide.hours > 0 ? Math.round(guide.hours / 24) + ' days' : 'not yet'} away, so your stated policy is a <b>full refund</b> — ${money(guide.full)}.`
+        : `The job is inside 48 hours. Your receipts say you <b>may keep up to 50%</b> because the contractors have held the slot — so anywhere from ${money(guide.reduced)} to ${money(guide.full)} back. It says <em>may</em>, so it is your call.`}
+    </p>` : ''}
+    <div class="form-grid" style="margin-top:10px">
+      <div class="field"><label for="rf-amt">Amount to refund</label>
+        <input class="input" id="rf-amt" name="amount" type="number" step="0.01" min="0" max="${left}"
+               value="${guide && guide.policy === 'inside-48' ? guide.reduced : left}"></div>
+      <div class="field"><label for="rf-on">Date it goes back</label>
+        <input class="input" id="rf-on" name="on" type="date" value="${Data.isoDate(Data.today())}"></div>
+      <div class="field"><label for="rf-how">How</label>
+        <select class="select" id="rf-how" name="method"><option>Bank transfer</option><option>Cash</option><option>Other</option></select></div>
+    </div>
+    <div class="field" style="margin-top:12px"><label for="rf-why">Why</label>
+      <select class="select" id="rf-why" name="reason">
+        ${Object.entries(Data.REFUND_REASONS).map(([k, r]) =>
+          `<option value="${k}">${esc(r.label)}</option>`).join('')}
+      </select>
+      <p class="small muted">The first four reduce what the job was worth, so they come off your income${
+        Data.getBusiness().gstRegistered ? ' and your GST' : ''}. The last two just return money that was never yours.</p></div>
+    <div class="field"><label for="rf-note">Anything to add <span class="muted">(optional)</span></label>
+      <input class="input" id="rf-note" name="note" maxlength="200" placeholder="Appears on the credit note"></div>
+    <div class="chips"><button class="btn sm" type="submit">Refund and issue the credit note</button>
+      <button class="btn sm ghost" type="button" data-act="cancelRefund">Cancel</button></div>
+  </form>`
+    : left > 0
+      ? `<div class="chips" style="margin-top:10px"><button class="btn sm ghost" data-act="refund" data-id="${j.id}">Refund the customer</button></div>`
+      : ''}
+  `;
+}
+
+/* Who can get in, and what they can see once they are in. Two roles
+   only — a staff member runs jobs; a partner also sees the money. */
+function loginsCard() {
+  const list = Data.listUsers();
+  const R = Data.ROLES;
+  return `<section class="card">
+    <div class="card-head"><h3>Logins</h3><span class="eyebrow">${list.length} ${list.length === 1 ? 'person' : 'people'}</span></div>
+    <p class="small muted">Everyone signs in as themselves, so the job history records who actually did something rather than who was picked from a list.</p>
+
+    <div class="rows" style="margin-top:14px">${list.map(u => {
+      const partner = Data.OWNERS.indexOf(u.name) !== -1;
+      const hasCode = Data.hasCode(u.id);
+      return `<div class="row">
+        <div class="main"><b>${esc(u.name)}</b>${partner ? ' <span class="pill p-navy">Partner in the business</span>' : ''}
+          ${hasCode ? '<span class="pill p-ok">Code set</span>' : '<span class="pill p-warn">No code — can’t sign in</span>'}<br>
+          <span class="small muted">${esc(R[u.role].note)}</span>
+          ${u.lastSeen ? `<br><span class="small muted">Last signed in ${fdOr(u.lastSeen.slice(0, 10))}</span>` : ''}</div>
+        ${ui.shownCode && ui.shownCode.id === u.id ? `
+          <div class="codeshow">
+            <span class="small muted">Their code, shown once</span>
+            <b>${esc(ui.shownCode.code)}</b>
+            <button class="linkbtn" data-act="copyCode" data-c="${esc(ui.shownCode.code)}">Copy</button>
+            <button class="linkbtn" data-act="hideCode">Done</button>
+          </div>` : `
+          <button class="btn sm ghost" data-act="issueCode" data-u="${u.id}">${hasCode ? 'Reset code' : 'Give them a code'}</button>`}
+        ${partner ? '<span class="pill p-grey">Fixed</span>' : `
+          <select class="select inline" data-act="setRole" data-u="${u.id}" aria-label="Role for ${esc(u.name)}">
+            ${Object.entries(R).map(([k, r]) => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
+          </select>
+          <button class="linkbtn danger" data-act="rmUser" data-u="${u.id}">Remove</button>`}
+      </div>`; }).join('')}</div>
+
+    ${ui.addUser ? `<div class="formbox">
+      <div class="form-grid">
+        <div class="field"><label for="u-name">Their name</label>
+          <input class="input" id="u-name" maxlength="60" placeholder="As it should appear on job history"></div>
+        <div class="field"><label for="u-role">Role</label>
+          <select class="select" id="u-role">
+            <option value="staff">Staff</option>
+            <option value="partner">Partner</option>
+          </select></div>
+      </div>
+      <p class="small muted">A staff login can run jobs, walk-throughs, customers and contractors. It cannot open Money or Settings, and contractor rates and the commission stay hidden — so what you pay a contractor, and what you make on a job, are not visible on a job site.</p>
+      <div class="chips"><button class="btn sm" data-act="saveUser">Add them</button>
+        <button class="btn sm ghost" data-act="hideUser">Cancel</button></div>
+    </div>` : `<div class="chips" style="margin-top:12px"><button class="btn sm" data-act="showUser">Add a login</button></div>`}
+
+    <p class="small muted" style="margin-top:12px">Removing someone deactivates the login rather than deleting it, because their name is on job history and signed-off work and that has to keep making sense.</p>
+  </section>`;
+}
+
+/* One chronological record of what happened, assembled from the job
+   histories, the money entries and the issued documents. Filterable by
+   person, because the question is almost always "who did that". */
+function vAudit() {
+  const f = ui.audit;
+  const rows = Data.auditTrail(f);
+  const people = Data.listUsers().map(u => u.name);
+  const kindPill = { job: 'p-grey', expense: 'p-warn', trip: 'p-warn',
+    asset: 'p-warn', hours: 'p-warn', document: 'p-navy' };
+
+  return `<div class="view">
+  <div><h2>History</h2><p class="muted small" style="margin-top:4px">Everything that has happened, newest first. ${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}.</p></div>
+
+  <section class="card">
+    <div class="filters">
+      <div class="field"><label for="au-q">Search</label>
+        <input class="input" id="au-q" type="search" value="${esc(f.q || '')}" data-af="q"
+               placeholder="A job number, a name, anything"></div>
+      <div class="field"><label for="au-who">Who</label>
+        <select class="select" id="au-who" data-af="who">
+          <option value="all">Everyone</option>
+          ${people.map(n => `<option ${f.who === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}
+        </select></div>
+      <div class="field"><label for="au-from">From</label>
+        <input class="input" id="au-from" type="date" value="${esc(f.from || '')}" data-af="from"></div>
+      <div class="field"><label for="au-to">To</label>
+        <input class="input" id="au-to" type="date" value="${esc(f.to || '')}" data-af="to"></div>
+    </div>
+
+    ${rows.length ? `<div class="tablewrap" style="margin-top:14px"><table>
+      <thead><tr><th>When</th><th>Who</th><th>What</th><th>Where</th></tr></thead>
+      <tbody>${rows.slice(0, 200).map(r => `<tr>
+        <td class="small">${r.at ? fdOr(r.at) : '<span class="muted">—</span>'}</td>
+        <td class="small">${esc(r.user)}</td>
+        <td>${esc(r.what)}</td>
+        <td><span class="pill ${kindPill[r.kind] || 'p-grey'}">${esc(r.where)}</span></td>
+      </tr>`).join('')}</tbody></table></div>
+      ${rows.length > 200 ? `<p class="small muted" style="margin-top:10px">Showing the most recent 200 of ${rows.length}. Narrow it with the filters.</p>` : ''}`
+      : '<p class="muted" style="margin-top:14px">Nothing matches those filters.</p>'}
+
+    <p class="small muted" style="margin-top:14px"><b>Assembled, not duplicated.</b>
+      This reads the job histories, money entries and issued documents you already have, rather than keeping a second copy that could disagree with them. Job history lines carry the date of the job rather than the minute they were written, because that is how they were recorded — a full build would timestamp each one.</p>
+  </section></div>`;
+}
+
 function vSettings() {
   const b = Data.getBusiness();
   const docCount = Data.listDocuments().length;
   return `<div class="view">
   <div><h2>Settings</h2><p class="muted small" style="margin-top:4px">The details that appear on estimates, quotes, invoices and receipts.</p></div>
+
+  ${loginsCard()}
 
   <form class="card" data-form="business">
     <div class="card-head"><h3>Bank account</h3><span class="eyebrow">${Data.bankReady() ? 'Set' : 'Needed before you can invoice'}</span></div>
@@ -1428,8 +2364,29 @@ function vSettings() {
     <div class="options" style="margin-top:10px">
       <label class="option"><input type="checkbox" name="gstRegistered" ${b.gstRegistered ? 'checked' : ''}><span>FlatOut NZ is registered for GST</span></label>
     </div>
-    <div class="field" style="margin-top:12px"><label for="se-gst">GST number</label><input class="input" id="se-gst" name="gstNumber" value="${esc(b.gstNumber)}" placeholder="123-456-789"></div>
+    <div class="form-grid" style="margin-top:12px">
+      <div class="field"><label for="se-gst">GST number</label><input class="input" id="se-gst" name="gstNumber" value="${esc(b.gstNumber)}" placeholder="123-456-789"></div>
+      <div class="field"><label for="se-gstfrom">Registered from</label><input class="input" id="se-gstfrom" name="gstRegisteredFrom" type="date" value="${esc(b.gstRegisteredFrom || '')}"></div>
+    </div>
     <p class="small muted">Leave this off until you actually register. You must register once turnover passes $60,000 in any twelve months. Turning it on adds the GST lines, the number and the words "Tax Invoice"; leaving it off keeps every document saying plainly that no GST is charged.</p>
+
+    <div class="field" style="margin-top:14px"><span class="flabel">What your rate-card prices mean</span>
+      <div class="options">
+        <label class="option" for="se-inc"><input type="radio" name="pricesIncludeGst" value="inc" id="se-inc" ${b.pricesIncludeGst ? 'checked' : ''}>
+          <span><b>They already include GST</b><br><span class="small muted">Customers pay the same as today. You hand 3/23 of it to IRD out of what you keep.</span></span></label>
+        <label class="option" for="se-exc"><input type="radio" name="pricesIncludeGst" value="exc" id="se-exc" ${b.pricesIncludeGst ? '' : 'checked'}>
+          <span><b>GST is added on top</b><br><span class="small muted">Customers pay 15% more. You keep what you kept before.</span></span></label>
+      </div></div>
+    ${b.gstRegistered ? (() => {
+      const demo = 500;
+      const inc = { gst: Math.round(demo - demo / 1.15), pays: demo };
+      const exc = { gst: Math.round(demo * 0.15), pays: Math.round(demo * 1.15) };
+      const on = b.pricesIncludeGst ? inc : exc;
+      return `<div class="brief" style="margin-top:12px">
+        <b>On a $500 job, as set: the customer pays ${money(on.pays)}, ${money(on.gst)} of it goes to IRD, you keep ${money(on.pays - on.gst)}.</b>
+        <span class="small muted">The other setting would be ${money(b.pricesIncludeGst ? exc.pays : inc.pays)} to the customer and ${money(b.pricesIncludeGst ? exc.pays - exc.gst : inc.pays - inc.gst)} kept.</span>
+      </div>`; })() : ''}
+    <p class="small muted" style="margin-top:10px">This is the decision that quietly costs money. Registering on GST-inclusive prices is a 13% pay cut on every job already quoted — it is not wrong, but it should be chosen, not discovered. Jobs already quoted keep their locked price either way.</p>
 
     <div class="hrule"></div>
 
@@ -1494,7 +2451,7 @@ function vContractors() {
       <div><dt>Contact</dt><dd>${c.contact ? esc(c.contact) : '<span class="muted">Not added</span>'}</dd></div>
       <div><dt>Phone</dt><dd>${c.phone ? esc(c.phone) : '<span class="muted">Not added</span>'}</dd></div>
       <div><dt>Job order email</dt><dd>${c.email ? esc(c.email) : '<span class="muted">Not added</span>'}</dd></div>
-      <div><dt>Payment terms</dt><dd>${esc(c.terms)}${c.terms.startsWith('On completion') ? '' : ' after invoice'}</dd></div>
+      <div><dt>Payment terms</dt><dd>${c.terms ? esc(c.terms) + (c.terms.startsWith('On completion') ? '' : ' after invoice') : '<span class="muted">Not set</span>'}</dd></div>
       <div><dt>Insurance expires</dt><dd>${insPill(c)}</dd></div>
       <div><dt>Strikes</dt><dd>${c.strikes} of 3</dd></div>
     </dl><div class="chips" style="margin-bottom:14px"><button class="btn sm ghost" data-act="editC" data-c="${c.id}">Edit details</button><button class="linkbtn danger" data-act="delContractor" data-c="${c.id}">Remove</button></div>
@@ -1524,9 +2481,19 @@ function vContractors() {
    looks like a dead button and hides the actual fault. */
 function render() {
   const app = document.getElementById('app');
+  applyRole();
+  /* A hidden tab is still a URL, and the role can change under you via
+     the switcher. Anyone on a screen they may no longer open goes to
+     Home rather than seeing the figures. */
+  if ((view === 'money' && !Data.can(owner(), 'money'))
+   || (view === 'audit' && !Data.can(owner(), 'audit'))
+   || (view === 'settings' && !Data.can(owner(), 'settings'))) {
+    view = 'home';
+    if (location.hash !== '#home') { location.hash = '#home'; return; }
+  }
   try {
     app.innerHTML =
-      ({ home: vHome, jobs: vJobs, calendar: vCalendar, walk: vWalk, today: vToday, customers: vCustomers, contractors: vContractors, money: vMoney, settings: vSettings, alerts: vAlerts })[view]();
+      ({ home: vHome, jobs: vJobs, calendar: vCalendar, walk: vWalk, today: vToday, customers: vCustomers, contractors: vContractors, money: vMoney, audit: vAudit, settings: vSettings, alerts: vAlerts })[view]();
   } catch (err) {
     console.error(err);
     app.innerHTML = `<section class="card"><h2>That didn't draw</h2>
@@ -1568,8 +2535,8 @@ function docOverlay() {
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   if (ui.viewDoc) { ui.viewDoc = null; render(); return; }
-  if (ui.voidFor || ui.payFor || ui.confirmDelete || ui.confirmDelC || ui.signoffOwing) {
-    ui.voidFor = ui.payFor = ui.confirmDelete = ui.confirmDelC = ui.signoffOwing = null;
+  if (ui.voidFor || ui.payFor || ui.refundFor || ui.confirmDelete || ui.confirmDelC || ui.signoffOwing) {
+    ui.voidFor = ui.payFor = ui.refundFor = ui.confirmDelete = ui.confirmDelC = ui.signoffOwing = null;
     render();
   }
 });
@@ -1631,6 +2598,8 @@ document.addEventListener('click', e => {
     case 'voidDoc': ui.voidFor = d.d; render(); focus('void-why'); break;
     case 'cancelVoid': ui.voidFor = null; render(); break;
     case 'takePayment': ui.payFor = { id: d.id, key: d.k }; render(); focus('pay-amt'); break;
+    case 'refund': ui.refundFor = d.id; render(); focus('rf-amt'); break;
+    case 'cancelRefund': ui.refundFor = null; render(); break;
     case 'cancelPay': ui.payFor = null; render(); break;
     case 'unpay': Data.deletePayment(d.id, d.p, owner()); toast('Payment removed — void the receipt too'); render(); break;
     case 'acceptOffline': {
@@ -1677,6 +2646,26 @@ document.addEventListener('click', e => {
     /* ---- customers ---- */
     case 'openCust': ui.cust.open = ui.cust.open === d.c ? null : d.c; ui.cust.edit = null; ui.cust.mergeFrom = null; render(); break;
     case 'openCustFrom': ui.cust.open = d.c; ui.cust.edit = null; go('customers'); break;
+
+    /* Start a job from a customer record. Their name, number, email and
+       contact preference come across, and the job is linked to them
+       before it is saved rather than matched on the phone number
+       afterwards. Address, date and services stay blank on purpose:
+       those belong to the job, not the person — a property manager has
+       a different property every time. */
+    case 'jobFromCust': {
+      const c = Data.getCustomer(d.c);
+      if (!c) { toast('That customer record no longer exists.'); break; }
+      ui.paste = { kind: ui.paste.kind, dup: null, match: c, useMatch: true,
+        parsed: { name: c.name, phone: c.phone, email: c.email,
+          contact: c.contact, ref: '', address: '', moveDate: '',
+          people: 0, special: '', services: [], warnings: [], fromCust: true } };
+      /* The new-job form is what the walk-through view shows when there
+         is no draft, so clearing the draft is what opens it. */
+      draft = null;
+      go('walk');
+      toast(`New job for ${c.name}. Add the address and date.`);
+      break; }
     case 'editCust': ui.cust.edit = d.c; ui.cust.add = false; render(); focus('cu-name-' + d.c); break;
     case 'showAddCust': ui.cust.add = true; ui.cust.edit = null; render(); focus('cu-name-new'); break;
     case 'cancelCust': ui.cust.edit = null; ui.cust.add = false; render(); break;
@@ -1704,7 +2693,7 @@ document.addEventListener('click', e => {
       render(); break; }
     case 'saveDraft': {
       if (draft.jobId) {
-        Data.saveScope(draft.jobId, draft.sections, owner());
+        Data.saveScope(draft.jobId, draft.sections, owner(), draft.commission);
         const id = draft.jobId; draft = null;
         toast('Walk-through saved'); go('jobs', id);
       } else {
@@ -1714,14 +2703,208 @@ document.addEventListener('click', e => {
       break; }
     case 'clearPaste': ui.paste.parsed = null; ui.paste.dup = null; render(); break;
     case 'send': Data.sendEstimate(d.id, owner()); toast('Recorded: estimate sent'); render(); break;
-    case 'accept': Data.markEstimateAccepted(d.id); toast('Recorded: customer accepted'); render(); break;
-    case 'quote': Data.markFormalQuoteSent(d.id, owner()); toast('Recorded: formal quote sent'); render(); break;
+    case 'quote': Data.markQuoteSent(d.id, owner()); toast('Recorded: quote sent'); render(); break;
+    case 'accept': Data.markAccepted(d.id); toast('Recorded: customer accepted'); render(); break;
+    case 'invoiced': Data.markInvoiced(d.id, owner()); toast('Recorded: invoice sent'); render(); break;
+    case 'walkComm': {
+      if (!draft) break;
+      const raw = d.r === 'custom'
+        ? (document.getElementById('cc-walk') || {}).value
+        : d.r;
+      if (raw === null || raw === undefined || String(raw).trim() === '') {
+        toast('Type a percentage first.'); break;
+      }
+      const pct = Number(String(raw).replace('%', '').trim());
+      if (!isFinite(pct) || pct < 0 || pct > 100) { toast('Enter a number between 0 and 100.'); break; }
+      draft.commission = pct / 100;
+      render(); break; }
+
+    case 'signout': {
+      /* The cookie is HttpOnly, so only the server can clear it. */
+      fetch('/api/panel-logout', { method: 'POST' })
+        .catch(() => {})
+        .then(() => { location.href = '/staff/'; });
+      break; }
+
+    /* ---- logins ---------------------------------------------------- */
+    case 'issueCode': {
+      /* Hashing is deliberately slow, so say something first. */
+      toast('Generating…');
+      Data.issueCode(d.u, owner()).then(r => {
+        if (r.error) { toast(r.error); return; }
+        ui.shownCode = { id: d.u, code: r.code };
+        render();
+      });
+      break; }
+    case 'hideCode': ui.shownCode = null; render(); break;
+    case 'copyCode': copy(d.c, 'Code copied. It will not be shown again.'); break;
+
+    case 'showUser': ui.addUser = true; render(); break;
+    case 'hideUser': ui.addUser = false; render(); break;
+    case 'saveUser': {
+      const name = (document.getElementById('u-name') || {}).value;
+      const role = (document.getElementById('u-role') || {}).value;
+      const r = Data.addUser(name, role, owner());
+      if (r.error) { toast(r.error); break; }
+      ui.addUser = false;
+      toast(`${r.user.name} added as ${Data.ROLES[r.user.role].label.toLowerCase()}.`);
+      render(); break; }
+    case 'rmUser': {
+      const r = Data.removeUser(d.u, owner());
+      toast(r.error || 'Login deactivated.');
+      render(); break; }
+
+    /* ---- expenses ------------------------------------------------- */
+    case 'showExp': ui.addExp = true; render(); break;
+    case 'hideExp': ui.addExp = false; render(); break;
+    case 'saveExp': {
+      const val = id => ((document.getElementById(id) || {}).value || '');
+      const gstBox = document.getElementById('x-gst');
+      const r = Data.saveExpense({
+        category: val('x-cat'), date: val('x-date'), amount: val('x-amt'),
+        what: val('x-what'), supplier: val('x-supplier'),
+        share: val('x-share') === '' ? '' : Number(val('x-share')) / 100,
+        hasGst: gstBox ? gstBox.checked : undefined
+      }, owner());
+      if (r.error) { toast(r.error); break; }
+      const v = Data.expenseValue(r.expense);
+      toast(`Saved. ${money(v.deductible)} comes off your profit.`);
+      ui.addExp = false; render(); break; }
+    case 'delExp': {
+      Data.deleteExpense(d.x);
+      toast('Expense removed.');
+      render(); break; }
+
+    /* ---- vehicle, hours, assets, year-end ------------------------- */
+    case 'showTrip': ui.addTrip = true; render(); break;
+    case 'hideTrip': ui.addTrip = false; render(); break;
+    case 'saveTrip': {
+      const val = id => ((document.getElementById(id) || {}).value || '');
+      const r = Data.saveTrip({ date: val('v-date'), km: val('v-km'),
+        fuel: val('v-fuel'), purpose: val('v-purpose') }, owner());
+      if (r.error) { toast(r.error); break; }
+      ui.addTrip = false; toast('Trip logged.'); render(); break; }
+    case 'delTrip': Data.deleteTrip(d.x); toast('Trip removed.'); render(); break;
+
+    case 'showHours': ui.addHours = true; render(); break;
+    case 'hideHours': ui.addHours = false; render(); break;
+    case 'saveHours': {
+      const val = id => ((document.getElementById(id) || {}).value || '');
+      const r = Data.saveHours({ date: val('h-date'), hours: val('h-hours'),
+        owner: val('h-owner'), what: val('h-what') }, owner());
+      if (r.error) { toast(r.error); break; }
+      ui.addHours = false; toast('Hours logged.'); render(); break; }
+    case 'delHours': Data.deleteHours(d.x); toast('Removed.'); render(); break;
+
+    case 'showAsset': ui.addAsset = true; render(); break;
+    case 'hideAsset': ui.addAsset = false; render(); break;
+    case 'saveAsset': {
+      const val = id => ((document.getElementById(id) || {}).value || '');
+      const r = Data.saveAsset({ date: val('a-date'), cost: val('a-cost'),
+        rate: val('a-rate') === '' ? '' : Number(val('a-rate')) / 100,
+        what: val('a-what') }, owner());
+      if (r.error) { toast(r.error); break; }
+      ui.addAsset = false;
+      toast(r.asset.cost < 1000
+        ? 'Saved — but under $1,000 it is written off this year, so record it in Expenses instead.'
+        : 'Asset saved.');
+      render(); break; }
+    case 'delAsset': Data.deleteAsset(d.x); toast('Asset removed.'); render(); break;
+
+    case 'exportYear': {
+      const y = taxYears(3)[ui.plYear || 0];
+      downloadCsv('flatout-year-end-' + y.to.slice(0, 4), Data.yearEndCsv(y.from, y.to));
+      toast('Year-end pack downloaded.');
+      break; }
+
+    /* ---- the site visit ------------------------------------------
+       These write to the job immediately rather than waiting for Save.
+       A wasted trip has to be recorded even when there is no scope to
+       save, and "I'm here" is worthless if it only lands later. */
+    case 'arrived': {
+      if (!draft || !draft.jobId) break;
+      const r = Data.arriveAtVisit(draft.jobId, owner());
+      toast(r.error || (r.already ? 'Already clocked in for this one.' : 'On site. Clock running.'));
+      render(); break; }
+
+    /* visitSave and moveDate are on inputs, so they are handled by the
+       change listener further down, not here. */
+
+    /* The two unhappy outcomes open an inline field rather than a
+       browser prompt() — prompt is blocked in some embedded contexts
+       and the button would simply do nothing. */
+    case 'visitNoAccess': ui.visitAsk = ui.visitAsk === 'noaccess' ? null : 'noaccess'; render(); break;
+    case 'visitRevisit':  ui.visitAsk = ui.visitAsk === 'revisit'  ? null : 'revisit';  render(); break;
+    case 'visitCancelAsk': ui.visitAsk = null; render(); break;
+
+    case 'visitConfirm': {
+      if (!draft || !draft.jobId) break;
+      const kind = ui.visitAsk;
+      const text = ((document.getElementById('v-why') || {}).value || '');
+      const r = Data.setVisitOutcome(draft.jobId, kind, text, owner());
+      if (r.error) { toast(r.error); break; }
+      ui.visitAsk = null;
+      if (kind === 'noaccess') {
+        toast("Recorded. It's on your Home screen until you get back out there.");
+        draft = null; go('jobs', r.job.id);
+      } else {
+        toast('Saved. The job keeps everything you priced so far.');
+        render();
+      }
+      break; }
+
+    case 'visitClear': {
+      if (!draft || !draft.jobId) break;
+      const r = Data.setVisitOutcome(draft.jobId, 'done', '', owner());
+      toast(r.error || 'Cleared. Carry on.');
+      render(); break; }
+
+    /* One-off lines. In the walk-through they go onto the draft, so an
+       unsaved job keeps them; on a saved job they go through Data and
+       are logged. Both paths share the same validation. */
+    case 'addOO': {
+      if (!draft) break;
+      const val = id => (document.getElementById(id) || {}).value;
+      const r = Data.addOneOffTo(draft.sections, {
+        name: val('oo-name'), amount: val('oo-amt'),
+        qty: val('oo-qty'), unit: val('oo-unit'), sectionKey: val('oo-where'),
+        comm: val('oo-comm')
+      });
+      if (r.error) { toast(r.error); break; }
+      /* Say what the customer will see, not what was typed — with a
+         commission on the line those are two different numbers. */
+      toast(`Added ${r.label} — ${money(r.shown)}${r.comm !== null
+        ? ` (${money(r.price * r.qty)} + ${Math.round(r.comm * 1000) / 10}%)` : ''}`);
+      render(); break; }
+    case 'rmOO': {
+      if (draft) {
+        const r = Data.removeOneOffFrom(draft.sections, d.i);
+        toast(r.error || `Removed ${r.name}`);
+      } else if (d.id) {
+        const r = Data.removeOneOff(d.id, d.i, owner());
+        toast(r.error || 'One-off removed.');
+      }
+      render(); break; }
+
+    case 'setComm': {
+      const raw = d.r === 'custom'
+        ? (document.getElementById('cc-' + d.id) || {}).value
+        : d.r;
+      if (raw === null || raw === undefined || String(raw).trim() === '') {
+        toast('Type a percentage first.'); break;
+      }
+      const pct = Number(String(raw).replace('%', '').trim());
+      if (!isFinite(pct) || pct < 0 || pct > 100) { toast('Enter a number between 0 and 100.'); break; }
+      const res = Data.setCommission(d.id, pct / 100, owner());
+      toast(res.error || `Commission set to ${Math.round(pct * 10) / 10}%`);
+      render(); break; }
     case 'pay': Data.markPaymentReceived(d.id); toast('Recorded: payment received'); render(); break;
     case 'issue': { const pos = Data.createPurchaseOrders(d.id);
       toast(`${pos.length} job order${pos.length === 1 ? '' : 's'} created. Send each one to the contractor.`);
       render(); break; }
     case 'scope': { const jb = Data.getJob(d.id);
-      draft = { jobId: jb.id, cust: jb.cust, sections: JSON.parse(JSON.stringify(jb.sections)) };
+      draft = { jobId: jb.id, cust: jb.cust, commission: Data.jobCommission(jb),
+        sections: JSON.parse(JSON.stringify(jb.sections)) };
       if (!Object.keys(draft.sections).length) draft.sections.cleaning = Data.newSection('cleaning');
       go('walk'); break; }
     case 'poMsg': { const jb = Data.getJob(d.id), po = Data.findPo(jb, d.po);
@@ -1866,7 +3049,8 @@ document.addEventListener('submit', e => {
     const job = Data.createJob(cust, owner(), services, useId || undefined);
     ui.paste = { kind: ui.paste.kind, parsed: null, dup: null, match: null, useMatch: true };
     if (form.get('then') === 'walk') {
-      draft = { jobId: job.id, cust: job.cust, sections: JSON.parse(JSON.stringify(job.sections)) };
+      draft = { jobId: job.id, cust: job.cust, commission: Data.jobCommission(job),
+        sections: JSON.parse(JSON.stringify(job.sections)) };
       if (!Object.keys(draft.sections).length) draft.sections.cleaning = Data.newSection('cleaning');
       toast('Saved as ' + job.id);
       go('walk');
@@ -1942,6 +3126,18 @@ document.addEventListener('submit', e => {
     render();
     return;
   }
+  if (kind === 'refund') {
+    const res = Data.refundPayment(f.dataset.id, {
+      amount: form.get('amount'), on: form.get('on'),
+      method: form.get('method'), reason: form.get('reason'),
+      note: form.get('note')
+    }, owner());
+    if (res.error && !res.payment) { toast(res.error); return; }
+    ui.refundFor = null;
+    toast(res.credit ? `Refunded · credit note ${res.credit.no} issued` : 'Refunded');
+    render();
+    return;
+  }
   if (kind === 'restore') {
     if ((form.get('confirm') || '').trim().toLowerCase() !== 'restore') {
       toast('Type restore to confirm.'); return;
@@ -1964,6 +3160,8 @@ document.addEventListener('submit', e => {
       bank: { accountName: form.get('accountName').trim(), accountNumber: form.get('accountNumber').trim(), bank: form.get('bank').trim() },
       gstRegistered: form.get('gstRegistered') === 'on',
       gstNumber: form.get('gstNumber').trim(),
+      gstRegisteredFrom: form.get('gstRegisteredFrom') || '',
+      pricesIncludeGst: form.get('pricesIncludeGst') !== 'exc',
       quoteValidDays: Number(form.get('quoteValidDays')) || 14,
       termsVersion: form.get('termsVersion').trim() || '1.0'
     }, owner());
@@ -2059,9 +3257,61 @@ document.addEventListener('change', e => {
     toast(`${j.id} now owned by ${t.value.split(' ')[0]}`);
     if (view !== 'jobs' || openJob) render(); else refreshJobs();
   }
+  /* Visit fields save on blur, not per keystroke, and deliberately do
+     not re-render: redrawing while you are tabbing between them would
+     take the cursor with it. */
+  if (d.act === 'visitSave' && draft && draft.jobId) {
+    const val = id => ((document.getElementById(id) || {}).value || '');
+    const was = Data.jobVisit(Data.getJob(draft.jobId));
+    const r = Data.saveVisitDetails(draft.jobId, {
+      present: was.requesterOnSite ? undefined : val('v-present'),
+      /* With the tick on, only the role is typed — name and phone come
+         off the customer record, so sending the hidden (empty) fields
+         would blank what is already there. */
+      authoriser: was.requesterOnSite
+        ? { name: was.authoriser.name, role: val('v-arole'), phone: was.authoriser.phone }
+        : { name: val('v-aname'), role: val('v-arole'), phone: val('v-aphone') },
+      keys: { holder: val('v-kholder'), code: val('v-kcode'), notes: val('v-knotes') }
+    }, owner());
+    if (r.remembered) toast(`Saved to ${r.remembered}'s record for next time.`);
+  }
+
+  /* The tick changes which fields are on screen, so this one does
+     re-render — unlike the text fields, which would lose the cursor. */
+  if (d.act === 'visitRequester' && draft && draft.jobId) {
+    Data.saveVisitDetails(draft.jobId, { requesterOnSite: t.checked }, owner());
+    render();
+  }
+  if (d.act === 'moveDate' && draft && draft.jobId) {
+    const r = Data.setMoveDate(draft.jobId, t.value, owner());
+    if (r.error) toast(r.error);
+    else if (!r.unchanged) {
+      draft.cust = Data.getJob(draft.jobId).cust;
+      toast(r.warnContractors && r.warnContractors.length
+        ? `Date changed. ${r.warnContractors.map(c => c.name).join(', ')} ${r.warnContractors.length === 1 ? 'has' : 'have'} the old one — tell them.`
+        : 'Date changed.');
+      render();
+    }
+  }
+  if (d.act === 'gstPeriod') { ui.gstPeriod = Number(t.value) || 0; render(); }
+  if (d.act === 'setRole') {
+    const r = Data.setUserRole(d.u, t.value, owner());
+    toast(r.error || `${r.user.name} is now ${Data.ROLES[r.user.role].label.toLowerCase()}.`);
+    render();
+  }
+  if (d.act === 'plYear') { ui.plYear = Number(t.value) || 0; render(); }
+  /* Changing the category changes the default business share, the
+     GST tick and the note under the form, so this one redraws. The
+     date typed so far is kept. */
+  if (d.act === 'expCat') {
+    ui.expCat = t.value;
+    ui.expDate = (document.getElementById('x-date') || {}).value || null;
+    render();
+  }
   if (d.act === 'nset') Data.setAlertType(owner(), t.value, t.checked);
   if (d.act === 'nmine') Data.setAlertScope(owner(), t.checked);
   if (d.jf && d.jf !== 'q') { ui.jf[d.jf] = t.value; render(); }
+  if (d.af) { ui.audit[d.af] = t.value; render(); }
   if (d.act === 'pickTpl') { ui.tpl[d.id] = t.value; ui.editTpl = null; render(); }
   if (d.act === 'signTick') {
     const l = ui.signoff[d.id], v = Number(t.value);
@@ -2121,7 +3371,9 @@ function readNewJobForm() {
   return out;
 }
 
-document.getElementById('owner').addEventListener('change', render);
+/* There is no longer anything to switch to: the signed-in person comes
+   from the session the edge function injected, so this listener went
+   with the dropdown it was attached to. */
 
 /* ---------- boot ---------------------------------------------------
    Nothing renders until the data is actually loaded. If the load fails

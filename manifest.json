@@ -1,0 +1,44 @@
+{
+  "name": "FlatOut Employees Panel",
+  "short_name": "FlatOut",
+  "description": "Run jobs, contractors and money for FlatOut NZ.",
+  "id": "/panel/",
+  "start_url": "/panel/",
+  "scope": "/panel/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#14283A",
+  "background_color": "#F7F8F6",
+  "lang": "en-NZ",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/images/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/images/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/images/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/images/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "New job",
+      "short_name": "New job",
+      "description": "Start a job from a quote request",
+      "url": "/panel/#walk",
+      "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Today",
+      "short_name": "Today",
+      "description": "What is happening today",
+      "url": "/panel/#today",
+      "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Jobs",
+      "short_name": "Jobs",
+      "description": "Every job",
+      "url": "/panel/#jobs",
+      "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

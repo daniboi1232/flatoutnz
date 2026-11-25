@@ -28,7 +28,52 @@ const Data = (() => {
   /* ---------- fixed vocabulary ------------------------------------- */
   const SERVICES = { cleaning: 'Cleaning', rubbish: 'Rubbish removal', moving: 'Moving', storage: 'Storage' };
   const SERVICE_KEYS = Object.keys(SERVICES);
+  /* Where a standalone one-off lands — a line with no contractor behind
+     it, so no job order goes out for it. Deliberately NOT in SERVICES:
+     that would make it a fifth service you could tick on a job and that
+     contractors could cover, which it is not. It only ever exists on a
+     job because you put a one-off line in it. */
+  const EXTRAS_KEY = 'extras';
+  const sectionLabel = k => SERVICES[k] || (k === EXTRAS_KEY ? 'Additional items' : k);
+  /* ---------- who can do what ------------------------------------------
+     OWNERS stays the two partners, because it is what profit splits
+     across and what a job's "owner" means. Staff are users, not owners:
+     they run jobs but have no share and no claim on the money screens.
+
+     The split is deliberately coarse. Fine-grained permissions sound
+     better and end up either unmaintained or worked around — two roles
+     that everyone understands beat twelve nobody sets correctly. */
   const OWNERS = ['Daniel Bell', 'Rocky Lin'];
+
+  const ROLES = {
+    partner: {
+      label: 'Partner',
+      note: 'Everything, including money and settings.',
+      can: { money: true, settings: true, costs: true, commission: true,
+             contractors: true, rates: true, remove: true, audit: true }
+    },
+    staff: {
+      label: 'Staff',
+      note: 'Runs jobs and walk-throughs. No money screens, no settings, and contractor rates stay hidden.',
+      /* Costs are off as well as the Money tab. A staff member who can
+         see what a contractor charges can work out the margin, and that
+         is the number you least want discussed on a job site. They
+         still see the customer's price, because they have to quote. */
+      can: { money: false, settings: false, costs: false, commission: false,
+             contractors: true, rates: false, remove: false, audit: false }
+    }
+  };
+
+  let users = [
+    { id: 'u-dan',   name: 'Daniel Bell', role: 'partner', active: true },
+    { id: 'u-rocky', name: 'Rocky Lin',   role: 'partner', active: true }
+  ];
+
+  const findUser = name => users.find(u => u.name === name) || null;
+  /* An unknown name is treated as a partner, so an older record whose
+     owner is not in the list never silently loses access. */
+  const roleOf = name => (findUser(name) || {}).role || 'partner';
+  const can = (name, what) => !!ROLES[roleOf(name)].can[what];
   const TITLES = { 'Daniel Bell': 'Executive Officer' };
   const MARGIN = 0.15;
   const ACCESS_ITEMS = ['Off-street parking', 'Stairs to unit', 'Keys with tenant', 'Power on',
@@ -37,7 +82,13 @@ const Data = (() => {
      quote request before anyone has been to the property, and "Paid" is
      its own stage rather than being skipped: payment and issuing the
      job orders are two separate things you do. */
-  const STAGES = ['New', 'Scoped', 'Estimate sent', 'Accepted', 'Quote sent',
+  /* The estimate is optional — most customers go straight to a quote —
+     so it no longer has a stage of its own; it is a document you can
+     issue at any point. Invoicing does have a stage, because "have we
+     billed them yet" is a question worth being able to answer at a
+     glance. Paid, Job orders out and Done keep their numbers so older
+     jobs still land in the right place. */
+  const STAGES = ['New', 'Scoped', 'Quoted', 'Accepted', 'Invoiced',
     'Paid', 'Job orders out', 'Done'];
   const SCHEMA = 2;  // bump when the shape of a stored job changes
   /* Standby: the flat is doing it themselves but wants us on file in case
@@ -47,6 +98,165 @@ const Data = (() => {
    no server ticking away, and a record quietly deleting itself is not
    something you could notice had gone wrong. */
   const JOB_STATUS = { active: 'Active', standby: 'On standby', lost: 'Lost', cancelled: 'Cancelled' };
+
+  /* Why money went back. `reduces` says whether the supply itself got
+     smaller — which changes what they owe and, if you are registered,
+     your output GST — or whether you are just returning money that was
+     never yours to begin with. `cancels` marks the ones that end the
+     job outright when refunded in full. */
+  const REFUND_REASONS = {
+    cancelled_customer: {
+      label: 'Customer cancelled', reduces: true, cancels: true,
+      blurb: 'You cancelled the job, so we have refunded what you paid.'
+    },
+    cancelled_us: {
+      label: "We couldn't do it", reduces: true, cancels: true,
+      blurb: 'We were unable to carry out the job, so we have refunded you in full.'
+    },
+    part_not_done: {
+      label: "Part of the job didn't happen", reduces: true, cancels: false,
+      blurb: 'Part of the work was not carried out, so we have credited you for it.'
+    },
+    goodwill: {
+      label: 'Goodwill after a complaint', reduces: true, cancels: false,
+      blurb: 'We have credited part of the price following your feedback.'
+    },
+    overpaid: {
+      label: 'They paid too much', reduces: false, cancels: false,
+      blurb: 'You paid more than the amount invoiced, so we have returned the difference.'
+    },
+    duplicate: {
+      label: 'Paid twice', reduces: false, cancels: false,
+      blurb: 'We received your payment twice, so we have returned the duplicate.'
+    }
+  };
+
+  /* Refunds are stored as negative payments, so they net correctly
+     everywhere money is summed without anything else having to know
+     they exist. These two pull them back apart where the distinction
+     matters. */
+  const refundedTotal = j => (j.payments || [])
+    .reduce((t, p) => t + (Number(p.amount) < 0 ? -Number(p.amount) : 0), 0);
+
+  /* The part of the refunds that shrank the job rather than returning
+     an overpayment — what comes off what they owed, and off supplies
+     for GST. */
+  const jobCredits = j => (j.payments || [])
+    .reduce((t, p) => t + (p.refund && p.reduces ? Math.abs(Number(p.amount) || 0) : 0), 0);
+
+  /* Credits dated inside a period, for the GST position and the P&L.
+     Dated by when the refund happened, because a credit note belongs
+     to the period it is issued in, not the period of the original job. */
+  function creditsIn(fromISO, toISO) {
+    return jobs.reduce((t, j) => t + (j.payments || [])
+      .reduce((s, p) => s + (p.refund && p.reduces && p.on >= fromISO && p.on <= toISO
+        ? Math.abs(Number(p.amount) || 0) : 0), 0), 0);
+  }
+
+  /* ---------- expense categories ------------------------------------
+     Everything FlatOut spends that is not a contractor. Without these
+     the panel's "you kept" is just revenue minus contractor cost, which
+     overstates what you made by every dollar you actually spend.
+
+     `rate` is how much of the business portion IRD lets you deduct —
+     1 for almost everything, 0.5 for entertainment. `share` is the
+     default business-use fraction, which you override per expense for
+     anything part-personal. `gst` is whether the supplier normally
+     charges GST you could claim back: an overseas subscription or a
+     bank fee often does not.
+
+     Treatments follow the notes already agreed with the accountant.
+     They are defaults for data entry, not tax advice. */
+  const EXPENSE_CATEGORIES = {
+    advertising:  { label: 'Advertising and marketing', rate: 1, share: 1, gst: true },
+    contractors:  { label: 'Contractor payments', rate: 1, share: 1, gst: true, auto: true,
+                    note: 'Comes from job orders — not entered by hand' },
+    insurance:    { label: 'Insurance', rate: 1, share: 1, gst: true },
+    software:     { label: 'Software and subscriptions', rate: 1, share: 1, gst: false,
+                    note: 'Many are billed overseas with no NZ GST — check the invoice' },
+    web:          { label: 'Domain, hosting and email', rate: 1, share: 1, gst: false },
+    printing:     { label: 'Printing and stationery', rate: 1, share: 1, gst: true },
+    workwear:     { label: 'Branded workwear', rate: 1, share: 1, gst: true,
+                    note: 'Branded only. Ordinary clothes are not deductible' },
+    professional: { label: 'Accountant and legal', rate: 1, share: 1, gst: true },
+    subs:         { label: 'Professional subscriptions', rate: 1, share: 1, gst: true },
+    training:     { label: 'Training', rate: 1, share: 1, gst: true },
+    repairs:      { label: 'Repairs and maintenance', rate: 1, share: 1, gst: true },
+    equipment:    { label: 'Equipment under $1,000', rate: 1, share: 1, gst: true,
+                    note: 'Written off this year. Over $1,000 is depreciated instead' },
+    bank:         { label: 'Bank and card fees', rate: 1, share: 1, gst: false,
+                    note: 'Bank fees are GST-exempt' },
+    interest:     { label: 'Interest', rate: 1, share: 1, gst: false },
+    phone:        { label: 'Phone and internet', rate: 1, share: 0.7, gst: true,
+                    note: 'Business share only — set what is honest and keep a basis for it' },
+    home:         { label: 'Use of home as office', rate: 1, share: 1, gst: false,
+                    note: 'Square-metre rate, or apportion by time and space' },
+    vehicle:      { label: 'Vehicle running costs', rate: 1, share: 0.3, gst: true,
+                    note: 'Actual costs × business share. Use the vehicle log for km instead' },
+    travel:       { label: 'Travel and accommodation', rate: 1, share: 1, gst: true },
+    entertainment:{ label: 'Entertainment and client meals', rate: 0.5, share: 1, gst: true,
+                    note: 'Only 50% is deductible' },
+    other:        { label: 'Other', rate: 1, share: 1, gst: true }
+  };
+  /* Entered by hand — contractor spend is derived from jobs. */
+  const EXPENSE_KEYS = Object.keys(EXPENSE_CATEGORIES).filter(k => !EXPENSE_CATEGORIES[k].auto);
+
+  /* How a site visit actually went, as opposed to cust.visit, which is
+     only when it was booked for. A visit that did not go to plan is the
+     commonest way a job stalls: you drive out, you cannot get in, and
+     there is nowhere to put that, so the job sits at New looking like
+     nobody has been. These three outcomes give it somewhere to go, and
+     the two unhappy ones raise it on the Home screen. */
+  const VISIT_OUTCOMES = {
+    done: 'Visit done',
+    noaccess: "Couldn't get in",
+    revisit: 'Needs another visit'
+  };
+  const KEY_HOLDERS = ['Tenant', 'Property manager', 'Landlord', 'Lockbox on site',
+    'Neighbour', 'With us', 'Not sorted yet'];
+
+  function newVisit() {
+    return { arrivedAt: null, present: '', requesterOnSite: false,
+      authoriser: { name: '', role: '', phone: '' },
+      keys: { holder: '', code: '', notes: '' },
+      outcome: '', reason: '', outstanding: [] };
+  }
+  /* Older jobs have no visit at all, and a half-written one can come
+     back from storage, so everything that reads it goes through here. */
+  function jobVisit(j) {
+    const v = (j && j.visit) || {};
+    return { arrivedAt: v.arrivedAt || null,
+      present: v.present || '',
+      requesterOnSite: !!v.requesterOnSite,
+      authoriser: Object.assign({ name: '', role: '', phone: '' }, v.authoriser || {}),
+      keys: Object.assign({ holder: '', code: '', notes: '' }, v.keys || {}),
+      outcome: VISIT_OUTCOMES[v.outcome] ? v.outcome : '',
+      reason: v.reason || '',
+      outstanding: Array.isArray(v.outstanding) ? v.outstanding : [] };
+  }
+
+  /* Who was there and who is authorising, with the "it was the person
+     who asked for the job" shortcut already worked out. Everything that
+     displays these goes through here, so nothing downstream has to know
+     whether the names were typed or came off the customer record.
+
+     Reading live from the record rather than copying the name in means
+     a manager who changes their number stays correct on visits already
+     recorded — they are the same person either way. */
+  function visitPeople(j) {
+    const v = jobVisit(j);
+    if (!v.requesterOnSite) return { present: v.present, authoriser: v.authoriser, from: null };
+    const c = j && j.custId ? getCustomer(j.custId) : null;
+    const name = (c && c.name) || (j && j.cust && j.cust.name) || '';
+    const phone = (c && c.phone) || (j && j.cust && j.cust.phone) || '';
+    return {
+      present: name,
+      /* A role typed during this visit wins; otherwise whatever the
+         record already knows them as. */
+      authoriser: { name, phone, role: v.authoriser.role || (c && c.role) || '' },
+      from: c || null
+    };
+  }
   const SIGNOFF_CHECKS = ['Contractor photos reviewed', 'Customer confirmed they are happy',
     'No damage or issues reported', 'Keys and access returned'];
   const PAYMENT_TERMS = ['14 days', '1 month', 'On completion (on site)'];
@@ -108,6 +318,7 @@ const Data = (() => {
 
   /* ---------- in-memory model, filled by init() -------------------- */
   let contractors = [], jobs = [], templates = [], alerts = [], customers = [], documents = [];
+  let expenses = [], trips = [], assets = [], hoursLog = [];
   let acceptances = [], portalGates = [];
   let alertSettings = {};
   let ready = false;
@@ -131,7 +342,21 @@ const Data = (() => {
     bank: { accountName: '', accountNumber: '', bank: '' },
     gstRegistered: false,
     gstNumber: '',
-    gstRate: 0.15
+    gstRate: 0.15,
+    /* The decision that costs money if it is made by accident.
+
+       true  — the prices on the rate cards already include GST. Ticking
+               "registered" changes nothing the customer sees and hands
+               3/23 of every job to Inland Revenue out of what you keep.
+       false — the rate cards are GST-exclusive, and 15% is added on top.
+               The customer pays more; you keep what you kept before.
+
+       Defaults to true because that is what unregistered prices are:
+       a single all-in figure with no tax component. Registering without
+       deciding this is the quiet 13% pay cut. */
+    pricesIncludeGst: true,
+    gstRegisteredFrom: '',
+    gstFilingBasis: '2-monthly'
   };
   let business = Object.assign({}, BUSINESS_DEFAULTS);
 
@@ -278,13 +503,97 @@ const Data = (() => {
   function lineItem(section, iid) {
     return (section.frozen && section.frozen[iid]) || getRateItem(section.contractorId, iid);
   }
+  /* A one-off line is not on anyone's rate card — it carries its own
+     name, unit and price, written straight into the section's frozen
+     map. lineItem then finds it by the normal frozen path, so costing,
+     the documents and the price lock all work with no special cases.
+
+     `oneoff: true` is what marks it, and it is the whole reason the
+     re-freeze below has to be careful: rebuilding `frozen` from the
+     rate card would wipe every one-off on the job, because there is
+     nothing on a rate card to rebuild them from. */
+  const isOneOff = i => !!(i && i.oneoff);
+  const oneOffLines = s => Object.keys(s.lines || {})
+    .filter(iid => isOneOff(s.frozen && s.frozen[iid]));
+
+  /* A one-off can carry its own commission rate, set per line when you
+     add it, independent of the job's rate.
+
+       comm absent or null → the price you typed is what they pay.
+       comm a number       → the price you typed is the COST, and that
+                             rate goes on top, exactly like a rate-card
+                             line but at this line's own percentage.
+
+     Absent is the default because that is what a one-off usually is: a
+     skip hire or a locksmith you are passing straight through. The rate
+     is frozen onto the line when it is created, so changing the job's
+     commission later never moves it. */
+  const oneOffComm = i => {
+    const r = i && i.comm;
+    return (typeof r === 'number' && isFinite(r) && r >= 0 && r <= 1) ? r : null;
+  };
+  const isFixedLine = i => isOneOff(i) && oneOffComm(i) === null;
+  /* Every one-off on the job, split by whether it carries a rate. */
+  function oneOffTotals(job) {
+    let fixed = 0, markedCost = 0, markedPrice = 0;
+    if (!job || !job.sections) return { fixed, markedCost, markedPrice };
+    Object.values(job.sections).forEach(s => {
+      oneOffLines(s).forEach(iid => {
+        const i = s.frozen[iid], cost = s.lines[iid] * i.rate, c = oneOffComm(i);
+        if (c === null) fixed += cost;
+        else { markedCost += cost; markedPrice += Math.round(cost * (1 + c)); }
+      });
+    });
+    return { fixed, markedCost, markedPrice };
+  }
+
+  /* One place that decides what a valid one-off is, so a draft in the
+     walk-through and a line added to a live job refuse the same bad
+     input in the same words. */
+  function validateOneOff({ name, amount, qty, unit, sectionKey, comm } = {}) {
+    const label = String(name || '').trim();
+    if (!label) return { error: 'Give the one-off a name — it goes on the customer’s quote.' };
+    if (label.length > 80) return { error: 'That name is too long for a quote line. Keep it under 80 characters.' };
+
+    const price = Number(amount);
+    if (!isFinite(price) || price <= 0) return { error: 'Enter a price above $0.' };
+    if (price > 100000) return { error: 'That price looks wrong. Enter it in dollars, not cents.' };
+
+    const n = qty === undefined || qty === '' || qty === null ? 1 : Number(qty);
+    if (!isFinite(n) || n <= 0 || n !== Math.round(n) || n > 999) {
+      return { error: 'Quantity has to be a whole number between 1 and 999.' };
+    }
+
+    /* Empty, null or undefined all mean "no commission on this line",
+       which is the default. Anything else has to be a real rate. */
+    let rate = null;
+    if (comm !== undefined && comm !== null && String(comm).trim() !== '') {
+      rate = Number(comm);
+      if (!isFinite(rate) || rate < 0 || rate > 1) {
+        return { error: 'Pick a commission for this line, or leave it on no commission.' };
+      }
+    }
+
+    return { label, price, n, comm: rate,
+      unit: String(unit || '').trim().slice(0, 24) || 'each',
+      key: sectionKey && SERVICE_KEYS.indexOf(sectionKey) !== -1 ? sectionKey : EXTRAS_KEY };
+  }
+
   /* Copy the rates this section currently uses onto the section itself.
      `only` fills gaps without touching rates already frozen, which is
-     what happens when an item is added to a job that is already out. */
+     what happens when an item is added to a job that is already out.
+
+     One-off lines are carried over either way. They are not a cached
+     copy of a live rate, so there is no newer version of them to pick
+     up, and dropping them would silently delete a line the customer
+     has already been quoted for. */
   function freezeSection(s, onlyGaps) {
     const frozen = onlyGaps ? Object.assign({}, s.frozen) : {};
+    if (!onlyGaps) {
+      oneOffLines(s).forEach(iid => { frozen[iid] = s.frozen[iid]; });
+    }
     Object.keys(s.lines).forEach(iid => {
-      if (onlyGaps && frozen[iid]) return;
+      if (frozen[iid] && (onlyGaps || isOneOff(frozen[iid]))) return;
       const i = getRateItem(s.contractorId, iid);
       if (i) frozen[iid] = { id: i.id, name: i.name, unit: i.unit, type: i.type, rate: i.rate, section: i.section };
     });
@@ -304,10 +613,76 @@ const Data = (() => {
   function jobCost(job) {
     return Object.values(job.sections).reduce((t, s) => t + sectionCost(s), 0);
   }
-  const customerPrice = cost => Math.round(cost * (1 + MARGIN));
+  /* Commission is per job, not global. Student flats take the standard
+     rate; some jobs are referrals at nothing, and a landlord or a
+     retirement village is a different conversation. A job that has
+     never been set keeps the standard rate, so every job that already
+     exists prices exactly as it did before.
+
+     It is frozen with the rates: once the quote is out, changing the
+     commission must not quietly rewrite a number the customer has
+     already been given. Re-pricing is the way to move it. */
+  const COMMISSION_CHOICES = [0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30];
+  function jobCommission(job) {
+    const r = job && job.commission;
+    return (typeof r === 'number' && isFinite(r) && r >= 0 && r <= 1) ? r : MARGIN;
+  }
+
+  /* What the no-commission one-offs add up to: the lines where the
+     figure you typed is the figure they pay. */
+  const jobFixedTotal = job => oneOffTotals(job).fixed;
+
+  /* `cost` is the job's whole cost, one-off lines included, which is
+     what jobCost returns. Three buckets come out of it:
+
+       - fixed one-offs      pass through untouched
+       - one-offs with a rate get their own rate
+       - everything else      gets the job's rate
+
+     Taking the full cost rather than the commissionable part keeps
+     every existing caller correct without having to know that one-offs
+     exist at all. */
+  const customerPrice = (cost, job) => {
+    const { fixed, markedCost, markedPrice } = oneOffTotals(job);
+    /* Guard against a caller passing something other than jobCost: the
+       base can never go negative. */
+    const base = Math.max(0, cost - fixed - markedCost);
+    const net = Math.round(base * (1 + jobCommission(job))) + fixed + markedPrice;
+    /* Everything downstream — the documents, the payment schedule, the
+       Money screen — treats this as the figure the customer actually
+       pays. So GST is added here, once, and nothing else has to know
+       about it. On GST-inclusive prices the figure is already gross and
+       is returned untouched. */
+    return business.gstRegistered && !business.pricesIncludeGst
+      ? Math.round(net * (1 + business.gstRate))
+      : net;
+  };
+
+  /* The GST sitting inside a gross figure: 3/23 at 15%. Returns 0 when
+     you are not registered, so callers need no special case.
+
+     Deliberately not rounded. The documents show this to the cent, and
+     a period total that rounds every job first drifts away from the
+     sum of the invoices — which is the one number a return must match.
+     Formatting rounds at the point of display instead. */
+  const gstWithin = gross => business.gstRegistered
+    ? gross - (gross / (1 + business.gstRate)) : 0;
+  const exGst = gross => gross - gstWithin(gross);
+
+  /* Contractor cost in a period that carries reclaimable GST — only the
+     sections run by contractors who are themselves registered. Declared
+     here because both the GST position and the P&L need it. */
+  function claimableCostIn(fromISO, toISO) {
+    return jobs.filter(j => j.status === 'active'
+        && j.cust.moveDate >= fromISO && j.cust.moveDate <= toISO)
+      .reduce((t, j) => t + Object.values(j.sections).reduce((s, sec) => {
+        const c = sec.contractorId ? getContractor(sec.contractorId) : null;
+        return s + (c && c.gstRegistered ? sectionCost(sec) : 0);
+      }, 0), 0);
+  }
 
   function paymentTerms(job) {
-    const total = customerPrice(jobCost(job));
+    const total = customerPrice(jobCost(job), job);
 
     /* A job can be priced before it has a date. The shape stays the
        same so nothing downstream has to special-case it; the dates are
@@ -400,6 +775,11 @@ const Data = (() => {
       phone: String(f.phone || '').trim(), email: String(f.email || '').trim(),
       contact: f.contact === 'Email' ? 'Email' : 'Text',
       notes: String(f.notes || '').trim(),
+      /* What they are to the property — "Property manager", "Tenant",
+         "Landlord". Kept on the person rather than the job, because a
+         property manager is the same thing on every job they send you,
+         and typing it out each time is the thing this spares you. */
+      role: String(f.role || '').trim(),
       created: isoDate(new Date())
     };
   }
@@ -565,7 +945,7 @@ const Data = (() => {
   function paymentPlan(jobOrId) {
     const job = typeof jobOrId === 'string' ? getJob(jobOrId) : jobOrId;
     if (!job) return { total: 0, dated: false, schedule: [], sentence: '', warning: '' };
-    const total = customerPrice(jobCost(job));
+    const total = customerPrice(jobCost(job), job);
 
     /* No date yet, so there are no due dates — only the rule. Said as
        the rule rather than with invented dates, which would be worse
@@ -653,22 +1033,31 @@ const Data = (() => {
         const i = lineItem(sec, iid);
         if (!i || !q) return;
         rows.push({ key: k, name: i.name, qty: q, hourly: i.type === 'hourly',
+          fixed: isFixedLine(i), own: isOneOff(i) ? oneOffComm(i) : null,
           cost: q * i.rate, amount: 0 });
       });
     });
 
-    const total = customerPrice(rows.reduce((t, r) => t + r.cost, 0));
-    rows.forEach(r => { r.amount = Math.round(r.cost * (1 + MARGIN)); });
+    const total = customerPrice(rows.reduce((t, r) => t + r.cost, 0), job);
+    rows.forEach(r => {
+      r.amount = r.fixed ? r.cost
+        : Math.round(r.cost * (1 + (r.own !== null ? r.own : jobCommission(job))));
+    });
+    /* The leftover cent or two goes onto the largest line, but never
+       onto a one-off — a fixed one is the exact price you typed and may
+       have been agreed out loud, and one with its own rate has already
+       been rounded at that rate. */
+    const movable = rows.filter(r => !r.fixed && r.own === null);
     const drift = total - rows.reduce((t, r) => t + r.amount, 0);
-    if (drift && rows.length) {
-      const biggest = rows.reduce((a, b) => (b.amount > a.amount ? b : a), rows[0]);
+    if (drift && movable.length) {
+      const biggest = movable.reduce((a, b) => (b.amount > a.amount ? b : a), movable[0]);
       biggest.amount += drift;
     }
 
     return Object.entries(job.sections).map(([k, sec]) => {
       const items = rows.filter(r => r.key === k);
       return {
-        name: SERVICES[k],
+        name: sectionLabel(k),
         when: job.cust.moveDate ? fmtDate(job.cust.moveDate) : '',
         items,
         // sec.notes is written for the contractor ("keys with the
@@ -733,11 +1122,13 @@ const Data = (() => {
        ever forwards, and never past a stage that means something else
        has happened (accepted, paid). */
     const was = job.stage;
-    if (type === 'estimate' && job.stage < 2) job.stage = 2;
-    // A quote only moves the stage on from Accepted. Issuing one
-    // earlier must not jump the job past Accepted, which has not
-    // happened yet — the stages are in the order they really occur.
-    if (type === 'quote' && job.stage === 3) job.stage = 4;
+    // An estimate moves nothing. It is a courtesy document, issued
+    // whenever the customer asks for the itemised version, and most
+    // never do.
+    if (type === 'quote' && job.stage < 2) job.stage = 2;
+    // Invoicing only follows acceptance. Issuing one earlier must not
+    // jump the job past Accepted, which has not happened yet.
+    if (type === 'invoice' && job.stage === 3) job.stage = 4;
     if (job.stage !== was) job.log.push(`Moved to ${STAGES[job.stage]} by issuing ${no}`);
 
     saveJobRecord(job);
@@ -767,6 +1158,26 @@ const Data = (() => {
         balanceDue: (plan.schedule.find(s => s.key === 'balance') || {}).due || null
       };
     }
+    if (type === 'credit') {
+      const invc = latestDoc(job.id, 'invoice');
+      const paidGross = Number(extra.paidGross || 0);
+      const netPaid = Number(extra.netPaid || 0);
+      return {
+        invoiceNo: invc ? invc.no : null,
+        refunded: Number(extra.refunded || 0),
+        refundedOn: extra.refundedOn || isoDate(new Date()),
+        method: extra.method || 'Bank transfer',
+        reasonLabel: extra.reasonLabel || 'Refund',
+        why: extra.why || '',
+        reducesSupply: !!extra.reducesSupply,
+        paidGross, netPaid,
+        /* What is left owing after the credit. Negative would mean we
+           still hold money that is theirs, which the renderer shows as
+           "net paid" instead. */
+        stillOwing: Math.max(0, plan.total - jobCredits(job) - (paidGross - Number(extra.refunded || 0)))
+      };
+    }
+
     // receipt
     const inv = extra.invoiceNo ? documents.find(d => d.no === extra.invoiceNo) : latestDoc(job.id, 'invoice');
     return {
@@ -807,7 +1218,9 @@ const Data = (() => {
      PUBLIC API
      ================================================================= */
   return {
-    SERVICES, SERVICE_KEYS, OWNERS, TITLES, MARGIN, ACCESS_ITEMS, STAGES,
+    SERVICES, SERVICE_KEYS, EXTRAS_KEY, sectionLabel,
+    OWNERS, TITLES, MARGIN, ACCESS_ITEMS, STAGES,
+    COMMISSION_CHOICES, jobCommission,
     SIGNOFF_CHECKS, PAYMENT_TERMS, ALERT_TYPES,
     today: () => new Date(),
     addBusinessDays, addDays, parseDate, isoDate,
@@ -838,6 +1251,14 @@ const Data = (() => {
       jobs = (d.jobs || []).map(migrateJob)
         .sort((a, b) => String(b.id).localeCompare(String(a.id)));
       templates = d.templates || [];
+      expenses = (d.expenses || []).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      trips = (d.trips || []).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      assets = (d.assets || []).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      hoursLog = (d.hours || []).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      if (d.users && d.users.length) {
+        const extra = d.users.filter(u => OWNERS.indexOf(u.name) === -1);
+        users = users.filter(u => OWNERS.indexOf(u.name) !== -1).concat(extra);
+      }
       alerts = (d.alerts || []).sort((a, b) => String(b.id).localeCompare(String(a.id)));
       alertSettings = d.settings || {};
       business = Object.assign({}, BUSINESS_DEFAULTS, d.business || {},
@@ -902,6 +1323,10 @@ const Data = (() => {
       c.email = String(fields.email || '').trim();
       c.contact = fields.contact === 'Email' ? 'Email' : 'Text';
       c.notes = String(fields.notes || '').trim();
+      /* Only touched when it is actually passed. The customer edit form
+         does not carry a role field, and a save from there must not
+         wipe what a walk-through recorded. */
+      if (fields.role !== undefined) c.role = String(fields.role || '').trim().slice(0, 40);
       saveCustomer(c);
       const touched = syncJobsToCustomer(c, byOwner);
       return { customer: c, jobs: touched, clash };
@@ -948,7 +1373,11 @@ const Data = (() => {
       const id = nextJobId();
       const job = { id, schema: SCHEMA, owner: byOwner, stage: 1, status: 'active',
         preparedBy: byOwner, cust: draft.cust, sections, pos: [], notes: [],
+        commission: jobCommission(draft),
         log: [`Walk-through saved by ${byOwner}`] };
+      if (jobCommission(draft) !== MARGIN) {
+        job.log.push(`Commission set to ${Math.round(jobCommission(draft) * 1000) / 10}% during the walk-through`);
+      }
       attachCustomer(job, draft.custId, byOwner);
       jobs.unshift(job);
       saveJobRecord(job);
@@ -972,9 +1401,22 @@ const Data = (() => {
 
     /* Save whatever has been priced so far on an existing job, without
        moving it along. Lets a walk-through be done in pieces. */
-    saveScope(jobId, sections, byOwner) {
+    saveScope(jobId, sections, byOwner, commission) {
       const j = getJob(jobId);
       if (!j) return null;
+      /* The commission is set while pricing, so it is saved with the
+         scope. Still refused once a quote is out — the customer has the
+         number by then. */
+      if (typeof commission === 'number' && isFinite(commission)
+          && commission >= 0 && commission <= 1
+          && !(j.pricedAt && j.stage >= 2)) {
+        const was = jobCommission(j);
+        if (Math.abs(was - commission) > 1e-9) {
+          j.commission = commission;
+          const pct = n => (Math.round(n * 1000) / 10) + '%';
+          j.log.push(`Commission changed from ${pct(was)} to ${pct(commission)} by ${byOwner}`);
+        }
+      }
       const kept = {};
       Object.entries(sections).forEach(([k, sec]) => { kept[k] = sec; });
       j.sections = kept;
@@ -1043,6 +1485,14 @@ const Data = (() => {
       contractors = d.contractors || contractors;
       customers = (d.customers || []).sort((a, b) => a.name.localeCompare(b.name));
       templates = d.templates || templates;
+      if (d.expenses) expenses = d.expenses.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      if (d.trips) trips = d.trips.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      if (d.assets) assets = d.assets.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      if (d.hours) hoursLog = d.hours.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      if (d.users) {
+        const extra = d.users.filter(u => OWNERS.indexOf(u.name) === -1);
+        users = users.filter(u => OWNERS.indexOf(u.name) !== -1).concat(extra);
+      }
       alerts = (d.alerts || []).sort((a, b) => String(b.id).localeCompare(String(a.id)));
       if (d.settings) alertSettings = d.settings;
 
@@ -1082,6 +1532,26 @@ const Data = (() => {
        you with no way back short of deleting the job and entering it
        again. Every step back is logged: this is a correction, and the
        record should show that it happened. */
+    /* Setting the commission. Refused once the job is priced and a
+       quote has gone out: the customer has a number, and this would
+       change it silently. Re-price the job to move it deliberately. */
+    setCommission(id, rate, byOwner) {
+      const j = getJob(id);
+      if (!j) return { error: 'No such job.' };
+      const r = Number(rate);
+      if (!isFinite(r) || r < 0 || r > 1) return { error: 'Enter a rate between 0% and 100%.' };
+      if (j.pricedAt && j.stage >= 2) {
+        return { error: 'This job is priced and quoted. Re-price it if the commission needs to move.' };
+      }
+      const was = jobCommission(j);
+      if (Math.abs(was - r) < 1e-9) return { job: j };
+      j.commission = r;
+      const pct = n => (Math.round(n * 1000) / 10) + '%';
+      j.log.push(`Commission changed from ${pct(was)} to ${pct(r)} by ${byOwner}`);
+      saveJobRecord(j);
+      return { job: j };
+    },
+
     stepBack(id, byOwner) {
       const j = getJob(id);
       if (!j || j.stage <= 0) return { error: 'It is already at the start.' };
@@ -1099,7 +1569,7 @@ const Data = (() => {
         return 'The job orders you have already issued stay as they are — going back here does not unsend them.';
       }
       if (j.stage === 2 && j.pricedAt) {
-        return 'Prices stay locked at the rates from when the estimate went out. Re-price it if they need to move.';
+        return 'Prices stay locked at the rates from when the quote went out. Re-price it if they need to move.';
       }
       if (j.stage === 6 || j.stage === 7) {
         return 'Contractor replies and sign-off tickings are kept.';
@@ -1323,9 +1793,9 @@ const Data = (() => {
       const before = jobCost(j);
       freezeJob(j);
       const after = jobCost(j);
-      j.log.push(`Re-priced at today's rates by ${byOwner}: ${fmtMoney(customerPrice(before))} → ${fmtMoney(customerPrice(after))}`);
+      j.log.push(`Re-priced at today's rates by ${byOwner}: ${fmtMoney(customerPrice(before, j))} → ${fmtMoney(customerPrice(after, j))}`);
       saveJobRecord(j);
-      return { job: j, before: customerPrice(before), after: customerPrice(after) };
+      return { job: j, before: customerPrice(before, j), after: customerPrice(after, j) };
     },
 
     /* ---- standby ------------------------------------------------- */
@@ -1415,28 +1885,39 @@ const Data = (() => {
       return j;
     },
 
+    /* Sending the estimate still locks the rates — that is the point of
+       it — but it no longer moves the stage, because the job has not
+       advanced just because someone asked for the itemised version. */
     sendEstimate(id, byOwner) {
       const j = getJob(id);
       freezeJob(j);
-      j.stage = 2;
       j.log.push(`Estimate sent to the customer by ${byOwner} — prices locked at today's rates`);
       saveJobRecord(j);
       return j;
     },
 
-    markEstimateAccepted(id) {
+    markQuoteSent(id, byOwner) {
       const j = getJob(id);
-      j.stage = 3;
-      j.log.push('Customer accepted the estimate');
-      raiseAlert(j, 'accept', `${j.cust.name} accepted the estimate for ${j.id}`);
+      freezeJob(j);
+      if (j.stage < 2) j.stage = 2;
+      j.log.push(`Quote sent by ${byOwner} — prices locked at today's rates`);
       saveJobRecord(j);
       return j;
     },
 
-    markFormalQuoteSent(id, byOwner) {
+    markAccepted(id) {
       const j = getJob(id);
-      j.stage = 4;
-      j.log.push(`Formal quote sent by ${byOwner}`);
+      j.stage = 3;
+      j.log.push('Customer accepted the quote');
+      raiseAlert(j, 'accept', `${j.cust.name} accepted the quote for ${j.id}`);
+      saveJobRecord(j);
+      return j;
+    },
+
+    markInvoiced(id, byOwner) {
+      const j = getJob(id);
+      if (j.stage < 4) j.stage = 4;
+      j.log.push(`Invoice sent by ${byOwner}`);
       saveJobRecord(j);
       return j;
     },
@@ -1571,6 +2052,235 @@ const Data = (() => {
       return { contractorId: contractorsCovering(key)[0]?.id || null, lines: {}, access: [], notes: '', photos: [] };
     },
 
+    /* ---------- one-off lines ---------------------------------------
+       Something that is not on anybody's rate card: a skip hire, a
+       locksmith, a carpet repair, a fixed price you agreed on the
+       phone. The figure you type is what the customer pays.
+
+       `sectionKey` decides who does it. Give it one of the four service
+       keys and the line joins that section, so it appears on that
+       contractor's job order and they are paid for it. Leave it out and
+       it goes to the extras section, which has no contractor — nothing
+       is ordered and nobody is paid; it is yours or a pass-through.
+
+       Allowed on a job that is already quoted, same as any other added
+       item: the line is frozen as it is created, so it cannot move the
+       price of anything already sent. */
+    /* Writes a one-off straight into a `sections` object. The
+       walk-through needs this: it edits a draft that has no job id yet,
+       so it cannot go through addOneOff below. Both call the same
+       validation, so the walk-through and an existing job refuse the
+       same bad input in the same words. */
+    addOneOffTo(sections, spec) {
+      const v = validateOneOff(spec);
+      if (v.error) return v;
+      const { key, label, price, n, unit, comm } = v;
+      if (!sections[key]) sections[key] = this.newSection(key);
+      const sec = sections[key];
+      const iid = 'oo-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e4);
+      sec.frozen = sec.frozen || {};
+      sec.frozen[iid] = { id: iid, name: label, unit, type: 'fixed',
+        rate: price, section: key, oneoff: true, comm };
+      sec.lines[iid] = n;
+      return { id: iid, sectionKey: key, label, price, qty: n, comm,
+        /* What the customer ends up seeing for this line. */
+        shown: comm === null ? price * n : Math.round(price * n * (1 + comm)) };
+    },
+
+    addOneOff(jobId, spec, byOwner) {
+      const j = getJob(jobId);
+      if (!j) return { error: 'That job no longer exists.' };
+      const r = this.addOneOffTo(j.sections, spec);
+      if (r.error) return r;
+      /* Frozen as it is created, so it can be added to a job that is
+         already quoted without touching the price of anything already
+         sent. */
+      j.log.push(`One-off added by ${byOwner}: ${r.label}` +
+        (r.qty > 1 ? ` ×${r.qty}` : '') + ` at ${fmtMoney(r.price * r.qty)}` +
+        (r.sectionKey === EXTRAS_KEY ? ' (no contractor)' : ` on ${sectionLabel(r.sectionKey)}`));
+      saveJobRecord(j);
+      return Object.assign({ job: j }, r);
+    },
+
+    /* Remove from a draft's sections — the walk-through counterpart to
+       removeOneOff. */
+    removeOneOffFrom(sections, iid) {
+      for (const [k, sec] of Object.entries(sections)) {
+        const f = sec.frozen && sec.frozen[iid];
+        if (!f || !isOneOff(f)) continue;
+        delete sec.lines[iid];
+        delete sec.frozen[iid];
+        if (k === EXTRAS_KEY && !Object.keys(sec.lines).length) delete sections[k];
+        return { name: f.name, amount: f.rate };
+      }
+      return { error: 'That one-off is no longer on this job.' };
+    },
+
+    /* Removing a one-off takes the frozen entry with it. Nothing else
+       references it, so leaving it behind would just be litter. */
+    removeOneOff(jobId, iid, byOwner) {
+      const j = getJob(jobId);
+      if (!j) return { error: 'That job no longer exists.' };
+      /* Once a quote is out the customer is holding this number, so a
+         line cannot just disappear from under it. Re-pricing is the
+         deliberate way to change what was sent. */
+      if (j.pricedAt && j.stage >= 2) {
+        return { error: 'This job is quoted. Re-price it if a line needs to come off.' };
+      }
+      const qty = Object.values(j.sections)
+        .reduce((n, s) => n || (isOneOff(s.frozen && s.frozen[iid]) ? s.lines[iid] : 0), 0);
+      const r = this.removeOneOffFrom(j.sections, iid);
+      if (r.error) return r;
+      j.log.push(`One-off removed by ${byOwner}: ${r.name} (${fmtMoney(r.amount * (qty || 1))})`);
+      saveJobRecord(j);
+      return { job: j };
+    },
+
+    /* ---------- the site visit --------------------------------------
+       cust.visit is the booking; this is what happened when you got
+       there. Kept on the job rather than the walk-through draft so it
+       survives whatever the walk-through turns into — including a visit
+       where you never got through the door and there is no scope at
+       all. */
+    newVisit, jobVisit, visitPeople,
+
+    /* Stamps when you arrived. Only the first one counts: pressing it
+       again on a second walk round the flat must not quietly rewrite
+       what time you turned up, which is the whole evidential point of
+       it when a customer says nobody came. */
+    arriveAtVisit(jobId, byOwner) {
+      const j = getJob(jobId);
+      if (!j) return { error: 'That job no longer exists.' };
+      j.visit = Object.assign(newVisit(), j.visit || {});
+      if (j.visit.arrivedAt) return { job: j, already: true, at: j.visit.arrivedAt };
+      j.visit.arrivedAt = new Date().toISOString();
+      j.log.push(`${byOwner} arrived on site at ` +
+        new Date(j.visit.arrivedAt).toLocaleTimeString('en-NZ',
+          { hour: 'numeric', minute: '2-digit' }));
+      saveJobRecord(j);
+      return { job: j, at: j.visit.arrivedAt };
+    },
+
+    /* Who showed you round, who is actually authorising the work, and
+       where the keys are. Saved as one patch because they are filled in
+       together, standing in the hallway. */
+    saveVisitDetails(jobId, patch, byOwner) {
+      const j = getJob(jobId);
+      if (!j) return { error: 'That job no longer exists.' };
+      const was = jobVisit(j);
+      const v = Object.assign(newVisit(), j.visit || {});
+
+      if (patch.requesterOnSite !== undefined) v.requesterOnSite = !!patch.requesterOnSite;
+      if (patch.present !== undefined) v.present = String(patch.present).trim().slice(0, 200);
+      if (patch.authoriser) {
+        v.authoriser = {
+          name: String(patch.authoriser.name || '').trim().slice(0, 80),
+          role: String(patch.authoriser.role || '').trim().slice(0, 40),
+          phone: String(patch.authoriser.phone || '').trim().slice(0, 40)
+        };
+      }
+      if (patch.keys) {
+        v.keys = {
+          holder: String(patch.keys.holder || '').trim().slice(0, 40),
+          code: String(patch.keys.code || '').trim().slice(0, 40),
+          notes: String(patch.keys.notes || '').trim().slice(0, 200)
+        };
+      }
+      j.visit = v;
+
+      /* When it was the person who asked for the job, their role is
+         worth keeping on their record — a property manager is the same
+         thing on every job they send, so this is what stops you typing
+         it out again next time. */
+      let remembered = null;
+      if (v.requesterOnSite && v.authoriser.role && j.custId) {
+        const c = getCustomer(j.custId);
+        if (c && c.role !== v.authoriser.role) {
+          c.role = v.authoriser.role;
+          saveCustomer(c);
+          remembered = c.name;
+        }
+      }
+
+      /* One line in the history, not four. The useful fact is that the
+         authoriser changed, because that is the person a dispute turns
+         on — not that a phone number was tidied up. */
+      const people = visitPeople(j);
+      if (!was.requesterOnSite && v.requesterOnSite) {
+        j.log.push(`${byOwner} recorded that ${people.authoriser.name || 'the person who asked for the job'} was on site`);
+      } else if (was.authoriser.name !== v.authoriser.name && v.authoriser.name) {
+        j.log.push(`${byOwner} recorded ${v.authoriser.name}` +
+          (v.authoriser.role ? ` (${v.authoriser.role})` : '') + ' as authorising the work');
+      } else if (JSON.stringify(was) !== JSON.stringify(jobVisit(j))) {
+        j.log.push(`Visit details updated by ${byOwner}`);
+      }
+      saveJobRecord(j);
+      return { job: j, remembered };
+    },
+
+    /* How the visit ended. "Couldn't get in" and "needs another visit"
+       both leave the job exactly where it was — nothing is priced, so
+       nothing should move — and both surface on Home until they are
+       cleared, which is the point: a wasted trip that nobody sees is a
+       job that quietly dies. */
+    setVisitOutcome(jobId, outcome, detail, byOwner) {
+      const j = getJob(jobId);
+      if (!j) return { error: 'That job no longer exists.' };
+      if (!VISIT_OUTCOMES[outcome]) return { error: 'Pick what happened with the visit.' };
+
+      const v = Object.assign(newVisit(), j.visit || {});
+      if (outcome === 'noaccess') {
+        const why = String(detail || '').trim();
+        if (!why) return { error: 'Say why you couldn’t get in — future-you will want to know.' };
+        v.reason = why.slice(0, 200);
+        v.outstanding = [];
+      } else if (outcome === 'revisit') {
+        const list = (Array.isArray(detail) ? detail : String(detail || '').split('\n'))
+          .map(s => String(s).trim()).filter(Boolean).slice(0, 12);
+        if (!list.length) return { error: 'List what still needs doing on the next visit.' };
+        v.outstanding = list;
+        v.reason = '';
+      } else {
+        v.reason = ''; v.outstanding = [];
+      }
+      v.outcome = outcome;
+      j.visit = v;
+
+      j.log.push(`Visit marked "${VISIT_OUTCOMES[outcome]}" by ${byOwner}` +
+        (outcome === 'noaccess' ? `: ${v.reason}` : '') +
+        (outcome === 'revisit' ? `: ${v.outstanding.length} thing${v.outstanding.length === 1 ? '' : 's'} outstanding` : ''));
+      saveJobRecord(j);
+      return { job: j, outcome };
+    },
+
+    /* The move-out date moving while you are standing in the flat is
+       routine — they got their dates wrong, or the tenancy shifted.
+       Changing it does not touch the price, so it is allowed at any
+       stage, but once job orders are out the contractors are holding
+       the old date and have to be told. */
+    setMoveDate(jobId, date, byOwner) {
+      const j = getJob(jobId);
+      if (!j) return { error: 'That job no longer exists.' };
+      const d = String(date || '').trim();
+      if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) return { error: 'That date did not read properly.' };
+      const was = j.cust.moveDate || '';
+      if (was === d) return { job: j, unchanged: true };
+
+      j.cust.moveDate = d;
+      j.log.push(`Move-out date changed from ${was ? fmtDate(was) : 'not set'} to ` +
+        `${d ? fmtDate(d) : 'not set'} by ${byOwner}`);
+
+      /* Anyone already holding a job order has the old date in writing.
+         Saying so here is cheaper than finding out on the day. */
+      const told = livePos(j).filter(p => p.status === 'accepted' || p.status === 'awaiting');
+      if (told.length) {
+        j.log.push(`${told.length} contractor${told.length === 1 ? ' has' : 's have'} the old date on a job order — tell them`);
+      }
+      saveJobRecord(j);
+      return { job: j, warnContractors: told.map(p => ({
+        no: p.no, name: getContractor(p.contractorId)?.name || 'Contractor' })) };
+    },
+
     /* ---- photos --------------------------------------------------
        Downscaled in the browser before upload, then stored as a blob
        and referenced by key. A raw phone photo is several megabytes and
@@ -1590,7 +2300,133 @@ const Data = (() => {
     photoUrl: key => `${API}?action=photo&key=${encodeURIComponent(key)}`,
 
     /* ---- money --------------------------------------------------- */
-    sectionCost, jobCost, customerPrice, paymentTerms,
+    sectionCost, jobCost, customerPrice, paymentTerms, gstWithin, exGst,
+    isOneOff, oneOffLines, jobFixedTotal, oneOffComm, isFixedLine, oneOffTotals,
+    ROLES, roleOf, can,
+    listUsers: () => users.filter(u => u.active).slice(),
+    getUser: findUser,
+
+    /* Adding someone is deliberately not the same as making them a
+       partner: a new user can only be staff, and promoting them is a
+       separate, explicit act. */
+    /* A six-digit code, generated here, shown once, and stored only as
+       a PBKDF2 hash. Nobody can read it back afterwards — not Rocky,
+       not you. That is deliberate: a code you can look up is a code
+       that can be looked up by whoever else gets in.
+
+       Losing it is not a problem, because resetting is one tap. */
+    async issueCode(id, byOwner) {
+      if (!can(byOwner, 'settings')) return { error: 'Only a partner can set a code.' };
+      const u = users.find(x => x.id === id);
+      if (!u) return { error: 'No such login.' };
+
+      const code = Session.newCode();
+      const salt = Session.newSalt();
+      u.codeSalt = salt;
+      u.codeHash = await Session.hashCode(code, salt);
+      u.codeSetAt = new Date().toISOString();
+      u.codeSetBy = byOwner;
+      queueSave('user', u.id, u);
+      /* Returned once, to be shown once. Never stored in this shape. */
+      return { user: u, code };
+    },
+
+    clearCode(id, byOwner) {
+      if (!can(byOwner, 'settings')) return { error: 'Only a partner can clear a code.' };
+      const u = users.find(x => x.id === id);
+      if (!u) return { error: 'No such login.' };
+      delete u.codeHash; delete u.codeSalt; delete u.codeSetAt; delete u.codeSetBy;
+      queueSave('user', u.id, u);
+      return { ok: true };
+    },
+
+    hasCode: id => {
+      const u = users.find(x => x.id === id);
+      return !!(u && u.codeHash && u.codeSalt);
+    },
+
+    addUser(name, role, byOwner) {
+      const n = String(name || '').trim().slice(0, 60);
+      if (!n) return { error: 'Give them a name.' };
+      if (findUser(n)) return { error: 'Someone with that name already has a login.' };
+      if (!ROLES[role]) return { error: 'Pick a role.' };
+      if (role === 'partner' && !can(byOwner, 'settings')) {
+        return { error: 'Only a partner can add another partner.' };
+      }
+      const u = { id: 'u-' + Date.now().toString(36), name: n, role, active: true };
+      users.push(u);
+      queueSave('user', u.id, u);
+      return { user: u };
+    },
+
+    setUserRole(id, role, byOwner) {
+      if (!can(byOwner, 'settings')) return { error: 'Only a partner can change roles.' };
+      const u = users.find(x => x.id === id);
+      if (!u) return { error: 'No such login.' };
+      if (!ROLES[role]) return { error: 'Pick a role.' };
+      if (OWNERS.indexOf(u.name) !== -1 && role !== 'partner') {
+        return { error: u.name + ' is a partner in the business — that cannot be set from here.' };
+      }
+      u.role = role;
+      queueSave('user', u.id, u);
+      return { user: u };
+    },
+
+    removeUser(id, byOwner) {
+      if (!can(byOwner, 'settings')) return { error: 'Only a partner can remove a login.' };
+      const u = users.find(x => x.id === id);
+      if (!u) return { error: 'No such login.' };
+      if (OWNERS.indexOf(u.name) !== -1) {
+        return { error: u.name + ' is a partner and cannot be removed.' };
+      }
+      /* Deactivated rather than deleted: their name is on job history
+         and signed-off work, and that has to keep making sense. */
+      u.active = false;
+      queueSave('user', u.id, u);
+      return { ok: true };
+    },
+
+    /* ---------- the audit trail -------------------------------------------
+       Assembled from what the panel already records rather than kept as
+       a second copy: job history, money entries and issued documents,
+       merged and sorted. One place to answer "who changed that, and
+       when" — which matters a great deal more once someone other than
+       the two of you has a login. */
+    auditTrail({ from, to, who, q } = {}) {
+      const rows = [];
+      const push = (at, user, what, where, kind) =>
+        rows.push({ at, user: user || '—', what, where, kind });
+
+      jobs.forEach(j => (j.log || []).forEach((text, i) => {
+        /* Job history lines carry the person inside the sentence, which
+           is how they were written to read on the job. Pull the name
+           back out where one of the known users appears in it. */
+        const u = users.find(x => text.indexOf(x.name) !== -1);
+        push(j.updatedAt || j.cust.moveDate || '', u ? u.name : '', text, j.id, 'job');
+      }));
+
+      expenses.forEach(x => push(x.date, x.by,
+        `Expense: ${x.what} — ${fmtMoney(x.amount)}`, 'Money', 'expense'));
+      trips.forEach(t => push(t.date, t.by,
+        `Trip: ${t.purpose} — ${t.km} km`, 'Money', 'trip'));
+      assets.forEach(a => push(a.date, a.by,
+        `Asset: ${a.what} — ${fmtMoney(a.cost)}`, 'Money', 'asset'));
+      hoursLog.forEach(h => push(h.date, h.by,
+        `Hours: ${h.hours}h — ${h.what}`, 'Money', 'hours'));
+      documents.forEach(d => push(isoDate(new Date(d.issuedAt || Date.now())), d.issuedBy,
+        `${(Docs.TYPES[d.type] || {}).label || d.type} ${d.no} issued` +
+        (d.voided ? ' (later voided)' : ''), d.jobId, 'document'));
+
+      const needle = String(q || '').trim().toLowerCase();
+      return rows
+        .filter(r => (!from || r.at >= from) && (!to || r.at <= to))
+        .filter(r => !who || who === 'all' || r.user === who)
+        .filter(r => !needle ||
+          (r.what + ' ' + r.where + ' ' + r.user).toLowerCase().indexOf(needle) !== -1)
+        .sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    },
+
+    VISIT_OUTCOMES, KEY_HOLDERS, EXPENSE_CATEGORIES, EXPENSE_KEYS,
 
     /* ---- contractors --------------------------------------------- */
     listContractors: () => contractors.slice(),
@@ -1685,6 +2521,25 @@ const Data = (() => {
       jobs.filter(j => j.status === 'active' && mine(j)).forEach(j => {
         const movesOn = parseDate(j.cust.moveDate);
         const daysToJob = Math.round((movesOn - today) / 864e5);
+
+        /* A visit that did not come off. Urgent when the job date is
+           close, because the window to get back out there is closing
+           and nothing is priced yet. */
+        const vis = jobVisit(j);
+        if (vis.outcome === 'noaccess' || vis.outcome === 'revisit') {
+          const soon = isFinite(daysToJob) && daysToJob <= 7;
+          out.push({ urgency: soon ? 0 : 1, jobId: j.id,
+            what: vis.outcome === 'noaccess'
+              ? `Couldn't get in at ${j.cust.name}'s`
+              : `${j.cust.name}'s walk-through isn't finished`,
+            detail: (vis.outcome === 'noaccess'
+              ? vis.reason
+              : vis.outstanding.join('; ')) +
+              (isFinite(daysToJob) && daysToJob >= 0
+                ? ` · they move out in ${daysToJob} day${daysToJob === 1 ? '' : 's'}`
+                : ''),
+            action: 'Re-book' });
+        }
 
         // contractors who have gone quiet past their reply date
         livePos(j).filter(p => p.status === 'awaiting').forEach(p => {
@@ -1828,6 +2683,726 @@ const Data = (() => {
        a deposit arrives before the job and a balance two weeks after,
        so they are reported separately rather than averaged into
        something that is true of neither. */
+    /* ---------- expenses ----------------------------------------------
+       What the business spends on itself. Contractor payments are not
+       in here: those come off the jobs, so entering them again would
+       double-count the largest cost you have. */
+    listExpenses(fromISO, toISO) {
+      return expenses
+        .filter(x => (!fromISO || x.date >= fromISO) && (!toISO || x.date <= toISO))
+        .slice()
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    },
+    getExpense: id => expenses.find(x => x.id === id) || null,
+
+    saveExpense(fields, byOwner) {
+      const cat = EXPENSE_CATEGORIES[fields.category];
+      if (!cat || cat.auto) return { error: 'Pick a category.' };
+
+      const amount = Number(fields.amount);
+      if (!isFinite(amount) || amount <= 0) return { error: 'Enter an amount above $0.' };
+      if (amount > 1000000) return { error: 'That amount looks wrong. Enter it in dollars.' };
+
+      const date = String(fields.date || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Pick a date.' };
+
+      let share = fields.share === undefined || fields.share === '' ? cat.share : Number(fields.share);
+      if (!isFinite(share) || share < 0 || share > 1) return { error: 'Business share has to be between 0% and 100%.' };
+
+      const what = String(fields.what || '').trim().slice(0, 120);
+      if (!what) return { error: 'Say what it was for — future-you reading a bank statement will not remember.' };
+
+      const existing = fields.id ? expenses.find(x => x.id === fields.id) : null;
+      const x = existing || { id: 'E-' + Date.now().toString(36), createdAt: new Date().toISOString() };
+      Object.assign(x, {
+        date, what, amount, share,
+        category: fields.category,
+        supplier: String(fields.supplier || '').trim().slice(0, 80),
+        hasGst: fields.hasGst === undefined ? cat.gst : !!fields.hasGst,
+        by: byOwner
+      });
+      if (!existing) expenses.push(x);
+      expenses.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      queueSave('expense', x.id, x);
+      return { expense: x, created: !existing };
+    },
+
+    deleteExpense(id) {
+      expenses = expenses.filter(x => x.id !== id);
+      removeRecord('expense', id);
+      return { ok: true };
+    },
+
+    /* What an expense is actually worth: the business share, then the
+       category's deductible rate (entertainment halves), and the GST
+       stripped out if you are registered and the supplier charged it —
+       you reclaim that separately, so it is not a cost. */
+    expenseValue(x) {
+      const cat = EXPENSE_CATEGORIES[x.category] || EXPENSE_CATEGORIES.other;
+      const business = Number(x.amount) * Number(x.share);
+      const gst = x.hasGst ? gstWithin(business) : 0;
+      return {
+        gross: Number(x.amount),
+        business,
+        gstClaim: gst,
+        /* The figure that reduces taxable profit. */
+        deductible: (business - gst) * cat.rate,
+        personal: Number(x.amount) - business,
+        halved: cat.rate < 1
+      };
+    },
+
+    /* ---------- what each contractor was paid -----------------------------
+       Their year in one line each. Useful to them, and the thing you
+       want in front of you before renegotiating a rate card. */
+    contractorYear(fromISO, toISO) {
+      const totals = {};
+      jobs.filter(j => j.status === 'active'
+          && j.cust.moveDate >= fromISO && j.cust.moveDate <= toISO).forEach(j => {
+        Object.entries(j.sections).forEach(([k, sec]) => {
+          if (!sec.contractorId) return;
+          const cost = sectionCost(sec);
+          if (!cost) return;
+          const c = getContractor(sec.contractorId);
+          const row = totals[sec.contractorId] || (totals[sec.contractorId] = {
+            id: sec.contractorId, name: c ? c.name : 'Contractor removed',
+            gstNumber: (c && c.gstNumber) || '', gstRegistered: !!(c && c.gstRegistered),
+            paid: 0, jobs: 0, services: new Set() });
+          row.paid += cost; row.jobs++; row.services.add(sectionLabel(k));
+        });
+      });
+      return Object.values(totals)
+        .map(r => Object.assign(r, { services: [...r.services].join(', ') }))
+        .sort((a, b) => b.paid - a.paid);
+    },
+
+    /* ---------- the year-end pack -----------------------------------------
+       One file for the accountant instead of a shoebox. Several
+       sections in one CSV, because a single download that opens in
+       anything beats four they have to be talked through. */
+    yearEndCsv(fromISO, toISO) {
+      const q = v => {
+        const s = String(v ?? '');
+        return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      };
+      const line = a => a.map(q).join(',');
+      const out = [];
+      const pl = this.profitAndLoss(fromISO, toISO);
+      const b = business;
+
+      out.push(line([b.name + ' — year-end pack']));
+      out.push(line(['Period', fromISO + ' to ' + toISO]));
+      out.push(line(['NZBN', b.nzbn || '']));
+      out.push(line(['GST', b.gstRegistered ? 'Registered ' + (b.gstNumber || '') : 'Not registered']));
+      out.push(line(['Prepared', isoDate(new Date())]));
+      out.push('');
+
+      out.push(line(['SUMMARY']));
+      out.push(line(['Income (excl GST)', pl.income.toFixed(2)]));
+      out.push(line(['Contractor payments', pl.contractors.toFixed(2)]));
+      out.push(line(['Other deductions', pl.expenseTotal.toFixed(2)]));
+      out.push(line(['Net profit', pl.net.toFixed(2)]));
+      OWNERS.forEach(o => out.push(line([o + ' — 50% share', (pl.net / OWNERS.length).toFixed(2)])));
+      out.push('');
+
+      out.push(line(['INCOME BY JOB']));
+      out.push(line(['Job', 'Customer', 'Date', 'Address', 'Gross', 'GST', 'Net', 'Contractor cost']));
+      jobs.filter(j => j.status === 'active' && j.cust.moveDate >= fromISO && j.cust.moveDate <= toISO)
+        .sort((a, c) => String(a.cust.moveDate).localeCompare(String(c.cust.moveDate)))
+        .forEach(j => {
+          const cost = jobCost(j); if (!cost) return;
+          const gross = customerPrice(cost, j), gst = gstWithin(gross);
+          out.push(line([j.id, j.cust.name, j.cust.moveDate, j.cust.address,
+            gross.toFixed(2), gst.toFixed(2), (gross - gst).toFixed(2), cost.toFixed(2)]));
+        });
+      out.push('');
+
+      out.push(line(['EXPENSES']));
+      out.push(line(['Date', 'Category', 'What', 'Supplier', 'Paid', 'Business share', 'GST claimed', 'Deductible']));
+      this.listExpenses(fromISO, toISO).forEach(x => {
+        const v = this.expenseValue(x);
+        out.push(line([x.date, (EXPENSE_CATEGORIES[x.category] || {}).label || x.category,
+          x.what, x.supplier || '', v.gross.toFixed(2), Math.round(x.share * 100) + '%',
+          v.gstClaim.toFixed(2), v.deductible.toFixed(2)]));
+      });
+      out.push('');
+
+      out.push(line(['CONTRACTOR PAYMENTS']));
+      out.push(line(['Contractor', 'GST number', 'GST registered', 'Jobs', 'Services', 'Paid']));
+      this.contractorYear(fromISO, toISO).forEach(r =>
+        out.push(line([r.name, r.gstNumber, r.gstRegistered ? 'Yes' : 'No',
+          r.jobs, r.services, r.paid.toFixed(2)])));
+      out.push('');
+
+      const veh = this.vehicleClaim(fromISO, toISO);
+      if (veh.rows.length) {
+        out.push(line(['VEHICLE LOG']));
+        out.push(line(['Date', 'Purpose', 'Fuel', 'km', 'Claim']));
+        veh.rows.slice().reverse().forEach(t =>
+          out.push(line([t.date, t.purpose, t.fuel, t.km, t.amount.toFixed(2)])));
+        out.push(line(['', '', '', veh.km, veh.claim.toFixed(2)]));
+        out.push('');
+      }
+
+      const dep = this.depreciation(fromISO, toISO);
+      if (dep.rows.length) {
+        out.push(line(['ASSETS AND DEPRECIATION']));
+        out.push(line(['Asset', 'Bought', 'Cost', 'Rate', 'Opening', 'This year', 'Closing']));
+        dep.rows.forEach(a => out.push(line([a.what, a.date, a.cost.toFixed(2),
+          Math.round(a.rate * 100) + '%', a.opening.toFixed(2),
+          a.thisYear.toFixed(2), a.closing.toFixed(2)])));
+        out.push('');
+      }
+
+      const hrs = this.listHours(fromISO, toISO);
+      if (hrs.length) {
+        out.push(line(['OWN HOURS (not a deduction — for your information)']));
+        out.push(line(['Date', 'Who', 'Hours', 'What']));
+        hrs.slice().reverse().forEach(h => out.push(line([h.date, h.owner, h.hours, h.what])));
+        out.push('');
+      }
+
+      if (b.gstRegistered) {
+        out.push(line(['GST BY PERIOD']));
+        out.push(line(['Period', 'Supplies', 'Output GST', 'Claimable purchases', 'Input GST', 'Net']));
+        this.gstPeriods(6).filter(p => p.to >= fromISO && p.from <= toISO).reverse().forEach(p => {
+          const g = this.gstPosition(p.from, p.to);
+          out.push(line([p.label.replace(' (still open)', ''), g.supplies.toFixed(2),
+            g.outputGst.toFixed(2), g.purchases.toFixed(2), g.inputGst.toFixed(2), g.net.toFixed(2)]));
+        });
+        out.push('');
+      }
+
+      out.push(line(['Figures are the panel\'s own working, on the job date. Confirm the basis with your accountant.']));
+      return out.join('\n');
+    },
+
+    /* ---------- refunds ---------------------------------------------------
+       Money going back out. Three different things wear the same word,
+       and they are not the same in the books:
+
+         - the job shrank or went away. What they owed drops, and if
+           you are GST registered the output GST on it drops too. That
+           needs a credit note, which is the supply correction
+           information IRD requires.
+         - they simply paid too much, or twice. Nothing about the job
+           changed; you are returning money that was never yours.
+
+       `reduces` is which of those it is, and it is on the reason
+       rather than left to be chosen, because getting it wrong quietly
+       misstates a GST return. */
+    REFUND_REASONS,
+
+    refundPayment(jobId, { amount, reason, on, method, note }, byOwner) {
+      const j = getJob(jobId);
+      if (!j) return { error: 'That job no longer exists.' };
+
+      const r = REFUND_REASONS[reason];
+      if (!r) return { error: 'Say why the money is going back.' };
+
+      const amt = Number(amount);
+      if (!(amt > 0)) return { error: 'Enter the amount you are refunding.' };
+
+      const paidGross = (j.payments || []).reduce((t, p) => t + Math.max(0, Number(p.amount) || 0), 0);
+      const refundedSoFar = refundedTotal(j);
+      const left = paidGross - refundedSoFar;
+      if (amt > left + 0.001) {
+        return left <= 0
+          ? { error: 'Nothing has been paid on this job, so there is nothing to refund.' }
+          : { error: `You can only refund what was actually paid. ${fmtMoney(left)} is left.` };
+      }
+
+      const when = on || isoDate(new Date());
+      const pay = { id: rid(), amount: -amt, on: when,
+        method: method || 'Bank transfer', refund: true, reason,
+        reduces: r.reduces, note: String(note || '').trim().slice(0, 200), by: byOwner };
+      if (!Array.isArray(j.payments)) j.payments = [];
+      j.payments.push(pay);
+
+      j.log.push(`${fmtMoney(amt)} refunded to ${j.cust.name} by ${byOwner} — ${r.label.toLowerCase()}` +
+        (pay.note ? `: ${pay.note}` : ''));
+
+      /* A job refunded in full for a cancellation is cancelled, not
+         active. Leaving it active keeps it in the pipeline, on the
+         Home screen and in the debtor figures, which is where a
+         cancelled job quietly rots. */
+      const nowNet = paidGross - refundedTotal(j);
+      if (r.cancels && nowNet <= 0.001 && j.status === 'active') {
+        j.status = 'cancelled';
+        j.log.push(`Job marked cancelled — refunded in full by ${byOwner}`);
+      }
+      saveJobRecord(j);
+
+      const res = issueDocument(jobId, 'credit', byOwner, {
+        refunded: amt, refundedOn: when, method: pay.method,
+        reasonLabel: r.label, why: pay.note || r.blurb,
+        reducesSupply: r.reduces, paidGross,
+        netPaid: paidGross - refundedTotal(j)
+      });
+      raiseAlert(j, 'pay', `${fmtMoney(amt)} refunded to ${j.cust.name} for ${j.id}`);
+      return { payment: pay, credit: res.document || null, error: res.error };
+    },
+
+    /* What has gone back out on a job, and how much of it reduced what
+       was owed rather than simply returning an overpayment. */
+    refundSummary(jobId) {
+      const j = getJob(jobId);
+      if (!j) return { total: 0, credited: 0, rows: [] };
+      const rows = (j.payments || []).filter(p => p.refund)
+        .sort((a, b) => String(b.on).localeCompare(String(a.on)));
+      return {
+        total: refundedTotal(j),
+        credited: jobCredits(j),
+        rows: rows.map(p => Object.assign({}, p, {
+          amount: Math.abs(p.amount),
+          label: (REFUND_REASONS[p.reason] || {}).label || 'Refund'
+        }))
+      };
+    },
+
+    /* What the 48-hour rule on the receipt works out to for this job.
+       Not applied automatically — the figure is yours to decide — but
+       shown, because the policy is already on every receipt you send
+       and ought to be in front of you when you set the number. */
+    cancellationGuide(jobId) {
+      const j = getJob(jobId);
+      if (!j) return null;
+      const paidGross = (j.payments || []).reduce((t, p) => t + Math.max(0, Number(p.amount) || 0), 0);
+      const net = paidGross - refundedTotal(j);
+      if (!j.cust.moveDate) return { paid: net, hours: null, full: net, policy: 'no-date' };
+      const hours = (parseDate(j.cust.moveDate) - new Date()) / 36e5;
+      const inside = hours < 48;
+      return {
+        paid: net, hours: Math.round(hours),
+        full: net,
+        /* "Up to 50%" is a ceiling, not a rule — the wording on the
+           receipt says may, and the contractors may not have been
+           committed at all. */
+        reduced: Math.round(net * 0.5 * 100) / 100,
+        policy: inside ? 'inside-48' : 'outside-48'
+      };
+    },
+
+    /* ---------- aged debtors ---------------------------------------------
+       Who owes you and for how long. A flat list of names tells you
+       nothing about which one is in trouble: 90 days overdue is a
+       different conversation from last Tuesday, and the buckets are
+       what make that visible at a glance. */
+    agedDebtors() {
+      const now = startOfDay(new Date()), buckets = { current: [], d30: [], d60: [], d90: [] };
+      jobs.filter(j => j.status === 'active' && jobCost(j)).forEach(j => {
+        const plan = paymentPlan(j);
+        /* Refunds are negative payments, so paidTotal already nets
+           them off. Subtracting the credits as well is what stops a
+           refund for work that never happened reappearing as a debt. */
+        const owing = Math.max(0, plan.total - jobCredits(j) - paidTotal(j.id));
+        if (!owing) return;
+        /* Only count it as a debt once an invoice has actually gone
+           out — a priced job nobody has been billed for is pipeline. */
+        if (!liveDocs(j.id).some(d => d.type === 'invoice')) return;
+
+        const terms = paymentTerms(j);
+        /* paymentTerms hands back a Date on some paths and an ISO
+           string on others, so normalise before doing arithmetic. */
+        const raw = terms.balanceDue || terms.due || j.cust.moveDate;
+        const dueDate = raw instanceof Date ? raw : (raw ? parseDate(raw) : null);
+        const due = dueDate ? isoDate(dueDate) : '';
+        const days = dueDate ? Math.floor((now - dueDate) / 864e5) : 0;
+        const row = { job: j, owing, due, days };
+        if (days <= 0) buckets.current.push(row);
+        else if (days <= 30) buckets.d30.push(row);
+        else if (days <= 60) buckets.d60.push(row);
+        else buckets.d90.push(row);
+      });
+      const sum = a => a.reduce((t, r) => t + r.owing, 0);
+      Object.values(buckets).forEach(a => a.sort((x, y) => y.days - x.days));
+      return { buckets,
+        totals: { current: sum(buckets.current), d30: sum(buckets.d30),
+                  d60: sum(buckets.d60), d90: sum(buckets.d90) },
+        total: sum(buckets.current) + sum(buckets.d30) + sum(buckets.d60) + sum(buckets.d90),
+        overdue: sum(buckets.d30) + sum(buckets.d60) + sum(buckets.d90) };
+    },
+
+    /* ---------- what you owe contractors ----------------------------------
+       The panel has always known this and never added it up. A job
+       order a contractor has accepted is a commitment: you pay them
+       whether or not the customer pays you, which is the whole risk of
+       the principal model. */
+    payables() {
+      const now = startOfDay(new Date()), rows = [];
+      jobs.filter(j => j.status === 'active').forEach(j => {
+        livePos(j).filter(p => p.status === 'accepted' || p.status === 'done').forEach(p => {
+          const c = getContractor(p.contractorId);
+          const sec = j.sections[p.key];
+          const amount = sec ? sectionCost(sec) : 0;
+          if (!amount) return;
+          /* Their terms run from the job, since that is when they
+             invoice. 1 month and 14 days are the two we offer. */
+          const base = j.cust.moveDate ? parseDate(j.cust.moveDate) : now;
+          const days = /month/i.test(c?.terms || '') ? 30 : 14;
+          const due = new Date(base); due.setDate(due.getDate() + days);
+          rows.push({ jobId: j.id, po: p.no, customer: j.cust.name,
+            contractor: c ? c.name : 'Contractor removed', contractorId: p.contractorId,
+            service: sectionLabel(p.key), amount, due: isoDate(due),
+            overdue: due < now, done: p.status === 'done' });
+        });
+      });
+      rows.sort((a, b) => String(a.due).localeCompare(String(b.due)));
+      const weekEnd = new Date(now); weekEnd.setDate(weekEnd.getDate() + 7);
+      return { rows,
+        total: rows.reduce((t, r) => t + r.amount, 0),
+        thisWeek: rows.filter(r => parseDate(r.due) <= weekEnd).reduce((t, r) => t + r.amount, 0),
+        overdue: rows.filter(r => r.overdue).reduce((t, r) => t + r.amount, 0) };
+    },
+
+    /* ---------- cash position ---------------------------------------------
+       Money banked against money committed. The question it answers is
+       the one that actually keeps you up: can I pay the contractors
+       before the customers pay me? */
+    cashPosition() {
+      const banked = jobs.reduce((t, j) =>
+        t + (j.payments || []).reduce((s, p) => s + Number(p.amount || 0), 0), 0);
+      const owedToYou = this.agedDebtors().total;
+      const owedByYou = this.payables();
+      return { banked, owedToYou,
+        owedByYou: owedByYou.total, dueThisWeek: owedByYou.thisWeek,
+        /* What is left if everyone you owe is paid and nobody who owes
+           you has yet. The pessimistic number, deliberately. */
+        worstCase: banked - owedByYou.total,
+        expected: banked + owedToYou - owedByYou.total };
+    },
+
+    /* ---------- vehicle log ---------------------------------------------
+       Site visits are the mileage nobody claims, because nothing
+       records them at the time and a logbook written in April is not
+       a logbook. One line per trip, costed at the IRD kilometre rates.
+
+       The tiers: the first 14,000 km in a year are at Tier 1, the rest
+       at Tier 2. Strictly that 14,000 counts the vehicle's TOTAL travel,
+       business and private, so a car also driven privately crosses into
+       Tier 2 sooner than this shows. The panel only ever sees business
+       trips, so it says so rather than pretending otherwise. */
+    KM_RATES: { petrol: { tier1: 1.20, tier2: 0.37 }, diesel: { tier1: 1.30, tier2: 0.38 } },
+    KM_TIER1_LIMIT: 14000,
+
+    listTrips(fromISO, toISO) {
+      return trips
+        .filter(t => (!fromISO || t.date >= fromISO) && (!toISO || t.date <= toISO))
+        .slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    },
+
+    saveTrip(fields, byOwner) {
+      const km = Number(fields.km);
+      if (!isFinite(km) || km <= 0) return { error: 'Enter the distance in kilometres.' };
+      if (km > 2000) return { error: 'That looks like a typo — enter one trip at a time.' };
+      const date = String(fields.date || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Pick a date.' };
+      const purpose = String(fields.purpose || '').trim().slice(0, 120);
+      if (!purpose) return { error: 'Say where you went and why — a logbook without that is not a logbook.' };
+      const fuel = fields.fuel === 'diesel' ? 'diesel' : 'petrol';
+
+      const existing = fields.id ? trips.find(t => t.id === fields.id) : null;
+      const t = existing || { id: 'T-' + Date.now().toString(36) };
+      Object.assign(t, { date, km, purpose, fuel, jobId: fields.jobId || '', by: byOwner });
+      if (!existing) trips.push(t);
+      trips.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      queueSave('trip', t.id, t);
+      return { trip: t };
+    },
+
+    deleteTrip(id) { trips = trips.filter(t => t.id !== id); removeRecord('trip', id); return { ok: true }; },
+
+    /* Costs a year's trips in date order, so the tier change lands on
+       the trip that actually crossed it rather than being averaged. */
+    vehicleClaim(fromISO, toISO) {
+      const list = this.listTrips(fromISO, toISO)
+        .slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+      let run = 0, claim = 0, tier2Km = 0;
+      const rows = list.map(t => {
+        const rates = this.KM_RATES[t.fuel] || this.KM_RATES.petrol;
+        const atTier1 = Math.max(0, Math.min(t.km, this.KM_TIER1_LIMIT - run));
+        const atTier2 = t.km - atTier1;
+        const amount = atTier1 * rates.tier1 + atTier2 * rates.tier2;
+        run += t.km; claim += amount; tier2Km += atTier2;
+        return Object.assign({}, t, { amount, atTier1, atTier2 });
+      });
+      return { rows: rows.reverse(), km: run, claim, tier2Km,
+        crossed: run > this.KM_TIER1_LIMIT };
+    },
+
+    /* ---------- your own hours -------------------------------------------
+       The Money screen has always said profit is "before your own
+       time". This is what turns that caveat into a number: hours in,
+       and what the business actually paid you per hour for them. */
+    listHours(fromISO, toISO) {
+      return hoursLog
+        .filter(h => (!fromISO || h.date >= fromISO) && (!toISO || h.date <= toISO))
+        .slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    },
+
+    saveHours(fields, byOwner) {
+      const hours = Number(fields.hours);
+      if (!isFinite(hours) || hours <= 0) return { error: 'Enter how many hours.' };
+      if (hours > 24) return { error: 'More than 24 hours in a day — split it across dates.' };
+      const date = String(fields.date || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Pick a date.' };
+      const what = String(fields.what || '').trim().slice(0, 120);
+      if (!what) return { error: 'Say what the time went on.' };
+
+      const existing = fields.id ? hoursLog.find(h => h.id === fields.id) : null;
+      const h = existing || { id: 'H-' + Date.now().toString(36) };
+      Object.assign(h, { date, hours, what, jobId: fields.jobId || '',
+        owner: fields.owner || byOwner, by: byOwner });
+      if (!existing) hoursLog.push(h);
+      hoursLog.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      queueSave('hours', h.id, h);
+      return { entry: h };
+    },
+
+    deleteHours(id) { hoursLog = hoursLog.filter(h => h.id !== id); removeRecord('hours', id); return { ok: true }; },
+
+    /* ---------- assets ----------------------------------------------------
+       Under $1,000 is written off the year you buy it. Over $1,000 is
+       depreciated, so only this year's slice reduces profit. Declining
+       balance, which is the common default — the accountant sets the
+       real rate per asset type. */
+    listAssets() { return assets.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))); },
+
+    saveAsset(fields, byOwner) {
+      const cost = Number(fields.cost);
+      if (!isFinite(cost) || cost <= 0) return { error: 'Enter what it cost.' };
+      const date = String(fields.date || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Pick the date you bought it.' };
+      const what = String(fields.what || '').trim().slice(0, 120);
+      if (!what) return { error: 'Say what it is.' };
+      let rate = fields.rate === undefined || fields.rate === '' ? 0.2 : Number(fields.rate);
+      if (!isFinite(rate) || rate < 0 || rate > 1) return { error: 'Depreciation rate has to be between 0% and 100%.' };
+
+      const existing = fields.id ? assets.find(a => a.id === fields.id) : null;
+      const a = existing || { id: 'A-' + Date.now().toString(36) };
+      Object.assign(a, { date, what, cost, rate,
+        supplier: String(fields.supplier || '').trim().slice(0, 80),
+        share: fields.share === undefined || fields.share === '' ? 1 : Number(fields.share),
+        by: byOwner });
+      if (!existing) assets.push(a);
+      assets.sort((a2, b2) => String(b2.date).localeCompare(String(a2.date)));
+      queueSave('asset', a.id, a);
+      return { asset: a };
+    },
+
+    deleteAsset(id) { assets = assets.filter(a => a.id !== id); removeRecord('asset', id); return { ok: true }; },
+
+    /* This year's depreciation on everything held, plus what is left to
+       write off in later years. An asset under $1,000 is not here — it
+       belongs in Expenses as "Equipment under $1,000". */
+    depreciation(fromISO, toISO) {
+      const yearEnd = new Date(toISO);
+      const rows = assets.filter(a => a.cost >= 1000 && a.date <= toISO).map(a => {
+        const bought = new Date(a.date);
+        /* Whole years held before this one, so the opening book value
+           is right for anything bought in an earlier year. */
+        const yearsBefore = Math.max(0, Math.floor(
+          (new Date(fromISO) - bought) / (365.25 * 864e5)));
+        const opening = a.cost * Math.pow(1 - a.rate, yearsBefore);
+        /* Part-year in the year of purchase, by month. */
+        const monthsHeld = a.date >= fromISO
+          ? Math.max(1, 12 - bought.getMonth() + (yearEnd.getMonth() < bought.getMonth() ? 0 : 0))
+          : 12;
+        const thisYear = opening * a.rate * (Math.min(12, monthsHeld) / 12) * (a.share || 1);
+        return Object.assign({}, a, { opening, thisYear, closing: opening - thisYear });
+      });
+      return { rows, total: rows.reduce((t, r) => t + r.thisYear, 0) };
+    },
+
+    /* ---------- profit and loss ----------------------------------------
+       Income is the job work done in the period, GST stripped out.
+       Contractor cost comes off the jobs. Everything else comes from
+       the expense records above. The result is what the partnership
+       actually made, which is the number that splits 50/50. */
+    profitAndLoss(fromISO, toISO) {
+      const inPeriod = d => d && d >= fromISO && d <= toISO;
+      let grossIncome = 0, contractorCost = 0, jobCount = 0;
+
+      jobs.filter(j => j.status === 'active' && inPeriod(j.cust.moveDate)).forEach(j => {
+        const cost = jobCost(j);
+        if (!cost) return;
+        grossIncome += customerPrice(cost, j);
+        contractorCost += cost;
+        jobCount++;
+      });
+
+      /* Money refunded for work that shrank or never happened is not
+         income. Returning an overpayment is not deducted, because it
+         was never counted as income in the first place. */
+      const credited = creditsIn(fromISO, toISO);
+      grossIncome -= credited;
+
+      /* GST is never income and never a cost — it passes through. */
+      const income = grossIncome - gstWithin(grossIncome);
+      const contractors = contractorCost - gstWithin(claimableCostIn(fromISO, toISO));
+
+      const byCategory = {};
+      let expenseTotal = 0, gstOnExpenses = 0;
+      this.listExpenses(fromISO, toISO).forEach(x => {
+        const v = this.expenseValue(x);
+        const row = byCategory[x.category] || (byCategory[x.category] =
+          { key: x.category, label: EXPENSE_CATEGORIES[x.category].label, gross: 0, deductible: 0, count: 0 });
+        row.gross += v.gross; row.deductible += v.deductible; row.count++;
+        expenseTotal += v.deductible;
+        gstOnExpenses += v.gstClaim;
+      });
+
+      /* The vehicle log and the depreciation schedule are deductions
+         too, so they belong in the P&L rather than sitting in their own
+         screens looking like trivia. Shown as their own lines because
+         they are worked out differently from a receipt. */
+      const veh = this.vehicleClaim(fromISO, toISO);
+      const dep = this.depreciation(fromISO, toISO);
+      const rows = Object.values(byCategory).sort((a, b) => b.deductible - a.deductible);
+      if (veh.claim) rows.push({ key: 'km', label: 'Vehicle, kilometre rate',
+        gross: veh.claim, deductible: veh.claim, count: veh.rows.length, derived: true });
+      if (dep.total) rows.push({ key: 'depreciation', label: 'Depreciation',
+        gross: dep.total, deductible: dep.total, count: dep.rows.length, derived: true });
+
+      const deductions = expenseTotal + veh.claim + dep.total;
+      const net = income - contractors - deductions;
+      return {
+        from: fromISO, to: toISO, jobCount, credited,
+        grossIncome, income, contractorCost, contractors,
+        expenses: rows, expenseTotal: deductions, receiptsTotal: expenseTotal,
+        vehicle: veh, depreciation: dep,
+        gstOnExpenses, net
+      };
+    },
+
+    /* Each partner's half. A partnership is not taxed itself: it files
+       a return, and each partner declares their share on their own
+       personal return. So this, not the net profit, is the number Dan
+       and Rocky each need. */
+    partnerShares(net) {
+      const share = net / OWNERS.length;
+      return OWNERS.map(o => ({ owner: o, share }));
+    },
+
+    /* Tax on one partner's share, at the NZ individual rates. This is
+       the partnership income alone — a partner with a job or other
+       income pays at their top rate on top of that, so this is a floor,
+       not a bill. ACC levies are extra again. */
+    TAX_BANDS: [
+      { upTo: 15600, rate: 0.105 },
+      { upTo: 53500, rate: 0.175 },
+      { upTo: 78100, rate: 0.30 },
+      { upTo: 180000, rate: 0.33 },
+      { upTo: Infinity, rate: 0.39 }
+    ],
+    taxOn(amount) {
+      if (!(amount > 0)) return { tax: 0, bands: [], effective: 0, provisional: false };
+      let left = amount, last = 0, tax = 0;
+      const bands = [];
+      for (const b of this.TAX_BANDS) {
+        const slice = Math.min(left, b.upTo - last);
+        if (slice > 0) {
+          const t = slice * b.rate;
+          bands.push({ from: last, to: b.upTo, rate: b.rate, amount: slice, tax: t });
+          tax += t; left -= slice;
+        }
+        last = b.upTo;
+        if (left <= 0) break;
+      }
+      return { tax, bands, effective: tax / amount,
+        /* Residual income tax over $5,000 puts you into provisional
+           tax for the following year — three instalments instead of
+           one bill, which is a cash-flow change worth seeing coming. */
+        provisional: tax > 5000 };
+    },
+
+    /* ---------- GST position -----------------------------------------
+       A working figure for a return, not a return. It is built on the
+       job date, which is when the service is supplied — the invoice
+       basis would use payment dates instead, so the accountant has to
+       say which one applies before this goes anywhere near myIR.
+
+       Output GST is what you collected: 3/23 of every gross customer
+       price in the period. Input GST is what you can claim back: 3/23
+       of what GST-registered contractors charged you. A contractor who
+       is not registered charges no GST, so none of their fee is
+       claimable — which is why their status is a field and not an
+       assumption. */
+    gstPosition(fromISO, toISO) {
+      if (!business.gstRegistered) return { registered: false };
+      const inPeriod = d => d && d >= fromISO && d <= toISO;
+
+      let supplies = 0, outputGst = 0, purchases = 0, inputGst = 0;
+      let noGstCost = 0, unknown = 0;
+      const rows = [];
+
+      jobs.filter(j => j.status === 'active' && inPeriod(j.cust.moveDate)).forEach(j => {
+        const cost = jobCost(j);
+        if (!cost) return;
+        const gross = customerPrice(cost, j);
+        supplies += gross;
+        outputGst += gstWithin(gross);
+
+        /* Split this job's cost by whether the contractor behind each
+           section can actually issue a GST invoice. */
+        let claimable = 0, notClaimable = 0, unsure = 0;
+        Object.values(j.sections).forEach(s => {
+          const c = s.contractorId ? getContractor(s.contractorId) : null;
+          const secCost = sectionCost(s);
+          if (!secCost) return;
+          if (!c) unsure += secCost;                 // a standalone one-off
+          else if (c.gstRegistered) claimable += secCost;
+          else notClaimable += secCost;
+        });
+        purchases += claimable;
+        inputGst += gstWithin(claimable);
+        noGstCost += notClaimable;
+        unknown += unsure;
+
+        rows.push({ id: j.id, name: j.cust.name, date: j.cust.moveDate,
+          gross, outputGst: gstWithin(gross), claimable, inputGst: gstWithin(claimable) });
+      });
+
+      /* Credit notes issued in this period reduce what was supplied,
+         and with it the GST collected on it. */
+      const credited = creditsIn(fromISO, toISO);
+      supplies -= credited;
+      outputGst -= gstWithin(credited);
+
+      return { registered: true, from: fromISO, to: toISO,
+        supplies, outputGst, purchases, inputGst, credited,
+        net: outputGst - inputGst,
+        noGstCost, unknown,
+        rows: rows.sort((a, b) => String(a.date).localeCompare(String(b.date))) };
+    },
+
+    /* The two-monthly periods most small NZ businesses file on, newest
+       first, back as far as there are jobs. */
+    gstPeriods(count = 6) {
+      const out = [], now = new Date(), nowIso = isoDate(now);
+      /* Two-monthly periods ending on the last day of an even month
+         (Feb, Apr, … Dec). The list opens on the period TODAY sits in,
+         not the last one that closed: most of the time you are looking
+         at what is building up, and a card that opens empty because
+         the current period was skipped just looks broken. */
+      let endMonth = now.getMonth();
+      if (endMonth % 2 === 0) endMonth += 1;
+      let y = now.getFullYear();
+      if (endMonth > 11) { endMonth -= 12; y += 1; }
+      for (let i = 0; i < count; i++) {
+        const end = new Date(y, endMonth + 1, 0);
+        const start = new Date(y, endMonth - 1, 1);
+        const open = isoDate(end) >= nowIso;
+        out.push({ from: isoDate(start), to: isoDate(end), open,
+          label: start.toLocaleDateString('en-NZ', { month: 'short' }) + '–' +
+                 end.toLocaleDateString('en-NZ', { month: 'short', year: 'numeric' }) +
+                 (open ? ' (still open)' : '') });
+        endMonth -= 2;
+        if (endMonth < 0) { endMonth += 12; y -= 1; }
+      }
+      return out;
+    },
+
     earnings(forOwner, mineOnly = false) {
       const mine = j => !mineOnly || j.owner === forOwner;
       const months = {};
@@ -1841,12 +3416,12 @@ const Data = (() => {
         if (!cost) return;
         if (j.status === 'active' && j.cust.moveDate) {
           const r = row(monthOf(j.cust.moveDate));
-          const price = customerPrice(cost);
+          const price = customerPrice(cost, j);
           r.sold += price; r.cost += cost; r.margin += price - cost; r.jobs++;
         }
         if (j.status === 'lost' && j.cust.moveDate) {
           const r = row(monthOf(j.cust.moveDate));
-          r.lost += customerPrice(cost); r.lostJobs++;
+          r.lost += customerPrice(cost, j); r.lostJobs++;
         }
         (j.payments || []).forEach(pm => { row(monthOf(pm.on)).received += Number(pm.amount || 0); });
       });
@@ -1894,14 +3469,24 @@ const Data = (() => {
        One wrong setting and there is no copy anywhere, so there needs
        to be a way to take one. */
     backup() {
+      /* Version 2 adds the money records and the logins. A version 1
+         file restores fine — the newer collections simply come back
+         empty, which is what they were when it was taken.
+
+         Code hashes travel with the users, so restoring a backup
+         restores everybody's sign-in too. They are hashes, not codes,
+         but the file is still worth treating as sensitive. */
       return {
         format: 'flatout-panel-backup',
-        version: 1,
+        version: 2,
         takenAt: new Date().toISOString(),
         counts: { jobs: jobs.length, customers: customers.length,
-          contractors: contractors.length, documents: documents.length },
+          contractors: contractors.length, documents: documents.length,
+          expenses: expenses.length, trips: trips.length,
+          assets: assets.length, hours: hoursLog.length, users: users.length },
         jobs, customers, contractors, documents, acceptances,
         portals: portalGates, templates, alerts,
+        expenses, trips, assets, hours: hoursLog, users,
         settings: alertSettings, business
       };
     },
@@ -1920,6 +3505,11 @@ const Data = (() => {
       (data.acceptances || []).forEach(a => put('acceptance', a.jobId, a));
       (data.portals || []).forEach(g => put('portal', g.jobId, g));
       (data.templates || []).forEach(t => put('template', t.id, t));
+      (data.expenses || []).forEach(x => put('expense', x.id, x));
+      (data.trips || []).forEach(x => put('trip', x.id, x));
+      (data.assets || []).forEach(x => put('asset', x.id, x));
+      (data.hours || []).forEach(x => put('hours', x.id, x));
+      (data.users || []).forEach(x => put('user', x.id, x));
       if (data.settings) put('settings', '', data.settings);
       if (data.business) put('business', '', data.business);
 
@@ -1930,6 +3520,8 @@ const Data = (() => {
       acceptances = data.acceptances || [];
       portalGates = data.portals || [];
       templates = data.templates || templates;
+      expenses = data.expenses || expenses;
+      trips = data.trips || trips; assets = data.assets || assets; hoursLog = data.hours || hoursLog;
       if (data.settings) alertSettings = data.settings;
       if (data.business) business = Object.assign({}, BUSINESS_DEFAULTS, data.business);
       return { restored: data.counts || {}, by: byOwner };
@@ -1946,7 +3538,7 @@ const Data = (() => {
         'Contractors', 'Contractor cost', 'Customer price', 'Payment', 'Amount', 'Due',
         'Job orders', 'Reference', 'Notes'];
       const rows = jobs.map(j => {
-        const cost = jobCost(j), price = customerPrice(cost), t = paymentTerms(j);
+        const cost = jobCost(j), price = customerPrice(cost, j), t = paymentTerms(j);
         return [
           j.id, JOB_STATUS[j.status] || 'Active', STAGES[j.stage] || '',
           j.cust.name, j.custId || '', j.cust.contact, j.cust.phone, j.cust.email || '',

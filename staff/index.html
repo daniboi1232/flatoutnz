@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Staff sign in | FlatOut NZ</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#14283A">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FlatOut">
+<style>
+@font-face{font-family:"Fraunces";src:url("/panel/fonts/fraunces-600.woff2") format("woff2");font-weight:600;font-display:swap}
+@font-face{font-family:"Karla";src:url("/panel/fonts/karla-variable.woff2") format("woff2-variations");font-weight:400 700;font-display:swap}
+:root{
+  --navy-deep:#14283A; --navy:#1D3A50; --blue:#285D78; --teal:#3D8C82;
+  --cream:#F4F0E8; --off-white:#F7F8F6; --white:#fff;
+  --line:rgba(20,40,58,.12); --red:#C24444; --red-wash:#FDF4F4;
+  --display:"Fraunces",Georgia,serif; --body:"Karla","Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;min-height:100svh;display:grid;place-items:center;padding:24px;
+  background:var(--navy-deep);color:var(--navy-deep);font-family:var(--body)}
+.card{background:var(--white);border-radius:20px;padding:32px 28px;width:100%;max-width:26rem;
+  box-shadow:0 10px 40px rgba(0,0,0,.3);text-align:center}
+img.logo{width:56px;height:56px}
+h1{font-family:var(--display);font-weight:600;font-size:1.5rem;margin:14px 0 4px;letter-spacing:-.01em}
+p.sub{color:var(--blue);font-size:.9rem;margin:0 0 22px}
+
+/* Six boxes rather than one field. It is unambiguous on a phone, it
+   shows progress, and it stops a browser offering to save it as a
+   password it will then autofill into the wrong place. */
+.code{display:flex;gap:8px;justify-content:center;margin-bottom:6px}
+.code input{width:46px;height:58px;text-align:center;font-size:1.5rem;font-weight:700;
+  font-family:var(--display);border:1.5px solid var(--line);border-radius:12px;
+  background:var(--off-white);color:var(--navy-deep);
+  -moz-appearance:textfield;transition:border-color .15s,box-shadow .15s}
+.code input::-webkit-outer-spin-button,.code input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.code input:focus{outline:none;border-color:var(--teal);background:var(--white);
+  box-shadow:0 0 0 4px rgba(61,140,130,.18)}
+.code.bad input{border-color:var(--red);background:var(--red-wash)}
+@media (max-width:360px){.code input{width:40px;height:52px;font-size:1.25rem}}
+
+.msg{min-height:1.3rem;font-size:.875rem;margin:10px 0 0;color:var(--red)}
+.msg.working{color:var(--blue)}
+.btn{display:block;width:100%;margin-top:18px;min-height:48px;border:0;border-radius:12px;
+  background:var(--navy-deep);color:var(--cream);font:inherit;font-weight:700;cursor:pointer}
+.btn:hover{background:var(--navy)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.foot{margin-top:20px;font-size:.8125rem;color:var(--blue)}
+.foot a{color:var(--blue)}
+:focus-visible{outline:3px solid var(--teal);outline-offset:3px}
+@keyframes shake{10%,90%{transform:translateX(-2px)}30%,70%{transform:translateX(4px)}50%{transform:translateX(-4px)}}
+.shake{animation:shake .4s}
+@media (prefers-reduced-motion:reduce){.shake{animation:none}}
+</style>
+</head>
+<body>
+<main class="card">
+  <img class="logo" src="/images/logo-icon.png" alt="">
+  <h1>FlatOut staff</h1>
+  <p class="sub">Enter your six-digit code</p>
+
+  <form id="f" novalidate>
+    <div class="code" id="boxes">
+      <input type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="Digit 1" autofocus>
+      <input type="text" inputmode="numeric" maxlength="1" aria-label="Digit 2">
+      <input type="text" inputmode="numeric" maxlength="1" aria-label="Digit 3">
+      <input type="text" inputmode="numeric" maxlength="1" aria-label="Digit 4">
+      <input type="text" inputmode="numeric" maxlength="1" aria-label="Digit 5">
+      <input type="text" inputmode="numeric" maxlength="1" aria-label="Digit 6">
+    </div>
+    <p class="msg" id="msg" role="status" aria-live="polite"></p>
+    <button class="btn" type="submit" id="go">Sign in</button>
+  </form>
+
+  <p class="foot">Lost your code? A partner can reset it from the panel.<br>
+    <a href="/">Back to the website</a></p>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const boxes = [...document.querySelectorAll('#boxes input')];
+  const wrap = document.getElementById('boxes');
+  const msg = document.getElementById('msg');
+  const go = document.getElementById('go');
+  const form = document.getElementById('f');
+
+  /* Where they were headed before the gate sent them here. Only ever a
+     path on this site: an absolute URL in the query string would turn
+     the sign-in into an open redirect. */
+  const next = (() => {
+    const raw = new URLSearchParams(location.search).get('next') || '/panel/';
+    return /^\/(?!\/)/.test(raw) ? raw : '/panel/';
+  })();
+
+  const value = () => boxes.map(b => b.value).join('');
+
+  boxes.forEach((box, i) => {
+    box.addEventListener('input', () => {
+      box.value = box.value.replace(/\D/g, '').slice(0, 1);
+      wrap.classList.remove('bad');
+      if (box.value && i < 5) boxes[i + 1].focus();
+      if (value().length === 6) submit();
+    });
+    box.addEventListener('keydown', e => {
+      /* Backspace on an empty box steps back, which is what everyone
+         expects and nothing does by default. */
+      if (e.key === 'Backspace' && !box.value && i > 0) { boxes[i - 1].focus(); e.preventDefault(); }
+      if (e.key === 'ArrowLeft' && i > 0) boxes[i - 1].focus();
+      if (e.key === 'ArrowRight' && i < 5) boxes[i + 1].focus();
+    });
+    /* Pasting the whole code into any box fills them all. */
+    box.addEventListener('paste', e => {
+      const digits = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+      if (!digits) return;
+      e.preventDefault();
+      digits.split('').forEach((d, n) => { if (boxes[n]) boxes[n].value = d; });
+      boxes[Math.min(digits.length, 5)].focus();
+      if (digits.length === 6) submit();
+    });
+  });
+
+  function fail(text) {
+    msg.className = 'msg';
+    msg.textContent = text;
+    wrap.classList.add('bad');
+    document.querySelector('.card').classList.add('shake');
+    setTimeout(() => document.querySelector('.card').classList.remove('shake'), 400);
+    boxes.forEach(b => b.value = '');
+    boxes[0].focus();
+    go.disabled = false;
+  }
+
+  let busy = false;
+  async function submit() {
+    if (busy) return;
+    const code = value();
+    if (code.length !== 6) { fail('Enter all six digits.'); return; }
+
+    busy = true; go.disabled = true;
+    msg.className = 'msg working';
+    msg.textContent = 'Checking…';
+
+    try {
+      const r = await fetch('/api/panel-login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) {
+        msg.className = 'msg working';
+        msg.textContent = 'Welcome back, ' + (data.name || '').split(' ')[0] + '.';
+        location.href = next;
+        return;
+      }
+      busy = false;
+      fail(data.error || 'That did not work. Try again.');
+    } catch {
+      busy = false;
+      fail('Could not reach the server. Check your connection.');
+    }
+  }
+
+  form.addEventListener('submit', e => { e.preventDefault(); submit(); });
+})();
+</script>
+</body>
+</html>

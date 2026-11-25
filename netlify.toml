@@ -42,6 +42,17 @@
   [headers.values]
     Cache-Control = "public, max-age=604800"
 
+# The home-screen manifest. Served with its own media type rather than
+# the generic application/json: some browsers refuse a manifest that
+# does not claim to be one, and the install then fails with no visible
+# reason. Short cache so a change to the icons or the shortcuts is
+# picked up rather than living on a phone for a year.
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Content-Type = "application/manifest+json; charset=utf-8"
+    Cache-Control = "public, max-age=3600"
+
 # The stylesheet DOES change in place, so it is revalidated rather than
 # held. A day of caching with a check on each visit.
 [[headers]]
@@ -62,6 +73,26 @@
   [headers.values]
     Cache-Control = "no-store"
     X-Robots-Tag = "noindex, nofollow"
+
+# The staff sign-in page. Not secret — it is the way in — but there is
+# no reason for Google to index it or for a shared machine to keep it.
+[[headers]]
+  for = "/staff/*"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow"
+
+# Short ways in for staff. /staff is the sign-in page itself; the
+# others are what someone actually types one-handed in a driveway.
+[[redirects]]
+  from = "/p"
+  to = "/staff/"
+  status = 302
+
+[[redirects]]
+  from = "/team"
+  to = "/staff/"
+  status = 302
 
 # Two files that shouldn't be in the repo: "quote:index.html" (a stray
 # copy of the quote page, whose canonical tag still points at the old

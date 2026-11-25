@@ -35,7 +35,7 @@
 import { getStore } from '@netlify/blobs';
 
 const STORE = 'flatout-panel';
-const KINDS = ['job', 'contractor', 'customer', 'document', 'acceptance', 'portal', 'template', 'alert'];
+const KINDS = ['job', 'contractor', 'customer', 'document', 'acceptance', 'portal', 'template', 'alert', 'expense', 'trip', 'asset', 'hours', 'user'];
 
 export default async (req) => {
   const denied = checkAuth(req);
@@ -108,10 +108,12 @@ function timingSafeEqual(a, b) {
 /* ---------- reads ------------------------------------------------- */
 async function loadAll(store) {
   const out = { jobs: [], contractors: [], customers: [], documents: [], acceptances: [], portals: [],
-    templates: [], alerts: [], settings: null, business: null };
+    templates: [], alerts: [], expenses: [], trips: [], assets: [], hours: [], users: [],
+    settings: null, business: null };
   const PLURAL = { job: 'jobs', contractor: 'contractors', customer: 'customers',
     document: 'documents', acceptance: 'acceptances', portal: 'portals',
-    template: 'templates', alert: 'alerts' };
+    template: 'templates', alert: 'alerts', expense: 'expenses',
+    trip: 'trips', asset: 'assets', hours: 'hours', user: 'users' };
 
   for (const kind of KINDS) {
     const { blobs } = await store.list({ prefix: kind + '/' });
