@@ -22,6 +22,7 @@ import {
   checkCode, signSession, cookieHeader, MAX_ATTEMPTS, backoffMs
 } from '../shared/session.js';
 
+const STORE = 'flatout-panel';      // must match panel-data.js
 const SESSION_HOURS = 12;           // a working day, then sign in again
 const LOCK_MINUTES = 15;            // how long a lock lasts
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -45,7 +46,12 @@ export default async (request) => {
   try { code = String((await request.json()).code || '').trim(); } catch { /* handled below */ }
   if (!/^\d{6}$/.test(code)) return json(400, { error: 'Enter your six-digit code.' });
 
-  const store = getStore('panel');
+  /* 'flatout-panel' is the same store panel-data.js writes to. It has
+     to be, byte for byte: the user records this walks are the ones the
+     panel saves when a code is issued. Reading a differently named
+     store finds nothing, every real code is refused, and — worse —
+     the bootstrap stays open because the user list looks empty. */
+  const store = getStore(STORE);
   const gate = getStore('panel-gate');
 
   /* Who is asking. Behind Netlify this is the real client address. */
