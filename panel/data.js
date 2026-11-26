@@ -1229,7 +1229,10 @@ const Data = (() => {
       method: extra.method || 'Bank transfer',
       forWhat: extra.forWhat || 'Payment',
       paidToDate: paid,
-      outstanding: Math.max(0, plan.total - paid),
+      /* Credits off, same as everywhere else — a receipt issued after a
+         credit note must not tell the customer they still owe what was
+         credited back to them. */
+      outstanding: Math.max(0, plan.total - jobCredits(job) - paid),
       balanceDue: (plan.schedule.find(s => s.key === 'balance') || {}).due || null
     };
   }
@@ -3515,7 +3518,7 @@ const Data = (() => {
 
       // Everything invoiced and not yet paid, whatever month it sits in.
       const owing = jobs.filter(j => mine(j) && j.status === 'active' && jobCost(j))
-        .map(j => ({ job: j, owing: Math.max(0, paymentPlan(j).total - paidTotal(j.id)) }))
+        .map(j => ({ job: j, owing: owingOn(j) }))
         .filter(x => x.owing > 0 && liveDocs(x.job.id).some(d => d.type === 'invoice'))
         .sort((a, b) => String(a.job.cust.moveDate).localeCompare(String(b.job.cust.moveDate)));
 
@@ -3540,7 +3543,7 @@ const Data = (() => {
             confirmed: p.status === 'accepted' || p.status === 'done'
           })),
           unconfirmed: livePos(j).filter(p => p.status !== 'accepted' && p.status !== 'done').length,
-          owing: Math.max(0, paymentPlan(j).total - paidTotal(j.id))
+          owing: owingOn(j)
         }));
     },
 
