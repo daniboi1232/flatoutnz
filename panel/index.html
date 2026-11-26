@@ -335,6 +335,13 @@ const money = n => n.toLocaleString('en-NZ', { style: 'currency', currency: 'NZD
 /* A contractor can be deleted, or an id can come from an older version of the
    data, so never read .name straight off the lookup. */
 function cName(id) { const c = Data.getContractor(id); return c ? c.name : 'Contractor removed'; }
+
+/* Extra data-* for a stage button, so a stage can offer an action that
+   needs an argument (which document to issue) rather than only the
+   ones that take a job id. */
+function dataAttrs(d) {
+  return d ? Object.entries(d).map(([k, v]) => ` data-${k}="${esc(String(v))}"`).join('') : '';
+}
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fd = d => (typeof d === 'string' ? Data.parseDate(d) : new Date(d)).toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
 /* A job can exist before you know its date — a phone enquiry you want
@@ -644,10 +651,22 @@ function nextAction(j) {
       return { waiting: `Estimate for ${total} is with the customer. Waiting on them.`,
         todo: 'When they accept — in the portal, by email or over the phone — record it here.',
         label: 'Customer has accepted', act: 'accept' };
-    case 3:
-      return { waiting: 'Customer has accepted the estimate.',
-        todo: 'Confirm the details with your contractors, then send the formal quote from Zoho.',
-        label: "I've sent the formal quote", act: 'quote' };
+    case 3: {
+      /* Two steps live at this stage, and showing only the first one
+         was why a job looked stuck here: once the quote had gone out
+         there was nothing else to press, and the same button did
+         nothing when pressed again. */
+      const q = Data.liveDocOf(j.id, 'quote');
+      if (!j.quoteSentAt) {
+        return { waiting: 'Customer has accepted the estimate.',
+          todo: 'Confirm the details with your contractors, then send the formal quote from Zoho.',
+          label: "I've sent the formal quote", act: 'quote' };
+      }
+      return { waiting: `Formal quote${q ? ' ' + esc(q.no) : ''} is with the customer, sent ${fd(String(j.quoteSentAt).slice(0, 10))}.`,
+        todo: 'Invoice them when you are ready to take the money. Issuing it moves the job to Invoiced.',
+        label: 'Issue the invoice', act: 'issueDoc', data: { t: 'invoice' },
+        second: { label: "Re-send the quote", act: 'quote' } };
+    }
     case 4:
       return { waiting: `Waiting on the ${t.kind.toLowerCase()} of ${money(t.amount)}${t.due ? `, due ${fd(t.due)}` : ''}.`,
         todo: 'When the money shows up in Zoho, record it here. The job does not go ahead until it has.',
@@ -725,8 +744,8 @@ function vJob(j) {
       ${na.todo ? `<p class="small muted" style="margin-top:6px">${na.todo}</p>` : ''}
     </div>
     <div class="chips">
-      ${na.label ? `<button class="btn" data-act="${na.act}" data-id="${j.id}">${na.label}</button>` : ''}
-      ${na.second ? `<button class="btn ghost" data-act="${na.second.act}" data-id="${j.id}">${na.second.label}</button>` : ''}
+      ${na.label ? `<button class="btn" data-act="${na.act}" data-id="${j.id}"${dataAttrs(na.data)}>${na.label}</button>` : ''}
+      ${na.second ? `<button class="btn ghost" data-act="${na.second.act}" data-id="${j.id}"${dataAttrs(na.second.data)}>${na.second.label}</button>` : ''}
       ${j.stage > 0 ? `<button class="linkbtn" data-act="stepBack" data-id="${j.id}">Put it back to ${esc(Data.STAGES[j.stage - 1])}</button>` : ''}
     </div></div>
     ${ui.stepBackFor === j.id ? `<div class="formbox">

@@ -1794,6 +1794,7 @@ const Data = (() => {
     /* ---- documents ------------------------------------------------ */
     DOC_TYPES: Docs.TYPES,
     duplicateNos,
+    liveDocOf: (jobId, type) => latestDoc(jobId, type),
     listDocuments: jobId => (jobId ? docsFor(jobId) : documents.slice()),
     liveDocuments: liveDocs,
     latestDocument: latestDoc,
@@ -2105,10 +2106,17 @@ const Data = (() => {
       return j;
     },
 
+    /* Sending the formal quote does not move the stage on its own —
+       the job is already at Accepted and the next real event is the
+       invoice. But something has to change, or the button looks
+       broken and gets pressed again. The date is what changes, and
+       the stage card reads it to offer the next step instead of the
+       same one. */
     markQuoteSent(id, byOwner) {
       const j = getJob(id);
       freezeJob(j);
       if (j.stage < 2) j.stage = 2;
+      j.quoteSentAt = new Date().toISOString();
       j.log.push(`Quote sent by ${byOwner} — prices locked at today's rates`);
       saveJobRecord(j);
       return j;
