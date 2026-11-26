@@ -3,14 +3,13 @@
    =====================================================================
    The only thing that touches stored data. The browser never reaches
    Netlify Blobs directly; it calls this function, and this function
-   checks the password on every single request.
+   checks the signed session cookie on every single request.
 
-   Why the password is checked here as well as at the edge: Netlify
-   Functions live at /.netlify/functions/..., which is a different path
-   from /panel/. The edge function is configured to cover both, but if
-   that config is ever changed this check still stands between the data
-   and the internet. Protecting it in one place only is how an
-   "internal" tool quietly becomes public.
+   Why the session is checked here as well as at the edge: this
+   function is routed at /panel/api/data, which the edge function
+   covers today — but if that config is ever changed, this check still
+   stands between the data and the internet. Protecting it in one place
+   only is how an "internal" tool quietly becomes public.
 
    HOW THE DATA IS LAID OUT
    One blob per record, keyed by id:
@@ -33,12 +32,13 @@
    ===================================================================== */
 
 import { getStore } from '@netlify/blobs';
+import { readSession, readCookie, SESSION_COOKIE } from '../shared/session.js';
 
 const STORE = 'flatout-panel';
 const KINDS = ['job', 'contractor', 'customer', 'document', 'acceptance', 'portal', 'template', 'alert', 'expense', 'trip', 'asset', 'hours', 'user'];
 
 export default async (req) => {
-  const denied = checkAuth(req);
+  const denied = await checkAuth(req);
   if (denied) return denied;
 
   const store = getStore(STORE);
@@ -74,23 +74,28 @@ export default async (req) => {
 };
 
 /* ---------- auth -------------------------------------------------- */
-function checkAuth(req) {
-  const user = Deno_env('PANEL_USER'), pass = Deno_env('PANEL_PASS');
-  if (!user || !pass) {
-    return json({ error: 'Panel is not configured. Set PANEL_USER and PANEL_PASS.' }, 503);
+/* The signed session cookie, checked here as well as at the edge.
+   This function is routed at /panel/api/data, which the edge function
+   already covers — but protecting data in one place only is how an
+   internal tool quietly becomes public the day a path config changes.
+
+   It used to check a shared username and password. It no longer can:
+   those variables were deleted when the six-digit codes replaced them,
+   and a function that 503s because a retired variable is gone is a
+   panel that cannot save a single job. Same cookie as the edge, same
+   secret, same failure mode when the secret is missing. */
+async function checkAuth(req) {
+  const secret = Deno_env('PANEL_SECRET');
+  if (!secret || secret.length < 24) {
+    return json({ error: 'The panel is not configured. Set PANEL_SECRET in Netlify and redeploy.' }, 503);
   }
-  const expected = 'Basic ' + btoa(`${user}:${pass}`);
-  const supplied = req.headers.get('authorization') || '';
-  const ok = supplied.length === expected.length && timingSafeEqual(supplied, expected);
-  if (!ok) {
-    return new Response(JSON.stringify({ error: 'Not authorised' }), {
-      status: 401,
-      headers: {
-        'WWW-Authenticate': 'Basic realm="FlatOut employees panel", charset="UTF-8"',
-        'content-type': 'application/json',
-        'cache-control': 'no-store'
-      }
-    });
+  const token = readCookie(req.headers.get('cookie') || '', SESSION_COOKIE);
+  const session = token && await readSession(token, secret);
+  if (!session) {
+    /* No WWW-Authenticate: it would make the browser pop up a password
+       box that nothing can answer any more. The panel's own code sees
+       this and sends the person to /staff/ to enter their code. */
+    return json({ error: 'signed-out' }, 401);
   }
   return null;
 }
@@ -98,11 +103,6 @@ function Deno_env(k) {
   // Works in both the Node and Deno function runtimes.
   return (typeof process !== 'undefined' && process.env && process.env[k]) ||
          (typeof Deno !== 'undefined' && Deno.env.get(k)) || '';
-}
-function timingSafeEqual(a, b) {
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
 }
 
 /* ---------- reads ------------------------------------------------- */

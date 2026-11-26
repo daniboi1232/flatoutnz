@@ -25,6 +25,22 @@ const Data = (() => {
 
   const API = '/panel/api/data';
 
+  /* A session lasts 12 hours, so it will expire on someone mid-job.
+     When it does, every request comes back 401 and the panel would
+     otherwise look like it had simply stopped saving — the worst
+     possible failure, because the person keeps working and trusts it.
+     Send them to the code screen instead, with the way back included.
+     Guarded so a burst of failed requests cannot redirect twice. */
+  let leaving = false;
+  function signedOut(res) {
+    if (!res || res.status !== 401) return false;
+    if (!leaving) {
+      leaving = true;
+      location.href = '/staff/?next=' + encodeURIComponent(location.pathname + location.hash);
+    }
+    return true;
+  }
+
   /* ---------- fixed vocabulary ------------------------------------- */
   const SERVICES = { cleaning: 'Cleaning', rubbish: 'Rubbish removal', moving: 'Moving', storage: 'Storage' };
   const SERVICE_KEYS = Object.keys(SERVICES);
@@ -431,6 +447,7 @@ const Data = (() => {
           ? { action: 'put', ...items[0] }
           : { action: 'putMany', items })
       });
+      if (signedOut(res)) return;
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const body = await res.json();
       if (body.error) throw new Error(body.error);
@@ -1239,6 +1256,7 @@ const Data = (() => {
       }).catch(() => {});
 
       const res = await fetch(API + '?action=load');
+      if (signedOut(res)) return;
       if (!res.ok) throw new Error('Could not load the panel data (HTTP ' + res.status + ')');
       const d = await res.json();
       if (d.error) throw new Error(d.error);
@@ -1463,6 +1481,7 @@ const Data = (() => {
       let d;
       try {
         const res = await fetch(API + '?action=load');
+        if (signedOut(res)) return { skipped: 'signed-out' };
         if (!res.ok) throw new Error('HTTP ' + res.status);
         d = await res.json();
         if (d.error) throw new Error(d.error);
