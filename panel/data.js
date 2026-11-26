@@ -920,11 +920,37 @@ const Data = (() => {
   /* Each type counts up on its own and never resets. Worked out from
      what exists rather than a stored counter, so two people issuing at
      once can't be handed the same number. */
+  /* Document numbers come from the highest already used — but reading
+     that off the documents in memory alone is not enough. Saves are
+     batched, so a reload a moment after issuing one could load a set
+     that did not have it yet and hand out the same number again. That
+     is how J-1023 ended up with three different estimates all called
+     EST-0010, and a number appearing twice on two different customers'
+     paperwork is not a cosmetic problem.
+
+     So the highest number issued is also kept in the business record,
+     which never goes backwards. If a document fails to save but the
+     counter does, the next one skips a number — harmless. The other
+     way round is the one that matters. */
   function nextDocNo(type, extra = []) {
     const prefix = Docs.TYPES[type].prefix;
     const all = documents.concat(extra).filter(d => d.type === type);
-    const max = all.reduce((m, d) => Math.max(m, Number(String(d.no).replace(/\D/g, '')) || 0), 0);
-    return prefix + '-' + String(max + 1).padStart(4, '0');
+    const seen = all.reduce((m, d) => Math.max(m, Number(String(d.no).replace(/\D/g, '')) || 0), 0);
+    business.docNo = business.docNo || {};
+    const next = Math.max(seen, Number(business.docNo[prefix]) || 0) + 1;
+    business.docNo[prefix] = next;
+    saveBusiness();
+    return prefix + '-' + String(next).padStart(4, '0');
+  }
+
+  /* Two live documents sharing a number, which the bug above could
+     leave behind. The panel says so rather than letting it go out. */
+  function duplicateNos(jobId) {
+    const seen = {}, dupes = new Set();
+    liveDocs(jobId).forEach(d => {
+      if (seen[d.no]) dupes.add(d.no); else seen[d.no] = 1;
+    });
+    return [...dupes];
   }
 
   const docsFor = jobId => documents
@@ -1767,6 +1793,7 @@ const Data = (() => {
 
     /* ---- documents ------------------------------------------------ */
     DOC_TYPES: Docs.TYPES,
+    duplicateNos,
     listDocuments: jobId => (jobId ? docsFor(jobId) : documents.slice()),
     liveDocuments: liveDocs,
     latestDocument: latestDoc,
@@ -2063,9 +2090,16 @@ const Data = (() => {
     /* Sending the estimate still locks the rates — that is the point of
        it — but it no longer moves the stage, because the job has not
        advanced just because someone asked for the itemised version. */
+    /* "I've sent the estimate" is the one action at Scoped, so it has
+       to move the job. Issuing an estimate DOCUMENT deliberately moves
+       nothing — it is a courtesy copy most customers never ask for —
+       but telling the panel you have sent the customer their price is
+       the step itself, and for a while this logged that and left the
+       job sitting at Scoped with nothing else to press. */
     sendEstimate(id, byOwner) {
       const j = getJob(id);
       freezeJob(j);
+      if (j.stage < 2) j.stage = 2;
       j.log.push(`Estimate sent to the customer by ${byOwner} — prices locked at today's rates`);
       saveJobRecord(j);
       return j;

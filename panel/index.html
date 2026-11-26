@@ -1028,6 +1028,13 @@ function docsCard(j) {
 
   ${!priced ? '<p class="note" style="margin-top:12px">Nothing is priced yet, so there is nothing to put on a document. Do the walk-through first.</p>' : `
 
+  ${(() => {
+    const dupes = Data.duplicateNos(j.id);
+    return dupes.length ? `<p class="note" style="margin-top:12px"><b>${dupes.length === 1
+      ? `${esc(dupes[0])} exists more than once.` : `${dupes.length} numbers exist more than once.`}</b>
+      Two live documents sharing a number came from a numbering fault that is now fixed. Open them, keep the
+      one you actually sent, and void the others so there is no doubt which is real.</p>` : '';
+  })()}
   <div class="rows" style="margin-top:12px">
     ${docs.length ? docs.slice().reverse().map(d => `<div class="row">
       <div class="main">
