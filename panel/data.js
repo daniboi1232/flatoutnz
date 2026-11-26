@@ -1242,7 +1242,13 @@ const Data = (() => {
     const j = typeof job === 'string' ? getJob(job) : job;
     if (!j) return false;
     const plan = paymentPlan(j);
-    const paid = (j.payments || []).reduce((t, p) => t + Number(p.amount || 0), 0);
+    /* Credits count towards the instalment, because the instalment is
+       what they owe and a credit note says they owe less. Without this
+       a refund made the payment they had already made look unpaid:
+       $328 in, $164 credited back, and the panel asked for the $328
+       again with "Was due" in red beside it. */
+    const paid = (j.payments || []).reduce((t, p) => t + Number(p.amount || 0), 0)
+      + jobCredits(j);
     const idx = plan.schedule.findIndex(s => s.key === key);
     if (idx < 0) return paid + 0.005 >= plan.total && plan.total > 0;
     const needed = plan.schedule.slice(0, idx + 1)
