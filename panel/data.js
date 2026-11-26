@@ -383,6 +383,31 @@ const Data = (() => {
   const getCustomer = id => customers.find(c => c.id === id) || null;
   const contractorsCovering = key => contractors.filter(c => c.services.includes(key));
   const getRateItem = (cid, iid) => getContractor(cid)?.items.find(i => i.id === iid) || null;
+
+  /* ---------- our own labour, billed through a contractor -------------
+     When the partners do a moving job themselves they are booked in as
+     a contractor called US, so the whole payment landed in the panel as
+     a contractor cost. Only part of it is: the van hire, the insurance
+     and the mileage are real money leaving the business, but the hourly
+     rates and the call-out are the partners being paid for their own
+     time. Treating that as a cost understated the profit the two of
+     them actually share, and the tax each of them has to set aside.
+
+     A contractor carries `isUs`, and on such a contractor every rate
+     item carries a category. Anything not marked as labour is a cost,
+     which is the safe default: a new item wrongly treated as profit
+     would overstate what the partnership earned. */
+  const ITEM_CATS = { labour: 'Our labour', pass: 'Pass-through' };
+  const isUsContractor = cid => !!(getContractor(cid) || {}).isUs;
+  const itemCat = i => (i && i.cat === 'labour') ? 'labour' : 'pass';
+
+  /* Whether a FROZEN line was our own labour. The question is answered
+     off the line as it was locked, never off the rate card as it
+     stands now — the whole point of the price lock is that a job
+     already quoted does not move when a rate card is edited, and that
+     has to cover the labour split too, or last quarter's profit
+     changes the day someone retypes an hourly rate. */
+  const frozenIsLabour = f => !!(f && f.us && f.cat === 'labour');
   const getJob = id => jobs.find(j => j.id === id) || null;
   const getTemplate = id => templates.find(t => t.id === id) || null;
   const livePos = job => job.pos.filter(p => p.status !== 'replaced');
@@ -615,7 +640,11 @@ const Data = (() => {
     Object.keys(s.lines).forEach(iid => {
       if (frozen[iid] && (onlyGaps || isOneOff(frozen[iid]))) return;
       const i = getRateItem(s.contractorId, iid);
-      if (i) frozen[iid] = { id: i.id, name: i.name, unit: i.unit, type: i.type, rate: i.rate, section: i.section };
+      /* `us` and `cat` are locked with the rate, so what counts as our
+         own labour on this job is settled now and cannot be changed
+         later by editing the rate card. */
+      if (i) frozen[iid] = { id: i.id, name: i.name, unit: i.unit, type: i.type, rate: i.rate,
+        section: i.section, us: isUsContractor(s.contractorId), cat: itemCat(i) };
     });
     s.frozen = frozen;
   }
@@ -632,6 +661,34 @@ const Data = (() => {
   }
   function jobCost(job) {
     return Object.values(job.sections).reduce((t, s) => t + sectionCost(s), 0);
+  }
+
+  /* How a section's cost splits between our own labour and real
+     outgoings. Only the lines frozen as ours count, so an unlocked job
+     reads off the live rate card and a locked one reads off what was
+     locked — the same rule the price itself follows. */
+  function sectionSplit(section) {
+    let labour = 0, pass = 0;
+    Object.entries(section.lines).forEach(([iid, q]) => {
+      const f = section.frozen && section.frozen[iid];
+      const i = f || getRateItem(section.contractorId, iid);
+      if (!i) return;
+      const amount = q * i.rate;
+      const ours = f
+        ? frozenIsLabour(f)
+        : (isUsContractor(section.contractorId) && itemCat(i) === 'labour');
+      if (ours) labour += amount; else pass += amount;
+    });
+    return { labour, pass };
+  }
+
+  /* The same for a whole job. `labour` is the partners' own time and
+     belongs in profit; `pass` is money that actually leaves. */
+  function jobSplit(job) {
+    return Object.values(job.sections).reduce((t, s) => {
+      const d = sectionSplit(s);
+      return { labour: t.labour + d.labour, pass: t.pass + d.pass };
+    }, { labour: 0, pass: 0 });
   }
   /* Commission is per job, not global. Student flats take the standard
      rate; some jobs are referrals at nothing, and a landlord or a
@@ -697,7 +754,10 @@ const Data = (() => {
         && j.cust.moveDate >= fromISO && j.cust.moveDate <= toISO)
       .reduce((t, j) => t + Object.values(j.sections).reduce((s, sec) => {
         const c = sec.contractorId ? getContractor(sec.contractorId) : null;
-        return s + (c && c.gstRegistered ? sectionCost(sec) : 0);
+        /* Only the pass-through part of our own section can carry an
+           input credit. There is no GST to claim on paying yourself
+           for your own hours — nobody invoiced you for them. */
+        return s + (c && c.gstRegistered ? sectionSplit(sec).pass : 0);
       }, 0), 0);
   }
 
@@ -2670,13 +2730,90 @@ const Data = (() => {
       contractors = contractors.filter(c => c.id !== id);
       removeRecord('contractor', id);
     },
-    addRateItem(cid, { section, name, unit, type, rate }) {
+    addRateItem(cid, { section, name, unit, type, rate, cat }) {
       const c = getContractor(cid);
+      /* Pass-through unless told otherwise. A new item wrongly counted
+         as our own labour would overstate the partners' profit, which
+         is the error worth avoiding. */
       const i = { id: 'i' + rid(), section, name, unit, type, rate: Math.max(0, Number(rate) || 0) };
+      if (c && c.isUs) i.cat = cat === 'labour' ? 'labour' : 'pass';
       c.items.push(i);
       saveContractor(c);
       return i;
     },
+
+    ITEM_CATS,
+    /* Which side of the line a rate item sits on. Only meaningful on a
+       contractor that is us. */
+    setItemCat(cid, iid, cat) {
+      const c = getContractor(cid);
+      if (!c) return { error: 'That contractor no longer exists.' };
+      if (!c.isUs) return { error: 'This only applies to a contractor marked as us.' };
+      const i = getRateItem(cid, iid);
+      if (!i) return { error: 'That rate item no longer exists.' };
+      if (!ITEM_CATS[cat]) return { error: 'Choose our labour or pass-through.' };
+      i.cat = cat;
+      saveContractor(c);
+      return { item: i };
+    },
+
+    /* Marking a contractor as us. Turning it on gives every item on
+       the rate card a category to sit in; turning it off takes the
+       whole idea away again. Jobs already locked keep what they
+       locked either way. */
+    setIsUs(cid, on, byOwner) {
+      const c = getContractor(cid);
+      if (!c) return { error: 'That contractor no longer exists.' };
+      c.isUs = !!on;
+      if (c.isUs) c.items.forEach(i => { if (!ITEM_CATS[i.cat]) i.cat = 'pass'; });
+      else c.items.forEach(i => { delete i.cat; });
+      saveContractor(c);
+      return { contractor: c };
+    },
+
+    /* ---- backfilling jobs that locked before the split existed ----
+       A job locked before this change has frozen lines with no `us`
+       or `cat` on them, so every one of them reads as a cost. The
+       figures have to be put right without re-pricing the job, which
+       would move the customer's price.
+
+       The names are matched against the rate card as it stands,
+       because the item ids are already in the frozen lines — the rate
+       on the line is whatever it was when the job locked, and that
+       rate is what is kept. Only the category comes from the card. */
+    backfillUsSplit(byOwner) {
+      const touched = [];
+      jobs.forEach(j => {
+        let changed = false;
+        Object.values(j.sections).forEach(sec => {
+          if (!sec.contractorId || !isUsContractor(sec.contractorId)) return;
+          Object.keys(sec.frozen || {}).forEach(iid => {
+            const f = sec.frozen[iid];
+            if (!f || isOneOff(f) || f.us) return;      // one-offs are never ours
+            const card = getRateItem(sec.contractorId, iid)
+              || (getContractor(sec.contractorId).items || [])
+                   .find(i => i.name === f.name && i.section === f.section);
+            f.us = true;
+            f.cat = itemCat(card);
+            changed = true;
+          });
+        });
+        if (changed) {
+          const d = jobSplit(j);
+          j.log.push(`Our own labour on this job identified as ${fmtMoney(d.labour)} of the ${fmtMoney(jobCost(j))} US total, by ${byOwner}`);
+          saveJobRecord(j);
+          touched.push({ id: j.id, labour: d.labour, pass: d.pass });
+        }
+      });
+      return touched;
+    },
+
+    /* The labour / pass-through split, for the screens. */
+    jobSplit: jobOrId => {
+      const j = typeof jobOrId === 'string' ? getJob(jobOrId) : jobOrId;
+      return j ? jobSplit(j) : { labour: 0, pass: 0 };
+    },
+    sectionSplit,
     removeRateItem(cid, iid) {
       const c = getContractor(cid);
       c.items = c.items.filter(i => i.id !== iid);
@@ -2984,8 +3121,13 @@ const Data = (() => {
           const row = totals[sec.contractorId] || (totals[sec.contractorId] = {
             id: sec.contractorId, name: c ? c.name : 'Contractor removed',
             gstNumber: (c && c.gstNumber) || '', gstRegistered: !!(c && c.gstRegistered),
-            paid: 0, jobs: 0, services: new Set() });
-          row.paid += cost; row.jobs++; row.services.add(sectionLabel(k));
+            paid: 0, jobs: 0, services: new Set(),
+            /* Our own row is split, so the table does not imply the
+               partnership paid itself $595 of contractor money. */
+            us: !!(c && c.isUs), labour: 0, pass: 0 });
+          const d = sectionSplit(sec);
+          row.paid += cost; row.labour += d.labour; row.pass += d.pass;
+          row.jobs++; row.services.add(sectionLabel(k));
         });
       });
       return Object.values(totals)
@@ -3443,13 +3585,19 @@ const Data = (() => {
        actually made, which is the number that splits 50/50. */
     profitAndLoss(fromISO, toISO) {
       const inPeriod = d => d && d >= fromISO && d <= toISO;
-      let grossIncome = 0, contractorCost = 0, jobCount = 0;
+      let grossIncome = 0, contractorCost = 0, jobCount = 0, ourLabour = 0;
 
       jobs.filter(j => j.status === 'active' && inPeriod(j.cust.moveDate)).forEach(j => {
         const cost = jobCost(j);
         if (!cost) return;
         grossIncome += customerPrice(cost, j);
-        contractorCost += cost;
+        /* The customer still pays the whole price, so income does not
+           change. What changes is that the hours the partners worked
+           themselves are not deducted as though they had been paid to
+           somebody else. */
+        const split = jobSplit(j);
+        contractorCost += cost - split.labour;
+        ourLabour += split.labour;
         jobCount++;
       });
 
@@ -3508,6 +3656,10 @@ const Data = (() => {
       return {
         from: fromISO, to: toISO, jobCount, credited,
         grossIncome, income, contractorCost, contractors,
+        /* Already inside income, and already kept out of the
+           contractor line. Reported on its own so the Money tab can
+           show where it went. */
+        ourLabour,
         cancelled: { kept: keptOnCancelled, fees: standDownFees, jobs: cancelledJobs },
         expenses: rows, expenseTotal: deductions, receiptsTotal: expenseTotal,
         vehicle: veh, depreciation: dep,
@@ -3598,7 +3750,11 @@ const Data = (() => {
         let claimable = 0, notClaimable = 0, unsure = 0;
         Object.values(j.sections).forEach(s => {
           const c = s.contractorId ? getContractor(s.contractorId) : null;
-          const secCost = sectionCost(s);
+          /* Our own hours are not a purchase at all, so they are left
+             out of every column here — there is no invoice behind them
+             to claim against. The hire and mileage in the same section
+             still count. */
+          const secCost = sectionSplit(s).pass;
           if (!secCost) return;
           if (!c) unsure += secCost;                 // a standalone one-off
           else if (c.gstRegistered) claimable += secCost;
@@ -3658,7 +3814,7 @@ const Data = (() => {
       const months = {};
       const row = k => (months[k] = months[k] || {
         key: k, sold: 0, cost: 0, margin: 0, jobs: 0, received: 0, lost: 0, lostJobs: 0,
-        cancelledJobs: 0
+        cancelledJobs: 0, labour: 0
       });
       const monthOf = iso => String(iso || '').slice(0, 7);
 
@@ -3668,7 +3824,12 @@ const Data = (() => {
         if (j.status === 'active' && j.cust.moveDate) {
           const r = row(monthOf(j.cust.moveDate));
           const price = customerPrice(cost, j);
-          r.sold += price; r.cost += cost; r.margin += price - cost; r.jobs++;
+          /* Our own hours are not a cost, so they stay on the kept
+             side here exactly as they do in the P&L — otherwise this
+             table and that one would disagree about the same month. */
+          const ours = jobSplit(j).labour;
+          r.sold += price; r.cost += cost - ours; r.margin += price - (cost - ours);
+          r.labour += ours; r.jobs++;
         }
         if (j.status === 'lost' && j.cust.moveDate) {
           const r = row(monthOf(j.cust.moveDate));
@@ -3692,9 +3853,9 @@ const Data = (() => {
         sold: t.sold + m.sold, cost: t.cost + m.cost, margin: t.margin + m.margin,
         jobs: t.jobs + m.jobs, received: t.received + m.received,
         lost: t.lost + m.lost, lostJobs: t.lostJobs + m.lostJobs,
-        cancelledJobs: t.cancelledJobs + m.cancelledJobs
+        cancelledJobs: t.cancelledJobs + m.cancelledJobs, labour: t.labour + m.labour
       }), { sold: 0, cost: 0, margin: 0, jobs: 0, received: 0, lost: 0, lostJobs: 0,
-            cancelledJobs: 0 });
+            cancelledJobs: 0, labour: 0 });
 
       // Everything invoiced and not yet paid, whatever month it sits in.
       const owing = jobs.filter(j => mine(j) && j.status === 'active' && jobCost(j))

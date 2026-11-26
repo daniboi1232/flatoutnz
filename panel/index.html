@@ -1875,11 +1875,11 @@ function cashCard() {
   return `<section class="card"><div class="card-head"><h3>Cash position</h3>
     <span class="eyebrow">Right now</span></div>
   <div class="stat-row" style="margin-top:12px">
-    <div class="stat"><b>${money(c.banked)}</b><span class="small muted">Banked</span></div>
-    <div class="stat"><b>${money(c.owedToYou)}</b><span class="small muted">Owed to you</span></div>
-    <div class="stat"><b>${money(c.owedByYou)}</b><span class="small muted">You owe contractors</span></div>
+    <div class="stat"><span class="small muted">Banked</span><b>${money(c.banked)}</b></div>
+    <div class="stat"><span class="small muted">Customers owe you</span><b>${money(c.owedToYou)}</b></div>
+    <div class="stat"><span class="small muted">You owe contractors</span><b>${money(c.owedByYou)}</b></div>
     <div class="stat" style="background:${tight ? 'var(--red-wash)' : 'var(--teal-wash)'}">
-      <b>${money(c.worstCase)}</b><span class="small muted">If nobody pays you</span></div>
+      <span class="small muted">Left if nobody pays you</span><b>${money(c.worstCase)}</b></div>
   </div>
   <p class="small muted" style="margin-top:12px">${tight
     ? `<b style="color:var(--red)">You owe contractors more than you're holding.</b> Under the principal model they get paid whether or not the customer does, so that gap is real money you'd have to find. ${c.dueThisWeek ? `${money(c.dueThisWeek)} of it falls due within a week.` : ''}`
@@ -2115,26 +2115,51 @@ function assetsCard(y) {
   </section>`;
 }
 
+/* Marking a contractor as the partners themselves. Only US should ever
+   have this on, and the wording says what it changes rather than
+   leaving it as a mysterious switch. */
+function usToggle(c) {
+  const on = !!c.isUs;
+  return `<div class="formbox" style="margin-bottom:12px">
+    <label class="row" style="padding:0">
+      <input type="checkbox" data-act="toggleUs" data-c="${c.id}"${on ? ' checked' : ''}>
+      <div class="main"><b>This is us (partners)</b><br>
+        <span class="small muted">${on
+          ? 'Each item below says whether it pays you for your own time or covers a real outgoing.'
+          : 'Turn this on for the contractor you book yourselves in as, so your own hours stop counting as a business cost.'}</span>
+      </div></label>
+  </div>`;
+}
+
 /* Each contractor's year in one line. What you'd want in front of you
    before renegotiating a rate card. */
 function contractorYearCard(y) {
   const rows = Data.contractorYear(y.from, y.to);
   if (!rows.length) return '';
   const total = rows.reduce((t, r) => t + r.paid, 0);
+  const ourLabour = rows.reduce((t, r) => t + (r.labour || 0), 0);
   const gstOn = Data.getBusiness().gstRegistered;
   return `<section class="card"><div class="card-head"><h3>Contractors this year</h3>
     <span class="eyebrow">${money(total)} across ${rows.length}</span></div>
   <div class="tablewrap" style="margin-top:12px"><table>
     <thead><tr><th>Contractor</th><th>Covers</th><th class="num">Jobs</th><th class="num">Paid</th>${gstOn ? '<th>GST</th>' : ''}</tr></thead>
     <tbody>${rows.map(r => `<tr>
-      <td><b>${esc(r.name)}</b></td>
+      <td><b>${esc(r.name)}</b>${r.us ? '<br><span class="small muted">that is us</span>' : ''}</td>
       <td class="small">${esc(r.services)}</td>
       <td class="num">${r.jobs}</td>
       <td class="num">${money(r.paid)}</td>
       ${gstOn ? `<td class="small">${r.gstRegistered
         ? (r.gstNumber ? esc(r.gstNumber) : '<span class="pill p-ok">Registered</span>')
-        : '<span class="pill p-warn">Not registered</span>'}</td>` : ''}</tr>`).join('')}
+        : '<span class="pill p-warn">Not registered</span>'}</td>` : ''}</tr>${
+      /* Our own row is split, because the single figure reads as money
+         the partnership paid away and most of it never left. */
+      r.us ? `<tr><td class="small muted" style="padding-left:22px">Our labour — kept by the partners</td>
+        <td></td><td></td><td class="num small muted">${money(r.labour)}</td>${gstOn ? '<td></td>' : ''}</tr>
+      <tr><td class="small muted" style="padding-left:22px">Pass-through — hire, insurance, mileage</td>
+        <td></td><td></td><td class="num small muted">${money(r.pass)}</td>${gstOn ? '<td></td>' : ''}</tr>` : ''}`).join('')}
       <tr class="total"><td colspan="3">Total</td><td class="num">${money(total)}</td>${gstOn ? '<td></td>' : ''}</tr>
+      ${ourLabour ? `<tr><td colspan="3" class="small muted">Of which our own labour, which is profit rather than a cost</td>
+        <td class="num small muted">${money(ourLabour)}</td>${gstOn ? '<td></td>' : ''}</tr>` : ''}
     </tbody></table></div>
   ${gstOn && rows.some(r => !r.gstRegistered) ? `<p class="small muted" style="margin-top:10px">A contractor marked "not registered" charges no GST, so none of what you paid them is reclaimable. If that is wrong, fix it on their record — it changes your GST return.</p>` : ''}
   </section>`;
@@ -2174,7 +2199,10 @@ function plCard() {
           <td class="num"><b>${money(pl.income)}</b></td></tr>
       ${pl.cancelled.kept ? `<tr><td>Kept on cancelled jobs <span class="small muted">${pl.cancelled.jobs} job${pl.cancelled.jobs === 1 ? '' : 's'}, inside the income above</span></td>
           <td class="num muted">${money(pl.cancelled.kept)}</td></tr>` : ''}
-      <tr><td>Contractor payments</td><td class="num">−${money(pl.contractors)}</td></tr>
+      <tr><td>Contractor payments <span class="small muted">outside contractors, plus what US pays out</span></td>
+          <td class="num">−${money(pl.contractors)}</td></tr>
+      ${pl.ourLabour ? `<tr><td>Our labour (through US) <span class="small muted">your own hours — kept, not a cost</span></td>
+          <td class="num muted">${money(pl.ourLabour)}</td></tr>` : ''}
       ${pl.cancelled.fees ? `<tr><td>Contractor cancellation fees <span class="small muted">inside the line above</span></td>
           <td class="num muted">−${money(pl.cancelled.fees)}</td></tr>` : ''}
       ${pl.expenses.map(e => `<tr><td>${esc(e.label)} <span class="small muted">${e.count}</span></td>
@@ -2281,6 +2309,7 @@ function vMoney() {
         <div class="row"><div class="main">Customers were charged</div><b>${money(t.sold)}</b></div>
         ${gstOn ? `<div class="row"><div class="main">GST inside that <span class="small muted">— never yours</span></div><b>−${money(Data.gstWithin(t.sold))}</b></div>` : ''}
         <div class="row"><div class="main">Contractors cost</div><b>${money(t.cost)}</b></div>
+        ${t.labour ? `<div class="row"><div class="main">Our own labour through US <span class="small muted">— counted as kept</span></div><b>${money(t.labour)}</b></div>` : ''}
         <div class="row"><div class="main"><b>You kept</b></div><b style="font-size:1.15rem">${money(gstOn ? t.margin - Data.gstWithin(t.sold) + Data.gstWithin(claimableCost) : t.margin)}</b></div>
       </div>
       <p class="small muted" style="margin-top:10px">${gstOn
@@ -2322,7 +2351,7 @@ function vMoney() {
         <td class="num"><b>${m.margin ? money(m.margin) : '—'}</b></td>
         <td class="num">${m.received ? money(m.received) : '—'}</td></tr>`).join('')}
       </tbody></table></div>
-      <p class="small muted" style="margin-top:10px">Lost jobs are left out of the first four columns. A cancelled job counts for what you kept and what you owe its contractors, not the price it would have been. Cash in counts every payment recorded in that month, whichever job it belonged to.</p>`
+      <p class="small muted" style="margin-top:10px">Lost jobs are left out of the first four columns. A cancelled job counts for what you kept and what you owe its contractors, not the price it would have been. Your own labour through US sits in what you kept, not in the contractor column. Cash in counts every payment recorded in that month, whichever job it belonged to.</p>`
     : '<p class="muted" style="margin-top:10px">Nothing priced yet.</p>'}
   </section>
 
@@ -2620,9 +2649,16 @@ function vContractors() {
       <p class="small muted">Their rate card goes with them. Jobs that already use them keep their prices, but the contractor's name will show as removed.</p>
       <div class="chips"><button class="btn sm" style="background:var(--red)" data-act="reallyDelC" data-c="${c.id}">Yes, remove</button><button class="btn sm ghost" data-act="cancelDelC">Keep them</button></div>
     </div>` : ''}`}
-    <div class="tablewrap"><table><thead><tr><th>Item</th><th>Type</th><th class="num">Rate</th><th></th></tr></thead><tbody>
-    ${c.items.map(i => `<tr><td>${esc(i.name)}<br><span class="small muted">${c.services.length > 1 ? S[i.section] + ' · ' : ''}per ${esc(i.unit)}</span></td><td>${i.type === 'hourly' ? '<span class="pill p-ok">Hourly</span>' : '<span class="pill p-grey">Fixed</span>'}</td><td class="num"><input class="input rate" type="number" min="0" step="1" id="rate-${i.id}" aria-label="${esc(i.name)} rate" value="${i.rate}" data-act="rate" data-c="${c.id}" data-i="${i.id}"></td><td class="num"><button class="linkbtn danger" data-act="rmItem" data-c="${c.id}" data-i="${i.id}" aria-label="Remove ${esc(i.name)}">Remove</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No items yet.</td></tr>'}
+    ${usToggle(c)}
+    <div class="tablewrap"><table><thead><tr><th>Item</th><th>Type</th>${c.isUs ? '<th>Counts as</th>' : ''}<th class="num">Rate</th><th></th></tr></thead><tbody>
+    ${c.items.map(i => `<tr><td>${esc(i.name)}<br><span class="small muted">${c.services.length > 1 ? S[i.section] + ' · ' : ''}per ${esc(i.unit)}</span></td><td>${i.type === 'hourly' ? '<span class="pill p-ok">Hourly</span>' : '<span class="pill p-grey">Fixed</span>'}</td>${
+      c.isUs ? `<td><select class="select sm" data-act="itemCat" data-c="${c.id}" data-i="${i.id}" aria-label="${esc(i.name)} counts as">${
+        Object.entries(Data.ITEM_CATS).map(([k, label]) =>
+          `<option value="${k}"${(i.cat === 'labour' ? 'labour' : 'pass') === k ? ' selected' : ''}>${label}</option>`).join('')
+      }</select></td>` : ''
+    }<td class="num"><input class="input rate" type="number" min="0" step="1" id="rate-${i.id}" aria-label="${esc(i.name)} rate" value="${i.rate}" data-act="rate" data-c="${c.id}" data-i="${i.id}"></td><td class="num"><button class="linkbtn danger" data-act="rmItem" data-c="${c.id}" data-i="${i.id}" aria-label="Remove ${esc(i.name)}">Remove</button></td></tr>`).join('') || `<tr><td colspan="${c.isUs ? 5 : 4}" class="muted">No items yet.</td></tr>`}
     </tbody></table></div>
+    ${c.isUs ? `<p class="small muted" style="margin-top:8px">"Our labour" is you two being paid for your own time, so it counts as profit rather than a cost. Everything else — hire, insurance, mileage — is money that actually leaves. A new item counts as pass-through until you change it. Jobs whose prices are already locked keep the split they locked.</p>` : ''}
     ${ui.addItemFor === c.id ? `<form class="formbox" data-form="addItem" data-c="${c.id}">
       <div class="form-grid">
         <div class="field"><label for="ni-name-${c.id}">Item</label><input class="input" id="ni-name-${c.id}" name="name" required placeholder="e.g. Fridge clean"></div>
@@ -3459,6 +3495,23 @@ document.addEventListener('change', e => {
     const s = draft.sections[d.k];
     s.contractorId = t.value; s.lines = {};
     toast('Items cleared for the new contractor'); render();
+  }
+  /* A checkbox, so it belongs on change rather than click: clicking
+     the label text fires on the label, and reading .checked from that
+     gives the wrong answer. */
+  if (d.act === 'toggleUs') {
+    const res = Data.setIsUs(d.c, t.checked, owner());
+    toast(res.error ? res.error
+      : t.checked ? 'Marked as us — now set what each item counts as'
+      : 'No longer marked as us');
+    render();
+    return;
+  }
+  if (d.act === 'itemCat') {
+    const res = Data.setItemCat(d.c, d.i, t.value);
+    toast(res.error ? res.error : 'Saved');
+    render();
+    return;
   }
   if (d.act === 'rate') Data.setRate(d.c, d.i, t.value);
   if (d.act === 'setOwner') {
