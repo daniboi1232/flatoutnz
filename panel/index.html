@@ -846,8 +846,9 @@ function standDownFields(j) {
   return keptLine + `
     <p class="small" style="margin-top:12px"><b>What does each contractor say?</b></p>
     <p class="small muted">They accepted the order before this was cancelled, so you owe them until they say
-      otherwise. Leave one unanswered and the panel keeps the full amount on your books, which is the safe way
-      round — you can set it once you have spoken to them.</p>
+      otherwise. Nothing is picked for you: leave one unanswered and the panel keeps the full amount on your
+      books and flags it, which is the safe way round. Set it once you have actually spoken to them — writing
+      off a contractor's money by pressing a button quickly is not something this should let you do.</p>
     ${open.map(p => {
       const c = Data.getContractor(p.contractorId);
       const full = Data.orderOwed(j.id, p.no);
@@ -856,7 +857,7 @@ function standDownFields(j) {
         <p class="small"><b>${n} · ${esc(c ? c.name : 'Contractor removed')}</b>
           <span class="muted">${esc(S[p.key] || p.key)} · ${money(full)}</span></p>
         <div class="rows">
-          <label class="row"><input type="radio" name="so-${n}" value="stood_down" checked>
+          <label class="row"><input type="radio" name="so-${n}" value="stood_down">
             <div class="main">They stood down — nothing owed</div></label>
           <label class="row"><input type="radio" name="so-${n}" value="fee">
             <div class="main">They charged a cancellation fee
@@ -868,6 +869,41 @@ function standDownFields(j) {
         </div>
       </div>`;
     }).join('')}`;
+}
+
+/* The same question as the cancel form, asked again on the order
+   itself — because the honest answer is usually "I haven't rung them
+   yet", and that conversation happens days later. */
+function standDownRow(j, p) {
+  const s = p.standDown;
+  const full = Data.sectionCost(j.sections[p.key] || { lines: {}, contractorId: null });
+  if (s) {
+    const said = s.outcome === 'stood_down' ? 'Stood down — nothing owed'
+      : s.outcome === 'fee' ? `Cancellation fee of ${money(s.fee)}`
+      : `Holding you to the full ${money(full)}`;
+    return `<p class="small muted" style="margin-top:8px">${esc(said)} · recorded by ${esc(String(s.by).split(' ')[0])}
+      <button class="linkbtn" data-act="poStandDown" data-id="${j.id}" data-po="${p.no}">Change</button></p>`;
+  }
+  if (ui.standDownFor !== p.no) {
+    return `<p class="small" style="margin-top:8px"><b style="color:var(--red)">Not settled.</b>
+      ${money(full)} is on your books until you record what they said.
+      <button class="linkbtn" data-act="poStandDown" data-id="${j.id}" data-po="${p.no}">Record it</button></p>`;
+  }
+  return `<form class="formbox" data-form="standDown" data-id="${j.id}" data-po="${p.no}" style="margin-top:8px">
+    <p class="small"><b>What did ${esc(cName(p.contractorId))} say about ${esc(p.no)}?</b></p>
+    <div class="rows">
+      <label class="row"><input type="radio" name="outcome" value="stood_down" required>
+        <div class="main">They stood down — nothing owed</div></label>
+      <label class="row"><input type="radio" name="outcome" value="fee">
+        <div class="main">They charged a cancellation fee
+          <input class="input sm" name="fee" type="number" min="0" step="0.01" max="${full}"
+            placeholder="0.00" style="max-width:110px;margin-left:8px"></div></label>
+      <label class="row"><input type="radio" name="outcome" value="owed_full">
+        <div class="main">They are holding me to the full ${money(full)}</div></label>
+    </div>
+    <div class="chips"><button class="btn sm" type="submit">Record it</button>
+      <button class="btn sm ghost" type="button" data-act="cancelStandDown">Cancel</button></div>
+  </form>`;
 }
 
 function posCard(j) {
@@ -895,7 +931,8 @@ function posCard(j) {
       <button class="btn sm ghost" data-act="poDecline" data-id="${j.id}" data-po="${p.no}">They declined</button>
       <button class="btn sm ghost" data-act="poSilent" data-id="${j.id}" data-po="${p.no}">No reply</button>
     </div>` : ''}
-    ${p.status === 'accepted' ? `<div class="chips"><button class="btn sm ghost" data-act="poDone" data-id="${j.id}" data-po="${p.no}">They've finished it</button></div>` : ''}
+    ${p.status === 'accepted' && j.status !== 'cancelled' ? `<div class="chips"><button class="btn sm ghost" data-act="poDone" data-id="${j.id}" data-po="${p.no}">They've finished it</button></div>` : ''}
+    ${j.status === 'cancelled' && (p.status === 'accepted' || p.status === 'done') ? standDownRow(j, p) : ''}
     ${p.status === 'awaiting' || p.status === 'accepted' ? `<button class="linkbtn" data-act="poFix" data-id="${j.id}" data-po="${p.no}">Something changed \u2014 re-issue this order</button>` : ''}
     ${ui.poFixFor === p.no ? `<form class="formbox" data-form="poFix" data-id="${j.id}" data-po="${p.no}">
       <p class="small"><b>Re-issue ${p.no} to ${esc(cName(p.contractorId))}</b></p>
@@ -3039,6 +3076,8 @@ document.addEventListener('click', e => {
       toast(r.owing ? 'Signed off, with money still owing' : 'Job signed off. Review request is ready below');
       render(); break; }
     case 'cancelSignoff': ui.signoffOwing = null; render(); break;
+    case 'poStandDown': ui.standDownFor = d.po; render(); break;
+    case 'cancelStandDown': ui.standDownFor = null; render(); break;
     case 'settle': {
       const r = Data.settleJob(d.id, owner());
       if (r.error) { toast(r.error); break; }
@@ -3202,6 +3241,15 @@ document.addEventListener('submit', e => {
   }
   if (kind === 'note') {
     Data.addNote(f.dataset.id, form.get('text'), owner());
+    render();
+    return;
+  }
+  if (kind === 'standDown') {
+    const res = Data.settleOrder(f.dataset.id, f.dataset.po,
+      form.get('outcome'), form.get('fee'), owner());
+    if (res.error) { toast(res.error); return; }
+    ui.standDownFor = null;
+    toast(res.owed ? `${money(res.owed)} owed on ${f.dataset.po}` : `Nothing owed on ${f.dataset.po}`);
     render();
     return;
   }
