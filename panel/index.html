@@ -886,6 +886,7 @@ function signoffCard(j) {
     <p class="small"><b>${money(Data.outstanding(j.id))} is still owing on this job.</b></p>
     <p class="small muted">Signing off is the last time anyone looks at a job, so a balance left here is a balance that never gets chased. Record the payment first if it has landed. If you have agreed something with them, sign it off anyway — it goes in the job's history either way.</p>
     <div class="chips"><button class="btn sm ghost" data-act="takePayment" data-id="${j.id}" data-k="balance">Record the payment</button>
+      <button class="btn sm ghost" data-act="settle" data-id="${j.id}">Nothing more is owed</button>
       <button class="btn sm" style="background:var(--red)" data-act="signoff" data-id="${j.id}" data-anyway="yes">Sign off anyway</button>
       <button class="btn sm ghost" data-act="cancelSignoff">Leave it</button></div>
   </div>` : ''}</section>`;
@@ -2209,6 +2210,25 @@ function refundSection(j) {
     sum.credited < sum.total ? `, ${money(sum.credited)} of it reducing what the job was worth` : ''}.
     ${left > 0 ? `${money(left)} is still refundable.` : 'Everything paid has been returned.'}</p>` : ''}
 
+  ${(() => {
+    /* Whether this job is still chasing money, said plainly, right
+       next to the refund that usually causes the question. */
+    const s = Data.settlement(j.id);
+    const raw = Data.rawOutstanding(j.id);
+    if (s) {
+      return `<p class="note" style="margin-top:10px"><b>Settled.</b> Nothing more is owed on this job${
+        s.amount ? `, and ${money(s.amount)} was written off` : ''} — marked by ${esc(String(s.by).split(' ')[0])} on ${fd(String(s.at).slice(0, 10))}${
+        s.note ? `: ${esc(s.note)}` : ''}.
+        <button class="linkbtn" data-act="unsettle" data-id="${j.id}">Undo</button></p>`;
+    }
+    if (!raw) return '';
+    return `<div class="formbox" style="margin-top:10px">
+      <p class="small"><b>${money(raw)} still shows as owing on this job.</b></p>
+      <p class="small muted">If you have settled up with them — a refund you agreed on the phone, or a few dollars you are not going to chase — say so here. It stops the job being chased and lets it sign off, and it goes in the history with your name on it.</p>
+      <div class="chips"><button class="btn sm ghost" data-act="settle" data-id="${j.id}">Nothing more is owed</button></div>
+    </div>`;
+  })()}
+
   ${open ? `<form class="formbox" data-form="refund" data-id="${j.id}">
     <p class="small"><b>Refund ${esc(j.cust.name)}</b></p>
     ${guide && guide.policy !== 'no-date' ? `<p class="note">
@@ -2942,6 +2962,17 @@ document.addEventListener('click', e => {
       toast(r.owing ? 'Signed off, with money still owing' : 'Job signed off. Review request is ready below');
       render(); break; }
     case 'cancelSignoff': ui.signoffOwing = null; render(); break;
+    case 'settle': {
+      const r = Data.settleJob(d.id, owner());
+      if (r.error) { toast(r.error); break; }
+      ui.signoffOwing = null;
+      toast(r.amount ? `Settled — ${money(r.amount)} written off` : 'Settled. Nothing more is owed');
+      render(); break; }
+    case 'unsettle': {
+      const r = Data.unsettleJob(d.id, owner());
+      if (r.error) { toast(r.error); break; }
+      toast(r.owing ? `${money(r.owing)} is owing again` : 'Settlement undone');
+      render(); break; }
     case 'downloadBackup': {
       const data = Data.backup();
       const name = `flatout-backup-${Data.isoDate(Data.today())}.json`;

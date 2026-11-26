@@ -1007,6 +1007,31 @@ const Data = (() => {
   const paidTotal = jobId => (getJob(jobId)?.payments || [])
     .reduce((t, p) => t + Number(p.amount || 0), 0);
 
+  /* What a job is still owed — the one definition, used everywhere.
+     It existed in three places and two of them were wrong: they took
+     the price less what was paid, and refunds are stored as negative
+     payments, so a refund pushed the "owing" figure straight back up
+     by the amount you had just sent back. Refund $100 on a fully paid
+     $350 job and the panel claimed $100 was still owing and refused
+     to let you sign it off.
+
+     Credits come off the price, because a credit note means the job
+     was worth less, not that the customer underpaid. And a balance
+     you have explicitly settled is zero regardless: sometimes you
+     agree something that no formula will arrive at. */
+  function owingOn(jobOrId) {
+    const j = typeof jobOrId === 'string' ? getJob(jobOrId) : jobOrId;
+    if (!j) return 0;
+    if (j.settled) return 0;
+    return rawOwing(j);
+  }
+
+  /* The same sum ignoring a settlement, so the panel can say what was
+     written off rather than just showing zero. */
+  function rawOwing(j) {
+    return Math.max(0, paymentPlan(j).total - jobCredits(j) - paidTotal(j.id));
+  }
+
   /* The snapshot a document renders from. Everything the template needs
      is read here, once, and never again. */
   function buildCtx(job, type, opts, byOwner) {
@@ -1652,7 +1677,41 @@ const Data = (() => {
     issueDocument,
     paymentPlan,
     paidTotal,
-    outstanding: jobId => Math.max(0, paymentPlan(getJob(jobId)).total - paidTotal(jobId)),
+    outstanding: owingOn,
+    rawOutstanding: jobId => { const j = getJob(jobId); return j ? rawOwing(j) : 0; },
+    settlement: jobId => (getJob(jobId) || {}).settled || null,
+
+    /* Say that nothing more is owed on a job, whatever the arithmetic
+       thinks. The honest cases: a refund you agreed in a conversation
+       and the figures do not quite land on, a few dollars you are not
+       going to chase, a balance written off. It is logged with who and
+       when, because a balance disappearing with no name against it is
+       the thing you cannot explain to each other later. */
+    settleJob(jobId, byOwner, note) {
+      const j = getJob(jobId);
+      if (!j) return { error: 'That job no longer exists.' };
+      const amount = rawOwing(j);
+      j.settled = { at: new Date().toISOString(), by: byOwner, amount,
+        note: String(note || '').slice(0, 200) };
+      j.log.push(`Marked settled by ${byOwner}` +
+        (amount ? ` — ${fmtMoney(amount)} written off` : ' — nothing was outstanding') +
+        (note ? `: ${String(note).slice(0, 200)}` : ''));
+      saveJobRecord(j);
+      return { job: j, amount };
+    },
+
+    /* Undo it, because the button is one tap and a mistake should not
+       need me to fix it. */
+    unsettleJob(jobId, byOwner) {
+      const j = getJob(jobId);
+      if (!j) return { error: 'That job no longer exists.' };
+      if (!j.settled) return { error: 'This job is not marked settled.' };
+      delete j.settled;
+      j.log.push(`Settlement undone by ${byOwner} — the balance is back`);
+      saveJobRecord(j);
+      return { job: j, owing: rawOwing(j) };
+    },
+
     isInstalmentPaid: (jobId, key) => isInstalmentPaid(getJob(jobId), key),
     portalUrl,
     getPortal: jobId => { const j = getJob(jobId); if (!j) return null; const p = ensurePortal(j); saveJobRecord(j); return p; },
@@ -2055,7 +2114,7 @@ const Data = (() => {
     signOffJob(id, byOwner, anyway) {
       const j = getJob(id);
       if (!j) return { error: 'That job no longer exists.' };
-      const owing = Math.max(0, paymentPlan(j).total - paidTotal(id));
+      const owing = owingOn(j);
       if (owing > 0 && !anyway) {
         return { blocked: true, owing, why: fmtMoney(owing) + ' is still owing on this job.' };
       }
@@ -3010,11 +3069,7 @@ const Data = (() => {
     agedDebtors() {
       const now = startOfDay(new Date()), buckets = { current: [], d30: [], d60: [], d90: [] };
       jobs.filter(j => j.status === 'active' && jobCost(j)).forEach(j => {
-        const plan = paymentPlan(j);
-        /* Refunds are negative payments, so paidTotal already nets
-           them off. Subtracting the credits as well is what stops a
-           refund for work that never happened reappearing as a debt. */
-        const owing = Math.max(0, plan.total - jobCredits(j) - paidTotal(j.id));
+        const owing = owingOn(j);
         if (!owing) return;
         /* Only count it as a debt once an invoice has actually gone
            out — a priced job nobody has been billed for is pipeline. */
