@@ -902,7 +902,9 @@ function docsCard(j) {
   const docs = Data.listDocuments(j.id);
   const plan = Data.paymentPlan(j);
   const paid = Data.paidTotal(j.id);
-  const out = Math.max(0, plan.total - paid);
+  /* The same definition the rest of the panel uses, so the heading
+     cannot disagree with the figure a few lines below it. */
+  const out = Data.outstanding(j.id);
   const priced = !!Data.jobCost(j);
   const bankReady = Data.bankReady();
   const portal = j.portal || null;
@@ -947,7 +949,7 @@ function docsCard(j) {
   <div class="chips" style="margin-top:14px">
     ${['estimate', 'quote', 'invoice'].map(t => {
       const why = canIssue(t);
-      return `<button class="btn sm ${t === 'quote' ? '' : 'ghost'}" data-act="issueDoc" data-t="${t}" data-id="${j.id}" ${why ? 'disabled title="' + esc(why) + '"' : ''}>Issue ${t === 'invoice' ? (Data.isInstalmentPaid(j.id, 'deposit') ? 'the balance invoice' : 'an invoice') : 'an ' + t}</button>`;
+      return `<button class="btn sm ${t === 'quote' ? '' : 'ghost'}" data-act="issueDoc" data-t="${t}" data-id="${j.id}" ${why ? 'disabled title="' + esc(why) + '"' : ''}>Issue ${t === 'invoice' ? (Data.isInstalmentPaid(j.id, 'deposit') ? 'the balance invoice' : 'an invoice') : (t === 'estimate' ? 'an estimate' : 'a ' + t)}</button>`;
     }).join('')}
   </div>
   ${!bankReady ? '<p class="small muted" style="margin-top:8px">Invoices need the bank account. Add it under <button class="linkbtn" data-act="nav" data-v="settings">Settings</button> — until then you can still send estimates and quotes.</p>' : ''}
