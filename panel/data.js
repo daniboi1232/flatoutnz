@@ -164,9 +164,12 @@ const Data = (() => {
      Dated by when the refund happened, because a credit note belongs
      to the period it is issued in, not the period of the original job. */
   function creditsIn(fromISO, toISO) {
-    return jobs.reduce((t, j) => t + (j.payments || [])
+    /* Cancelled jobs are left out. Their income is counted as what you
+       actually kept, which already has the refund taken off — counting
+       the credit again here would deduct the same money twice. */
+    return jobs.reduce((t, j) => t + (j.status === 'cancelled' ? 0 : (j.payments || [])
       .reduce((s, p) => s + (p.refund && p.reduces && p.on >= fromISO && p.on <= toISO
-        ? Math.abs(Number(p.amount) || 0) : 0), 0), 0);
+        ? Math.abs(Number(p.amount) || 0) : 0), 0)), 0);
   }
 
   /* ---------- expense categories ------------------------------------
@@ -1032,6 +1035,44 @@ const Data = (() => {
     return Math.max(0, paymentPlan(j).total - jobCredits(j) - paidTotal(j.id));
   }
 
+  /* ---------- a cancelled job still has money in it -------------------
+     A cancelled job used to drop out of the accounts entirely. That is
+     wrong in both directions: the deposit you keep is income, and a
+     contractor who had already accepted the order is still owed
+     something, which is often a cancellation fee rather than the full
+     amount. Dropping the job hid real income and a real debt at once.
+
+     What you KEPT is the net of the payments — a refund is a negative
+     payment, so this is already what did not go back. */
+  const retained = j => Math.max(0, paidTotal(j.id));
+
+  /* What one accepted job order costs you. While the job is live that
+     is its section cost. Once the job is cancelled it is whatever you
+     settled with that contractor: nothing if they stood down, a fee if
+     they charged one, or the full amount if they are holding you to it.
+     Undecided counts as the full amount, because assuming a debt away
+     is the expensive mistake. */
+  function poOwed(j, p) {
+    const sec = j.sections[p.key];
+    const full = sec ? sectionCost(sec) : 0;
+    if (j.status !== 'cancelled') return full;
+    const s = p.standDown;
+    if (!s) return full;
+    if (s.outcome === 'stood_down') return 0;
+    if (s.outcome === 'fee') return Math.max(0, Number(s.fee) || 0);
+    return full;
+  }
+
+  const cancelledCost = j => livePos(j)
+    .filter(p => p.status === 'accepted' || p.status === 'done')
+    .reduce((t, p) => t + poOwed(j, p), 0);
+
+  /* Whether every accepted order on a cancelled job has been settled
+     one way or the other, so the panel can nag about the ones that
+     have not. */
+  const standDownPending = j => j.status === 'cancelled' && livePos(j)
+    .filter(p => (p.status === 'accepted' || p.status === 'done') && !p.standDown).length;
+
   /* The snapshot a document renders from. Everything the template needs
      is read here, once, and never again. */
   function buildCtx(job, type, opts, byOwner) {
@@ -1495,8 +1536,55 @@ const Data = (() => {
       j.log.push(status === 'active'
         ? `Reopened by ${byOwner}`
         : `Marked ${JOB_STATUS[status].toLowerCase()} by ${byOwner}${reason ? ': ' + reason : ''}`);
+      /* Reopening undoes the stand-down decisions: the orders are live
+         again, so what you owe goes back to the full amounts. */
+      if (status === 'active') (j.pos || []).forEach(p => { delete p.standDown; });
       saveJobRecord(j);
       return j;
+    },
+
+    /* What each accepted job order costs you, job by job and order by
+       order, for the screens that have to show it. */
+    orderOwed: (jobId, poNo) => {
+      const j = getJob(jobId); if (!j) return 0;
+      const p = findPo(j, poNo); return p ? poOwed(j, p) : 0;
+    },
+    retained: jobId => { const j = getJob(jobId); return j ? retained(j) : 0; },
+    cancelledCost: jobId => { const j = getJob(jobId); return j ? cancelledCost(j) : 0; },
+    standDownPending: jobId => { const j = getJob(jobId); return j ? standDownPending(j) : 0; },
+
+    /* Settle one accepted order on a cancelled job: they stood down,
+       they charged a fee, or they are holding you to the full amount.
+       Recorded per order, because two contractors on one job will not
+       necessarily say the same thing. */
+    settleOrder(jobId, poNo, outcome, fee, byOwner) {
+      const j = getJob(jobId);
+      if (!j) return { error: 'That job no longer exists.' };
+      const p = findPo(j, poNo);
+      if (!p) return { error: 'That job order no longer exists.' };
+      if (!['stood_down', 'fee', 'owed_full'].includes(outcome)) {
+        return { error: 'Choose what the contractor is owed.' };
+      }
+      const amount = Number(fee);
+      if (outcome === 'fee' && (!isFinite(amount) || amount <= 0)) {
+        return { error: 'Enter the fee they charged.' };
+      }
+      const sec = j.sections[p.key];
+      const full = sec ? sectionCost(sec) : 0;
+      if (outcome === 'fee' && amount > full) {
+        return { error: `A cancellation fee above the ${fmtMoney(full)} order itself needs checking — enter it as the full amount if that is right.` };
+      }
+      p.standDown = { outcome, fee: outcome === 'fee' ? amount : 0,
+        at: new Date().toISOString(), by: byOwner };
+      const c = getContractor(p.contractorId);
+      const who = c ? c.name : 'the contractor';
+      j.log.push(`${p.no}: ` + (outcome === 'stood_down'
+        ? `${who} stood down, nothing owed`
+        : outcome === 'fee'
+          ? `${who} charged a ${fmtMoney(amount)} cancellation fee`
+          : `${who} is owed the full ${fmtMoney(full)}`) + ` — recorded by ${byOwner}`);
+      saveJobRecord(j);
+      return { job: j, owed: poOwed(j, p) };
     },
     JOB_STATUS,
     parseSheetRow,
@@ -3113,11 +3201,14 @@ const Data = (() => {
        the principal model. */
     payables() {
       const now = startOfDay(new Date()), rows = [];
-      jobs.filter(j => j.status === 'active').forEach(j => {
+      /* Cancelled jobs are in here too. An order the contractor had
+         already accepted is owed until they say otherwise, and that
+         debt not appearing anywhere was the worst part of cancelling a
+         job: you would pay it out of a figure that never showed it. */
+      jobs.filter(j => j.status === 'active' || j.status === 'cancelled').forEach(j => {
         livePos(j).filter(p => p.status === 'accepted' || p.status === 'done').forEach(p => {
           const c = getContractor(p.contractorId);
-          const sec = j.sections[p.key];
-          const amount = sec ? sectionCost(sec) : 0;
+          const amount = poOwed(j, p);
           if (!amount) return;
           /* Their terms run from the job, since that is when they
              invoice. 1 month and 14 days are the two we offer. */
@@ -3127,7 +3218,13 @@ const Data = (() => {
           rows.push({ jobId: j.id, po: p.no, customer: j.cust.name,
             contractor: c ? c.name : 'Contractor removed', contractorId: p.contractorId,
             service: sectionLabel(p.key), amount, due: isoDate(due),
-            overdue: due < now, done: p.status === 'done' });
+            overdue: due < now, done: p.status === 'done',
+            cancelled: j.status === 'cancelled',
+            /* Flagged when the job is cancelled and nobody has said yet
+               what this contractor is owed, so the figure is the full
+               amount as a placeholder rather than a settled number. */
+            unsettled: j.status === 'cancelled' && !p.standDown,
+            fee: !!(p.standDown && p.standDown.outcome === 'fee') });
         });
       });
       rows.sort((a, b) => String(a.due).localeCompare(String(b.due)));
@@ -3314,6 +3411,23 @@ const Data = (() => {
         jobCount++;
       });
 
+      /* Cancelled jobs, on their own two lines. The job did not happen,
+         so its price is not income — but the part of the deposit you
+         kept is, and the fee a contractor charged for standing down
+         late is a cost. Shown separately because a cancellation that
+         nets out negative is worth seeing rather than burying in the
+         ordinary job figures. */
+      let keptOnCancelled = 0, standDownFees = 0, cancelledJobs = 0;
+      jobs.filter(j => j.status === 'cancelled' && inPeriod(j.cust.moveDate)).forEach(j => {
+        const kept = retained(j), owed = cancelledCost(j);
+        if (!kept && !owed) return;
+        keptOnCancelled += kept;
+        standDownFees += owed;
+        cancelledJobs++;
+      });
+      grossIncome += keptOnCancelled;
+      contractorCost += standDownFees;
+
       /* Money refunded for work that shrank or never happened is not
          income. Returning an overpayment is not deducted, because it
          was never counted as income in the first place. */
@@ -3352,6 +3466,7 @@ const Data = (() => {
       return {
         from: fromISO, to: toISO, jobCount, credited,
         grossIncome, income, contractorCost, contractors,
+        cancelled: { kept: keptOnCancelled, fees: standDownFees, jobs: cancelledJobs },
         expenses: rows, expenseTotal: deductions, receiptsTotal: expenseTotal,
         vehicle: veh, depreciation: dep,
         gstOnExpenses, net
@@ -3418,6 +3533,16 @@ const Data = (() => {
       let supplies = 0, outputGst = 0, purchases = 0, inputGst = 0;
       let noGstCost = 0, unknown = 0;
       const rows = [];
+
+      /* A cancellation fee you keep is a taxable supply like any other,
+         so a cancelled job belongs in the return at what you kept —
+         not at the price of the job that never ran, and not left out. */
+      jobs.filter(j => j.status === 'cancelled' && inPeriod(j.cust.moveDate)).forEach(j => {
+        const kept = retained(j);
+        if (!kept) return;
+        supplies += kept;
+        outputGst += gstWithin(kept);
+      });
 
       jobs.filter(j => j.status === 'active' && inPeriod(j.cust.moveDate)).forEach(j => {
         const cost = jobCost(j);
@@ -3490,7 +3615,8 @@ const Data = (() => {
       const mine = j => !mineOnly || j.owner === forOwner;
       const months = {};
       const row = k => (months[k] = months[k] || {
-        key: k, sold: 0, cost: 0, margin: 0, jobs: 0, received: 0, lost: 0, lostJobs: 0
+        key: k, sold: 0, cost: 0, margin: 0, jobs: 0, received: 0, lost: 0, lostJobs: 0,
+        cancelledJobs: 0
       });
       const monthOf = iso => String(iso || '').slice(0, 7);
 
@@ -3506,6 +3632,16 @@ const Data = (() => {
           const r = row(monthOf(j.cust.moveDate));
           r.lost += customerPrice(cost, j); r.lostJobs++;
         }
+        /* A cancelled job counts for what you kept and what you owe,
+           so this table adds up to the same thing the P&L does. */
+        if (j.status === 'cancelled' && j.cust.moveDate) {
+          const kept = retained(j), owed = cancelledCost(j);
+          if (kept || owed) {
+            const r = row(monthOf(j.cust.moveDate));
+            r.sold += kept; r.cost += owed; r.margin += kept - owed;
+            r.cancelledJobs = (r.cancelledJobs || 0) + 1;
+          }
+        }
         (j.payments || []).forEach(pm => { row(monthOf(pm.on)).received += Number(pm.amount || 0); });
       });
 
@@ -3513,8 +3649,10 @@ const Data = (() => {
       const totals = list.reduce((t, m) => ({
         sold: t.sold + m.sold, cost: t.cost + m.cost, margin: t.margin + m.margin,
         jobs: t.jobs + m.jobs, received: t.received + m.received,
-        lost: t.lost + m.lost, lostJobs: t.lostJobs + m.lostJobs
-      }), { sold: 0, cost: 0, margin: 0, jobs: 0, received: 0, lost: 0, lostJobs: 0 });
+        lost: t.lost + m.lost, lostJobs: t.lostJobs + m.lostJobs,
+        cancelledJobs: t.cancelledJobs + m.cancelledJobs
+      }), { sold: 0, cost: 0, margin: 0, jobs: 0, received: 0, lost: 0, lostJobs: 0,
+            cancelledJobs: 0 });
 
       // Everything invoiced and not yet paid, whatever month it sits in.
       const owing = jobs.filter(j => mine(j) && j.status === 'active' && jobCost(j))

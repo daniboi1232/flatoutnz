@@ -716,6 +716,7 @@ function vJob(j) {
   return `<div class="view">
   <div><button class="btn sm ghost" data-act="back">← All jobs</button></div>
   ${j.status === 'standby' ? standbyBanner(j)
+    : j.status === 'cancelled' ? cancelledNote(j)
     : j.status !== 'active' ? `<p class="note">This job is marked ${esc(Data.JOB_STATUS[j.status].toLowerCase())}${j.statusReason ? ': ' + esc(j.statusReason) : ''}. It is out of your pipeline until you reopen it.</p>` : ''}
   <div class="card-head" style="margin:0"><div><h2>${esc(j.cust.name)}</h2><p class="muted small" style="margin-top:4px">${j.id}${j.cust.address ? ' · ' + esc(j.cust.address) : ' · no address yet'} · job ${fdOr(j.cust.moveDate)} · prepared by ${esc(j.preparedBy)} · <button class="linkbtn" data-act="editJob" data-id="${j.id}">Edit details</button></p></div><div class="chips"><label class="small muted" for="own-d-${j.id}">Owner</label><select class="select inline" id="own-d-${j.id}" data-act="setOwner" data-id="${j.id}">${OWNERS.map(o => `<option value="${o}" ${o === j.owner ? 'selected' : ''}>${o}</option>`).join('')}</select>${stagePill(j.stage, j)}</div></div>
   <section class="card"><div class="steps">${STAGES.map((s, i) => `<div class="step ${i < j.stage ? 'done' : i === j.stage ? 'now' : ''}">${s}</div>`).join('')}</div>
@@ -780,6 +781,7 @@ function vJob(j) {
       <div class="field"><label for="status-reason">${ui.statusFor.status === 'standby' ? 'Why are they on standby?' : `Why is it ${ui.statusFor.status}?`} <span class="muted" style="font-weight:400">(optional, but worth knowing later)</span></label>
       <input class="input" id="status-reason" name="reason" placeholder="${ui.statusFor.status === 'lost' ? 'Went with someone cheaper' : ui.statusFor.status === 'standby' ? 'Flat is doing it themselves, wants us on hand' : 'Flat decided not to bother'}"></div>
       ${ui.statusFor.status === 'standby' ? '<p class="small muted">Nothing is owed and nothing is chased. It sits out of your way until their move-out date, when Home will ask you what happened.</p>' : ''}
+      ${ui.statusFor.status === 'cancelled' ? standDownFields(j) : ''}
       <div class="chips"><button class="btn sm" type="submit">${ui.statusFor.status === 'standby' ? 'Put on standby' : 'Mark ' + ui.statusFor.status}</button><button class="btn sm ghost" type="button" data-act="cancelStatus">Cancel</button></div>
     </form>` : ''}
     ${ui.retrieveFor === j.id ? `<form class="formbox" data-form="retrieve" data-id="${j.id}">
@@ -801,6 +803,73 @@ function vJob(j) {
 /* Job orders. With no vendor portal, you send these yourself and
    record what the contractor told you. Every button is a statement of
    something that already happened, not an instruction to the panel. */
+/* A cancelled job is out of the pipeline but still in the accounts, so
+   the banner says what it is worth rather than only that it is dead. */
+function cancelledNote(j) {
+  const kept = Data.retained(j.id);
+  const owed = Data.cancelledCost(j.id);
+  const pending = Data.standDownPending(j.id);
+  const net = kept - owed;
+  return `<div class="note">
+    <p><b>Cancelled${j.statusReason ? ': ' + esc(j.statusReason) : ''}.</b> Out of your pipeline until you reopen it.</p>
+    <div class="rows" style="margin-top:8px">
+      <div class="row"><div class="main">Kept from the customer</div><b>${money(kept)}</b></div>
+      <div class="row"><div class="main">Owed to contractors</div><b>−${money(owed)}</b></div>
+      <div class="row"><div class="main"><b>This job</b></div><b style="color:${net < 0 ? 'var(--red)' : 'inherit'}">${money(net)}</b></div>
+    </div>
+    ${pending ? `<p class="small" style="margin-top:8px"><b>${pending} job order${pending === 1 ? '' : 's'} not settled yet.</b>
+      The full amount is on your books until you record what they said — set it on the order below.</p>` : ''}
+    <p class="small muted" style="margin-top:8px">Both figures are in your profit and loss and in what you owe contractors. They do not disappear because the job did.</p>
+  </div>`;
+}
+
+/* Cancelling a job used to be one button and a free-text reason, and
+   the money quietly left the accounts. Two things actually need
+   deciding, so the form asks them: what you keep of what they paid,
+   and what each contractor who had already accepted is owed. */
+function standDownFields(j) {
+  const kept = Data.retained(j.id);
+  const open = Data.livePos(j)
+    .filter(p => p.status === 'accepted' || p.status === 'done');
+
+  const money = v => '$' + Number(v || 0).toFixed(2);
+  const keptLine = kept
+    ? `<p class="note" style="margin-top:10px"><b>${money(kept)} of theirs is still with you.</b>
+       That stays counted as income on this job — it is the part you did not give back. Refund more of it
+       from the Refunds section first if you are going to.</p>`
+    : `<p class="small muted" style="margin-top:10px">Nothing of theirs is sitting with you, so there is no income on this job.</p>`;
+
+  if (!open.length) {
+    return keptLine + '<p class="small muted">No contractor had accepted an order, so nobody is owed anything.</p>';
+  }
+
+  return keptLine + `
+    <p class="small" style="margin-top:12px"><b>What does each contractor say?</b></p>
+    <p class="small muted">They accepted the order before this was cancelled, so you owe them until they say
+      otherwise. Leave one unanswered and the panel keeps the full amount on your books, which is the safe way
+      round — you can set it once you have spoken to them.</p>
+    ${open.map(p => {
+      const c = Data.getContractor(p.contractorId);
+      const full = Data.orderOwed(j.id, p.no);
+      const n = esc(p.no);
+      return `<div class="formbox" style="margin-top:10px">
+        <p class="small"><b>${n} · ${esc(c ? c.name : 'Contractor removed')}</b>
+          <span class="muted">${esc(S[p.key] || p.key)} · ${money(full)}</span></p>
+        <div class="rows">
+          <label class="row"><input type="radio" name="so-${n}" value="stood_down" checked>
+            <div class="main">They stood down — nothing owed</div></label>
+          <label class="row"><input type="radio" name="so-${n}" value="fee">
+            <div class="main">They charged a cancellation fee
+              <input class="input sm" name="fee-${n}" type="number" min="0" step="0.01"
+                max="${full}" placeholder="0.00" style="max-width:110px;margin-left:8px">
+            </div></label>
+          <label class="row"><input type="radio" name="so-${n}" value="owed_full">
+            <div class="main">They are holding me to the full ${money(full)}</div></label>
+        </div>
+      </div>`;
+    }).join('')}`;
+}
+
 function posCard(j) {
   return `<section class="card"><div class="card-head"><h3>Job orders</h3><span class="eyebrow">You send these · record their answer</span></div><div class="rows">
   ${j.pos.map(p => {
@@ -1795,9 +1864,11 @@ function payablesCard() {
     <thead><tr><th>Contractor</th><th>For</th><th>Due</th><th class="num">Amount</th></tr></thead>
     <tbody>${p.rows.map(r => `<tr>
       <td><b>${esc(r.contractor)}</b><br><span class="small muted">${esc(r.po)}</span></td>
-      <td>${esc(r.service)} — ${esc(r.customer)}<br><span class="small muted">${esc(r.jobId)}</span></td>
+      <td>${esc(r.service)} — ${esc(r.customer)}<br><span class="small muted">${esc(r.jobId)}${
+        r.cancelled ? ' · job cancelled' : ''}${r.fee ? ' · cancellation fee' : ''}</span></td>
       <td>${fdOr(r.due)}${r.overdue ? ' <span class="pill p-bad">Overdue</span>' : ''}</td>
-      <td class="num">${money(r.amount)}</td></tr>`).join('')}
+      <td class="num">${money(r.amount)}${r.unsettled
+        ? '<br><span class="small" style="color:var(--red)">not settled</span>' : ''}</td></tr>`).join('')}
       <tr class="total"><td colspan="3">Total owed</td><td class="num">${money(p.total)}</td></tr>
     </tbody></table></div>
   ${p.thisWeek ? `<p class="small muted" style="margin-top:10px"><b>${money(p.thisWeek)}</b> falls due within the next seven days.</p>` : ''}
@@ -2038,7 +2109,11 @@ function plCard() {
     <tbody>
       <tr><td><b>Income</b> <span class="small muted">${pl.jobCount} job${pl.jobCount === 1 ? '' : 's'}${Data.getBusiness().gstRegistered ? ', GST excluded' : ''}</span></td>
           <td class="num"><b>${money(pl.income)}</b></td></tr>
+      ${pl.cancelled.kept ? `<tr><td>Kept on cancelled jobs <span class="small muted">${pl.cancelled.jobs} job${pl.cancelled.jobs === 1 ? '' : 's'}, inside the income above</span></td>
+          <td class="num muted">${money(pl.cancelled.kept)}</td></tr>` : ''}
       <tr><td>Contractor payments</td><td class="num">−${money(pl.contractors)}</td></tr>
+      ${pl.cancelled.fees ? `<tr><td>Contractor cancellation fees <span class="small muted">inside the line above</span></td>
+          <td class="num muted">−${money(pl.cancelled.fees)}</td></tr>` : ''}
       ${pl.expenses.map(e => `<tr><td>${esc(e.label)} <span class="small muted">${e.count}</span></td>
         <td class="num">−${money(e.deductible)}</td></tr>`).join('')}
       ${!pl.expenses.length ? `<tr><td colspan="2" class="muted">No expenses recorded yet — so this is revenue minus contractors, not profit.</td></tr>` : ''}
@@ -2184,7 +2259,7 @@ function vMoney() {
         <td class="num"><b>${m.margin ? money(m.margin) : '—'}</b></td>
         <td class="num">${m.received ? money(m.received) : '—'}</td></tr>`).join('')}
       </tbody></table></div>
-      <p class="small muted" style="margin-top:10px">Lost and cancelled jobs are left out of the first four columns. Cash in counts every payment recorded in that month, whichever job it belonged to.</p>`
+      <p class="small muted" style="margin-top:10px">Lost jobs are left out of the first four columns. A cancelled job counts for what you kept and what you owe its contractors, not the price it would have been. Cash in counts every payment recorded in that month, whichever job it belonged to.</p>`
     : '<p class="muted" style="margin-top:10px">Nothing priced yet.</p>'}
   </section>
 
@@ -3131,9 +3206,36 @@ document.addEventListener('submit', e => {
     return;
   }
   if (kind === 'status') {
-    Data.setJobStatus(f.dataset.id, f.dataset.status, form.get('reason'), owner());
+    const id = f.dataset.id, status = f.dataset.status;
+    Data.setJobStatus(id, status, form.get('reason'), owner());
+
+    /* The status has to go on first: what a contractor is owed depends
+       on the job being cancelled, so settling an order before that
+       would be recorded against a live job. */
+    let owed = 0, problem = '';
+    if (status === 'cancelled') {
+      for (const [k, v] of [...form.entries()]) {
+        if (!k.startsWith('so-')) continue;
+        const po = k.slice(3);
+        const res = Data.settleOrder(id, po, v, form.get('fee-' + po), owner());
+        if (res.error) { problem = res.error; break; }
+        owed += res.owed;
+      }
+    }
     ui.statusFor = null;
-    toast(f.dataset.status === 'standby' ? 'Put on standby' : 'Job marked ' + f.dataset.status);
+    if (problem) {
+      /* Left unsettled rather than half-recorded. The full amount
+         stands on the books until it is answered, which is the safe
+         way for it to be wrong. */
+      toast(problem);
+    } else if (status === 'cancelled') {
+      const kept = Data.retained(id);
+      toast(kept || owed
+        ? `Cancelled — ${money(kept)} kept, ${money(owed)} owed to contractors`
+        : 'Job marked cancelled');
+    } else {
+      toast(status === 'standby' ? 'Put on standby' : 'Job marked ' + status);
+    }
     render();
     return;
   }
