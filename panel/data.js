@@ -2781,6 +2781,16 @@ const Data = (() => {
        because the item ids are already in the frozen lines — the rate
        on the line is whatever it was when the job locked, and that
        rate is what is kept. Only the category comes from the card. */
+    /* Jobs whose prices locked before the split existed, so every US
+       line on them still reads as a cost. Counted so the panel can
+       offer to put them right once, rather than silently. */
+    unsplitUsJobs() {
+      return jobs.filter(j => Object.values(j.sections).some(sec =>
+        sec.contractorId && isUsContractor(sec.contractorId)
+        && Object.values(sec.frozen || {}).some(f => f && !isOneOff(f) && !f.us)
+      )).map(j => ({ id: j.id, name: j.cust.name, status: j.status }));
+    },
+
     backfillUsSplit(byOwner) {
       const touched = [];
       jobs.forEach(j => {

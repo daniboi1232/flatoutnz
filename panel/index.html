@@ -2658,7 +2658,19 @@ function vContractors() {
       }</select></td>` : ''
     }<td class="num"><input class="input rate" type="number" min="0" step="1" id="rate-${i.id}" aria-label="${esc(i.name)} rate" value="${i.rate}" data-act="rate" data-c="${c.id}" data-i="${i.id}"></td><td class="num"><button class="linkbtn danger" data-act="rmItem" data-c="${c.id}" data-i="${i.id}" aria-label="Remove ${esc(i.name)}">Remove</button></td></tr>`).join('') || `<tr><td colspan="${c.isUs ? 5 : 4}" class="muted">No items yet.</td></tr>`}
     </tbody></table></div>
-    ${c.isUs ? `<p class="small muted" style="margin-top:8px">"Our labour" is you two being paid for your own time, so it counts as profit rather than a cost. Everything else — hire, insurance, mileage — is money that actually leaves. A new item counts as pass-through until you change it. Jobs whose prices are already locked keep the split they locked.</p>` : ''}
+    ${c.isUs ? `<p class="small muted" style="margin-top:8px">"Our labour" is you two being paid for your own time, so it counts as profit rather than a cost. Everything else — hire, insurance, mileage — is money that actually leaves. A new item counts as pass-through until you change it. Jobs whose prices are already locked keep the split they locked.</p>
+    ${(() => {
+      /* Jobs priced before this existed have no split on them, so they
+         still read as all cost. Offered once, after the categories are
+         set — running it first would mark everything pass-through. */
+      const old = Data.unsplitUsJobs();
+      if (!old.length) return '';
+      return `<div class="formbox" style="margin-top:10px">
+        <p class="small"><b>${old.length} job${old.length === 1 ? '' : 's'} priced before this change still count the whole ${esc(c.name)} order as a cost.</b></p>
+        <p class="small muted">Set every item above first, then do this. It keeps each job's locked rates exactly as they are and only works out which lines were your own labour. ${esc(old.map(o => o.id).join(', '))}</p>
+        <div class="chips"><button class="btn sm ghost" data-act="backfillUs">Work out our labour on those jobs</button></div>
+      </div>`;
+    })()}` : ''}
     ${ui.addItemFor === c.id ? `<form class="formbox" data-form="addItem" data-c="${c.id}">
       <div class="form-grid">
         <div class="field"><label for="ni-name-${c.id}">Item</label><input class="input" id="ni-name-${c.id}" name="name" required placeholder="e.g. Fridge clean"></div>
@@ -3203,6 +3215,13 @@ document.addEventListener('click', e => {
     case 'showAddItem': ui.addItemFor = d.c; render(); focus('ni-name-' + d.c); break;
     case 'hideAddItem': ui.addItemFor = null; render(); break;
     case 'rmItem': Data.removeRateItem(d.c, d.i); toast('Item removed'); render(); break;
+    case 'backfillUs': {
+      const done = Data.backfillUsSplit(owner());
+      const total = done.reduce((t, x) => t + x.labour, 0);
+      toast(done.length
+        ? `${done.length} job${done.length === 1 ? '' : 's'} updated — ${money(total)} of it was our own labour`
+        : 'Nothing needed changing');
+      render(); break; }
   }
 });
 
