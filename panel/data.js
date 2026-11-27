@@ -1149,6 +1149,17 @@ const Data = (() => {
     return full;
   }
 
+  /* The rate item a frozen line came from. Ids survive, so that is the
+     first try; a renamed or re-created item is matched on name and
+     section instead. Only the CATEGORY is ever taken from here — the
+     rate stays as the job locked it. */
+  function cardItemFor(sec, iid, f) {
+    return getRateItem(sec.contractorId, iid)
+      || ((getContractor(sec.contractorId) || {}).items || [])
+           .find(i => i.name === f.name && i.section === f.section)
+      || null;
+  }
+
   const cancelledCost = j => livePos(j)
     .filter(p => p.status === 'accepted' || p.status === 'done')
     .reduce((t, p) => t + poOwed(j, p), 0);
@@ -2771,48 +2782,64 @@ const Data = (() => {
       return { contractor: c };
     },
 
-    /* ---- backfilling jobs that locked before the split existed ----
-       A job locked before this change has frozen lines with no `us`
-       or `cat` on them, so every one of them reads as a cost. The
-       figures have to be put right without re-pricing the job, which
-       would move the customer's price.
+    /* ---- putting the split right on jobs already locked ------------
+       Two situations, one repair. A job locked before the split
+       existed has frozen lines with no `us` or `cat`, so the whole US
+       order reads as a cost. And a job split while a category was set
+       wrongly carries that mistake until it is redone — which is what
+       happened here: Distance and Personal Vehicle Costs were marked
+       as our own labour, so $36 of real outgoings was counted as
+       partner profit.
 
-       The names are matched against the rate card as it stands,
-       because the item ids are already in the frozen lines — the rate
-       on the line is whatever it was when the job locked, and that
-       rate is what is kept. Only the category comes from the card. */
-    /* Jobs whose prices locked before the split existed, so every US
-       line on them still reads as a cost. Counted so the panel can
-       offer to put them right once, rather than silently. */
+       This deliberately overrides the price lock, for the CATEGORY
+       only. The lock exists so a job already quoted does not move when
+       a rate card is edited, and it still holds for every figure the
+       customer sees: each line keeps the rate it locked at, so the
+       price does not change by a cent. What is redone is only which
+       side of our own books each line sits on, which the customer was
+       never quoted. It runs when asked and never on its own, for
+       exactly that reason. */
+    /* Jobs whose recorded split does not match what the categories now
+       say — either because they locked before the split existed, or
+       because a category was set wrongly and has since been corrected.
+       Both need the same repair, so they are one list. */
     unsplitUsJobs() {
-      return jobs.filter(j => Object.values(j.sections).some(sec =>
-        sec.contractorId && isUsContractor(sec.contractorId)
-        && Object.values(sec.frozen || {}).some(f => f && !isOneOff(f) && !f.us)
-      )).map(j => ({ id: j.id, name: j.cust.name, status: j.status }));
+      return jobs.filter(j => Object.values(j.sections).some(sec => {
+        if (!sec.contractorId || !isUsContractor(sec.contractorId)) return false;
+        return Object.entries(sec.frozen || {}).some(([iid, f]) => {
+          if (!f || isOneOff(f)) return false;
+          if (!f.us) return true;                       // never split
+          const card = cardItemFor(sec, iid, f);
+          return card && itemCat(card) !== f.cat;       // split differently now
+        });
+      })).map(j => ({ id: j.id, name: j.cust.name, status: j.status }));
     },
 
-    backfillUsSplit(byOwner) {
+    reSplitUsJobs(byOwner) {
       const touched = [];
       jobs.forEach(j => {
+        const was = jobSplit(j);
         let changed = false;
         Object.values(j.sections).forEach(sec => {
           if (!sec.contractorId || !isUsContractor(sec.contractorId)) return;
           Object.keys(sec.frozen || {}).forEach(iid => {
             const f = sec.frozen[iid];
-            if (!f || isOneOff(f) || f.us) return;      // one-offs are never ours
-            const card = getRateItem(sec.contractorId, iid)
-              || (getContractor(sec.contractorId).items || [])
-                   .find(i => i.name === f.name && i.section === f.section);
+            if (!f || isOneOff(f)) return;              // one-offs are never ours
+            const card = cardItemFor(sec, iid, f);
+            const cat = itemCat(card);
+            if (f.us && f.cat === cat) return;          // already right
             f.us = true;
-            f.cat = itemCat(card);
+            f.cat = cat;
             changed = true;
           });
         });
         if (changed) {
-          const d = jobSplit(j);
-          j.log.push(`Our own labour on this job identified as ${fmtMoney(d.labour)} of the ${fmtMoney(jobCost(j))} US total, by ${byOwner}`);
+          const now = jobSplit(j);
+          j.log.push(`Our own labour on this job set to ${fmtMoney(now.labour)} of the ${fmtMoney(jobCost(j))} US total`
+            + (was.labour !== now.labour ? ` (was ${fmtMoney(was.labour)})` : '')
+            + `, by ${byOwner}. The rates and the customer's price are unchanged.`);
           saveJobRecord(j);
-          touched.push({ id: j.id, labour: d.labour, pass: d.pass });
+          touched.push({ id: j.id, before: was.labour, labour: now.labour, pass: now.pass });
         }
       });
       return touched;

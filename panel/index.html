@@ -2666,9 +2666,9 @@ function vContractors() {
       const old = Data.unsplitUsJobs();
       if (!old.length) return '';
       return `<div class="formbox" style="margin-top:10px">
-        <p class="small"><b>${old.length} job${old.length === 1 ? '' : 's'} priced before this change still count the whole ${esc(c.name)} order as a cost.</b></p>
-        <p class="small muted">Set every item above first, then do this. It keeps each job's locked rates exactly as they are and only works out which lines were your own labour. ${esc(old.map(o => o.id).join(', '))}</p>
-        <div class="chips"><button class="btn sm ghost" data-act="backfillUs">Work out our labour on those jobs</button></div>
+        <p class="small"><b>${old.length} locked job${old.length === 1 ? ' does' : 's do'} not match the categories above.</b></p>
+        <p class="small muted">Either ${old.length === 1 ? 'it was' : 'they were'} priced before this existed, or a category has changed since. Set every item above correctly first, then do this: it keeps each job's locked rates exactly as they are, so no customer's price moves — it only redoes which side of your own books each line sits on. ${esc(old.map(o => o.id).join(', '))}</p>
+        <div class="chips"><button class="btn sm ghost" data-act="backfillUs">Redo our labour on those jobs</button></div>
       </div>`;
     })()}` : ''}
     ${ui.addItemFor === c.id ? `<form class="formbox" data-form="addItem" data-c="${c.id}">
@@ -3216,10 +3216,10 @@ document.addEventListener('click', e => {
     case 'hideAddItem': ui.addItemFor = null; render(); break;
     case 'rmItem': Data.removeRateItem(d.c, d.i); toast('Item removed'); render(); break;
     case 'backfillUs': {
-      const done = Data.backfillUsSplit(owner());
+      const done = Data.reSplitUsJobs(owner());
       const total = done.reduce((t, x) => t + x.labour, 0);
       toast(done.length
-        ? `${done.length} job${done.length === 1 ? '' : 's'} updated — ${money(total)} of it was our own labour`
+        ? `${done.length} job${done.length === 1 ? '' : 's'} redone — ${money(total)} of our own labour on them`
         : 'Nothing needed changing');
       render(); break; }
   }
