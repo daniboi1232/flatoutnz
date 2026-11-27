@@ -33,6 +33,7 @@
 
 import { getStore } from '@netlify/blobs';
 import { readSession, readCookie, SESSION_COOKIE } from '../shared/session.js';
+import { addToIndex, removeFromIndex, allKeys } from '../shared/store.js';
 
 const STORE = 'flatout-panel';
 const KINDS = ['job', 'contractor', 'customer', 'document', 'acceptance', 'portal', 'template', 'alert', 'expense', 'trip', 'asset', 'hours', 'user'];
@@ -116,9 +117,12 @@ async function loadAll(store) {
     trip: 'trips', asset: 'assets', hours: 'hours', user: 'users' };
 
   for (const kind of KINDS) {
-    const { blobs } = await store.list({ prefix: kind + '/' });
+    /* Both sources, unioned. The index carries what was written in the
+       last minute, which list() cannot see yet; list carries anything
+       the index missed. A record present in neither does not exist. */
+    const keys = await allKeys(store, kind);
     const records = await Promise.all(
-      blobs.map(b => store.get(b.key, { type: 'json' }).catch(() => null))
+      keys.map(k => store.get(k, { type: 'json' }).catch(() => null))
     );
     out[PLURAL[kind]] = records.filter(Boolean);
   }
@@ -143,6 +147,26 @@ async function servePhoto(store, key) {
 }
 
 /* ---------- writes ------------------------------------------------ */
+/* ---------- the index, and why it exists ---------------------------
+   Netlify Blobs reads a key you just wrote straight back, but LISTING
+   is only eventually consistent — a new key can take the better part
+   of a minute to show up under store.list(). loadAll enumerated every
+   record with list(), so anything newly created was missing from the
+   next load: save a job and reload, and it was not there; wait, reload
+   again, and it was. Measured on the live site, a new record was still
+   invisible to list 21 seconds after the write returned ok.
+
+   Worse than the confusion, it corrupted data. Issuing a document
+   reads the highest number already used; a reload in that window
+   loaded a document set with the newest one missing, so the next
+   document reused its number. That is how three different estimates
+   ended up numbered EST-0010.
+
+   So each kind keeps its own index of ids at index/<kind>, written
+   with the record. Reads take the union of the index and list(): the
+   index makes a new record visible at once, and list still heals the
+   index if a write of it is ever lost. Neither source alone is
+   trusted, which is what makes it safe. */
 async function put(store, { kind, id, value }) {
   if (kind === 'settings' || kind === 'business') {
     await store.setJSON(kind, value);
@@ -151,6 +175,11 @@ async function put(store, { kind, id, value }) {
   if (!KINDS.includes(kind)) return { error: 'Unknown kind' };
   if (!id || /[^A-Za-z0-9._-]/.test(id)) return { error: 'Bad id' };
   await store.setJSON(`${kind}/${id}`, value);
+  /* After the record, never before: an id in the index whose record is
+     missing would read as a record that vanished. This way round the
+     worst case is a record that takes the old path to becoming
+     visible, which is what used to happen to all of them. */
+  await addToIndex(store, kind, [id]);
   return { ok: true };
 }
 
@@ -164,16 +193,45 @@ async function put(store, { kind, id, value }) {
 async function putMany(store, { items }) {
   if (!Array.isArray(items) || !items.length) return { error: 'Nothing to save' };
   if (items.length > 50) return { error: 'Too many records in one save' };
-  const results = await Promise.all(items.map(it => put(store, it).catch(e => ({ error: String(e) }))));
+  /* The records in parallel, then one index write per kind. Letting
+     each put update the index would have them read-modify-write the
+     same key at the same time and lose each other's ids. */
+  const results = await Promise.all(items.map(it => putRecordOnly(store, it)
+    .catch(e => ({ error: String(e) }))));
   const bad = results.find(r => r && r.error);
   if (bad) return { error: bad.error };
+
+  const byKind = {};
+  items.forEach(it => {
+    if (it.kind === 'settings' || it.kind === 'business') return;
+    (byKind[it.kind] = byKind[it.kind] || []).push(it.id);
+  });
+  for (const [kind, ids] of Object.entries(byKind)) await addToIndex(store, kind, ids);
+
   return { ok: true, saved: items.length };
+}
+
+/* The record without touching the index — putMany does the index once
+   per kind afterwards. */
+async function putRecordOnly(store, { kind, id, value }) {
+  if (kind === 'settings' || kind === 'business') {
+    await store.setJSON(kind, value);
+    return { ok: true };
+  }
+  if (!KINDS.includes(kind)) return { error: 'Unknown kind' };
+  if (!id || /[^A-Za-z0-9._-]/.test(id)) return { error: 'Bad id' };
+  await store.setJSON(`${kind}/${id}`, value);
+  return { ok: true };
 }
 
 async function del(store, { kind, id }) {
   if (!KINDS.includes(kind)) return { error: 'Unknown kind' };
   if (!id || /[^A-Za-z0-9._-]/.test(id)) return { error: 'Bad id' };
   await store.delete(`${kind}/${id}`);
+  /* Out of the index too, or the next load keeps asking for a record
+     that is gone. A miss is harmless — loadAll drops the nulls — but
+     it is a read per load, forever. */
+  await removeFromIndex(store, kind, id);
   return { ok: true };
 }
 
@@ -196,8 +254,12 @@ async function savePhoto(store, { dataUrl }) {
    real agreed prices. No sample jobs and no sample customers: from here
    on everything in the panel is real. */
 async function seed(store) {
-  const { blobs } = await store.list({ prefix: 'contractor/' });
-  if (blobs.length) return { ok: true, seeded: false };
+  /* The index as well as the list. A stale list on a store that was
+     seeded a moment ago would read as empty and seed it again, writing
+     the starting contractors over the real ones — the one place where
+     a stale list could destroy data rather than just hide it. */
+  const keys = await allKeys(store, 'contractor');
+  if (keys.length) return { ok: true, seeded: false };
 
   const contractors = [
     ['gecs', 'GECS', 'Mike', ['cleaning'], '14 days'],

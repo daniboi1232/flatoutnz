@@ -39,6 +39,7 @@
    ===================================================================== */
 
 import { getStore } from '@netlify/blobs';
+import { allKeys } from '../shared/store.js';
 
 const STORE = 'flatout-panel';
 const MAX_TRIES = 8;
@@ -116,9 +117,12 @@ export default async (req) => {
 
 /* ---------- finding the one job --------------------------------- */
 async function findByToken(store, token) {
-  const { blobs } = await store.list({ prefix: 'job/' });
-  for (const b of blobs) {
-    const job = await store.get(b.key, { type: 'json' }).catch(() => null);
+  /* Both the index and the list: a job created in the last minute is
+     not in the list yet, and a customer sent their link straight away
+     would be told the link was dead. */
+  const keys = await allKeys(store, 'job');
+  for (const k of keys) {
+    const job = await store.get(k, { type: 'json' }).catch(() => null);
     if (job && job.portal && job.portal.token && timingSafeEqual(String(job.portal.token), token)) {
       const business = await store.get('business', { type: 'json' }).catch(() => null);
       return { job, business: business || {} };
@@ -129,10 +133,11 @@ async function findByToken(store, token) {
 
 /* ---------- what the customer is allowed to see ------------------ */
 async function view(store, job, business) {
-  const { blobs } = await store.list({ prefix: 'document/' });
+  /* Likewise: the quote they were just sent has to be on the page. */
+  const keys = await allKeys(store, 'document');
   const docs = [];
-  for (const b of blobs) {
-    const d = await store.get(b.key, { type: 'json' }).catch(() => null);
+  for (const k of keys) {
+    const d = await store.get(k, { type: 'json' }).catch(() => null);
     if (d && d.jobId === job.id) docs.push(d);
   }
   docs.sort((a, b) => String(a.issuedAt).localeCompare(String(b.issuedAt)));
@@ -196,10 +201,13 @@ async function view(store, job, business) {
 }
 
 async function accept(store, job, business) {
-  const { blobs } = await store.list({ prefix: 'document/' });
+  /* The one that matters most: accepting needs to find the quote that
+     was issued moments ago, or the customer is told there is nothing
+     to accept. */
+  const keys = await allKeys(store, 'document');
   let quote = null;
-  for (const b of blobs) {
-    const d = await store.get(b.key, { type: 'json' }).catch(() => null);
+  for (const k of keys) {
+    const d = await store.get(k, { type: 'json' }).catch(() => null);
     if (d && d.jobId === job.id && d.type === 'quote' && d.status !== 'voided') {
       if (!quote || String(d.issuedAt) > String(quote.issuedAt)) quote = d;
     }

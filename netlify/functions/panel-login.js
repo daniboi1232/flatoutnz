@@ -21,6 +21,7 @@ import { getStore } from '@netlify/blobs';
 import {
   checkCode, signSession, cookieHeader, MAX_ATTEMPTS, backoffMs
 } from '../shared/session.js';
+import { allKeys } from '../shared/store.js';
 
 const STORE = 'flatout-panel';      // must match panel-data.js
 const SESSION_HOURS = 12;           // a working day, then sign in again
@@ -77,11 +78,17 @@ export default async (request) => {
   if (wait) await sleep(wait);
 
   /* Every active user with a code set. The list is small; a linear
-     walk is fine and avoids leaking which codes exist. */
-  const { blobs } = await store.list({ prefix: 'user/' });
+     walk is fine and avoids leaking which codes exist.
+
+     Not store.list() on its own: listing in Blobs is eventually
+     consistent, so a login created a minute ago can be missing from
+     it, and the code you had just handed somebody would be refused —
+     with the attempt counted against them. allKeys unions the list
+     with the index written alongside the record. */
+  const keys = await allKeys(store, 'user');
   const withCodes = [];
-  for (const b of blobs) {
-    const u = await store.get(b.key, { type: 'json' });
+  for (const k of keys) {
+    const u = await store.get(k, { type: 'json' }).catch(() => null);
     if (u && u.active && u.codeHash && u.codeSalt) withCodes.push(u);
   }
 
