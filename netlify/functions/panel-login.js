@@ -52,8 +52,11 @@ export default async (request) => {
      panel saves when a code is issued. Reading a differently named
      store finds nothing, every real code is refused, and — worse —
      the bootstrap stays open because the user list looks empty. */
-  const store = getStore(STORE);
-  const gate = getStore('panel-gate');
+  /* Strong reads: a login issued a moment ago must be found, and an
+     attempt counter must not be read stale. Listing cannot be made
+     strong, which is what the shared index is for. */
+  const store = getStore({ name: STORE, consistency: 'strong' });
+  const gate = getStore({ name: 'panel-gate', consistency: 'strong' });
 
   /* Who is asking. Behind Netlify this is the real client address. */
   const who = request.headers.get('x-nf-client-connection-ip')

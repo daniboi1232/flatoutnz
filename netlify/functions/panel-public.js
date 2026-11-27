@@ -46,7 +46,9 @@ const MAX_TRIES = 8;
 
 export default async (req) => {
   try {
-    const store = getStore(STORE);
+    /* Strong reads: a customer opening their link right after a quote
+       was issued has to see it. */
+    const store = getStore({ name: STORE, consistency: 'strong' });
     const url = new URL(req.url);
 
     if (req.method === 'GET') {

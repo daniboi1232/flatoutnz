@@ -42,7 +42,14 @@ export default async (req) => {
   const denied = await checkAuth(req);
   if (denied) return denied;
 
-  const store = getStore(STORE);
+  /* Strong consistency on every read. Blobs defaults to eventual, which
+     means a read can be served an older copy of a key that was just
+     written: a contractor saved and read straight back still showed the
+     old categories a second later, and a deleted record came back once
+     before staying gone. Strong reads cost a little latency and remove
+     a whole class of "it did not save" that is really "it did not read".
+     Listing has no such option, which is why the index exists. */
+  const store = getStore({ name: STORE, consistency: 'strong' });
   const url = new URL(req.url);
 
   try {
